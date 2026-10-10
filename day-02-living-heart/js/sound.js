@@ -1,0 +1,59 @@
+// Synthesised heart sounds with WebAudio: S1 ("lub") at valve closure as systole starts, S2 ("dub") as ejection ends.
+
+export class HeartSound {
+  constructor() {
+    this.ctx = null;
+    this.on = false;
+  }
+
+  async setOn(on) {
+    this.on = false;
+    if (on && !this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.55;
+      this.master.connect(this.ctx.destination);
+      const len = Math.floor(this.ctx.sampleRate * 0.2);
+      this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const d = this.noise.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (this.ctx) await (on ? this.ctx.resume() : this.ctx.suspend()).catch(() => {});
+    this.on = on && this.ctx?.state === 'running';
+    return this.on;
+  }
+
+  lub() { this.thump(0.11, 45, 140, 0.09, 1.0); }
+  dub() { this.thump(0.07, 65, 220, 0.055, 0.7); }
+
+  // A short burst of noise plus a low sine, through a lowpass, with a fast attack and quick decay.
+  thump(duration, freq, cutoff, decay, gain) {
+    if (!this.on || !this.ctx || this.ctx.state !== 'running') return;
+    const ctx = this.ctx, t = ctx.currentTime + 0.005;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(gain, t + 0.008);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.008 + decay);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = cutoff;
+    lp.Q.value = 0.9;
+    lp.connect(env).connect(this.master);
+
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(freq * 1.15, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + duration);
+    const oscGain = ctx.createGain();
+    oscGain.gain.value = 0.9;
+    osc.connect(oscGain).connect(lp);
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const nGain = ctx.createGain();
+    nGain.gain.value = 0.6;
+    src.connect(nGain).connect(lp);
+    osc.start(t); src.start(t);
+    osc.stop(t + duration + 0.05); src.stop(t + duration + 0.05);
+  }
+}

@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- Living Heart: Day 2 of 30 Days, 30 Apps. A heart beats at the centre of the page and pumps blood through glass threads. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gh7NRJ7MEWdYUGMcXx0SUMJY93gUi2UqlztG1amlvwA='; img-src 'self' data: blob:; connect-src 'self' data: blob:">
+<title>Living Heart</title>
+<meta name="description" content="A heart beats at the centre of the page and pumps blood through glass threads to every edge.">
+<meta name="theme-color" content="#050507">
+<meta property="og:title" content="Living Heart">
+<meta property="og:description" content="A heart beats at the centre of the page and pumps blood through glass threads to every edge.">
+<meta property="og:image" content="https://tirupathipodugu.github.io/30-days-30-apps/day-02-living-heart/og.png">
+<meta property="og:url" content="https://tirupathipodugu.github.io/30-days-30-apps/day-02-living-heart/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 fill=%22%23050507%22/%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%225%22 fill=%22%23b3001b%22/%3E%3Cpath d=%22M16 11V3M20 13l7-6M12 13L5 7M16 21v8%22 stroke=%22%23cfe3ee%22 stroke-width=%221%22 opacity=%22.7%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<canvas id="scene" aria-label="A beating human heart with glass threads carrying pulses of blood to the edges of the page" role="img"></canvas>
+
+<header class="top">
+  <div class="title chrome">
+    <h1 class="mark">Living Heart</h1>
+    <p class="sub">blood through glass threads, at the speed of a heart</p>
+  </div>
+  <p class="rate-readout chrome" aria-live="off"><span class="dot" id="dot" aria-hidden="true"></span><span id="bpm">72</span> BPM <span class="mode" id="mode">Manual</span></p>
+</header>
+
+<footer class="bottom">
+  <p class="beats chrome">Beats since you arrived <span id="beats">0</span></p>
+  <div class="credits chrome">
+    <p class="honest">A visualisation, not a medical device.</p>
+    <p class="footer">Day 2 / 30 · <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a> · <a href="../">← all apps</a> · <a id="credit">Heart: procedural, built in code</a></p>
+  </div>
+  <div class="controls chrome">
+    <button class="text" id="rate" type="button" aria-expanded="false" aria-controls="slider">Rate</button>
+    <input class="slider" id="slider" type="range" min="40" max="200" step="1" value="72" aria-label="Heart rate in beats per minute" hidden>
+    <button class="text" id="sound" type="button" aria-pressed="false">Sound off</button>
+  </div>
+</footer>
+
+<div class="tip" id="tip" hidden aria-hidden="true"></div>
+<noscript><p class="nojs">Living Heart needs JavaScript and WebGL.</p></noscript>
+</body>
+</html>
