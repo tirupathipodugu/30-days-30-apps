@@ -1,19 +1,19 @@
 <!doctype html>
-<!-- Mirror Room: Day 1 of 30 Days, 30 Apps. One mirror; tap it and it breaks. -->
+<!-- Mirror Room: Day 1 of 30 Days, 30 Apps. A mirror you can break, rendered as real cracked glass. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:">
 <title>Mirror Room</title>
-<meta name="description" content="One mirror. Tap it and it breaks. Keep tapping. Runs in your browser; your camera never leaves your device.">
-<meta name="theme-color" content="#07070B">
+<meta name="description" content="A mirror you can break. Runs in your browser; your camera never leaves your device.">
+<meta name="theme-color" content="#050506">
 <meta property="og:title" content="Mirror Room">
-<meta property="og:description" content="One mirror. Tap it and it breaks. Keep tapping.">
+<meta property="og:description" content="A mirror you can break.">
 <meta property="og:image" content="https://tirupathipodugu.github.io/30-days-30-apps/day-01-mirror-room/og.png">
 <meta property="og:url" content="https://tirupathipodugu.github.io/30-days-30-apps/day-01-mirror-room/">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect x=%224%22 y=%222%22 width=%2224%22 height=%2228%22 rx=%223%22 fill=%22%23c9ccd6%22/%3E%3Cpath d=%22M16 2l-3 12 6 4-4 12%22 stroke=%22%2307070B%22 stroke-width=%222%22 fill=%22none%22/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 fill=%22%23050506%22/%3E%3Cpath d=%22M16 4v24M6 9l20 14M6 23L26 9%22 stroke=%22%23d8dce4%22 stroke-width=%221%22/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 <script type="module" src="js/main.js"></script>
 </head>
@@ -21,59 +21,67 @@
 
 <main class="stage" id="stage" hidden>
   <canvas id="glass" aria-hidden="true"></canvas>
-  <div class="pieces" id="pieces" role="group" aria-label="Mirror pieces. Press Enter to break the focused piece, arrow keys to move."></div>
-  <p class="hint" id="hint">Tap the mirror to break it.</p>
+  <button class="aim" id="aim" type="button" aria-label="The mirror. Arrow keys aim, Enter strikes the glass."><span class="reticle" id="reticle" aria-hidden="true"></span></button>
+  <p class="hint" id="hint" aria-hidden="true">tap the glass</p>
 
-  <header class="topbar">
-    <span class="title silver" id="stage-title">Mirror Room</span>
-    <div class="actions">
-      <button class="glass rec" id="rec" type="button" aria-keyshortcuts="R"><span class="dot" aria-hidden="true"></span><span id="rec-label">Rec 6s</span></button>
-      <button class="glass icon" id="sound" type="button" aria-pressed="false" aria-label="Sound">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="mute" d="M16 9l6 6M22 9l-6 6"/></svg>
-      </button>
-      <button class="glass icon" id="camera-off" type="button" aria-label="Turn camera off">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h12v10H3zM15 11l6-3v8l-6-3"/><path d="M2 3l20 18"/></svg>
-      </button>
+  <header class="top chrome">
+    <span class="mark" id="stage-title">Mirror Room</span>
+    <div class="row">
+      <button class="text" id="sound" type="button" aria-pressed="false">sound</button>
+      <button class="text" id="camera-off" type="button">close</button>
     </div>
   </header>
 
-  <footer class="bottom">
-    <nav class="dock" aria-label="Mirror controls">
-      <button class="glass" id="break-all" type="button" aria-keyshortcuts="B">Break all</button>
-      <span class="counter" id="counter">1 mirror</span>
-      <button class="glass" id="time" type="button" aria-pressed="false" aria-keyshortcuts="T">Time</button>
-      <button class="glass" id="reassemble" type="button" aria-keyshortcuts="0">Reassemble</button>
+  <footer class="bottom chrome">
+    <nav class="controls" aria-label="Mirror controls">
+      <button class="text" id="shatter" type="button" aria-keyshortcuts="B">shatter</button>
+      <span class="dot" aria-hidden="true">·</span>
+      <button class="text" id="restore" type="button" aria-keyshortcuts="0">restore</button>
+      <span class="dot" aria-hidden="true">·</span>
+      <button class="text" id="time" type="button" aria-pressed="false" aria-keyshortcuts="T">time</button>
+      <span class="dot" aria-hidden="true">·</span>
+      <button class="text" id="rec" type="button" aria-keyshortcuts="R"><span id="rec-label">record</span></button>
     </nav>
-    <p class="credit">Day 1 of 30 Days, 30 Apps by <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a> · <a href="../">← All apps</a></p>
+    <div class="meta">
+      <p class="credit"><a href="../">Day 1 / 30</a> · <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a></p>
+      <span class="count" id="counter" aria-hidden="true"></span>
+    </div>
   </footer>
 </main>
 
 <section class="screen" id="landing">
-  <h1 class="silver big">Mirror Room</h1>
-  <button class="glass primary" id="open" type="button">Open the mirrors</button>
-  <p class="note">Your camera stays on this device. Nothing is uploaded.</p>
-  <a class="demo-link" href="?demo=1">No camera? Watch the demo</a>
-  <p class="credit">Day 1 of 30 Days, 30 Apps by <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a> · <a href="../">← All apps</a></p>
+  <div class="center">
+    <h1 class="mark">Mirror Room</h1>
+    <button class="link" id="open" type="button">Look into the mirror</button>
+  </div>
+  <div class="foot">
+    <p>Your camera stays on this device. Nothing is uploaded. <a href="?demo=1">No camera? Watch the demo.</a></p>
+    <p class="credit"><a href="../">Day 1 / 30</a> · <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a></p>
+  </div>
 </section>
 
 <section class="screen" id="error" hidden role="alert">
-  <h1 class="silver big">Mirror Room</h1>
-  <p class="error-text" id="error-text"></p>
-  <div class="row">
-    <button class="glass primary" id="retry" type="button">Try again</button>
-    <button class="glass" id="error-demo" type="button">Watch the demo</button>
+  <div class="center">
+    <h1 class="mark">Mirror Room</h1>
+    <p class="message" id="error-text"></p>
+    <p class="row">
+      <button class="link" id="retry" type="button">Try again</button>
+      <button class="link" id="error-demo" type="button">Watch the demo</button>
+    </p>
   </div>
-  <p class="credit">Day 1 of 30 Days, 30 Apps by <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a> · <a href="../">← All apps</a></p>
+  <div class="foot">
+    <p class="credit"><a href="../">Day 1 / 30</a> · <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a></p>
+  </div>
 </section>
 
 <dialog class="sheet" id="sheet" aria-labelledby="sheet-title">
-  <h2 id="sheet-title">Your clip</h2>
+  <h2 class="mark" id="sheet-title">Your clip</h2>
   <div class="preview" id="preview"></div>
-  <div class="row">
-    <button class="glass primary" id="share" type="button">Share</button>
-    <a class="glass button" id="save" download>Save video</a>
-    <button class="glass" id="close-sheet" type="button">Close</button>
-  </div>
+  <p class="row">
+    <button class="link" id="share" type="button">Share</button>
+    <a class="link" id="save" download>Save video</a>
+    <button class="link" id="close-sheet" type="button">Close</button>
+  </p>
 </dialog>
 
 <p class="sr-only" id="live" aria-live="polite"></p>

@@ -1,34 +1,31 @@
-// Encore: an automatic showcase for screen recordings. From one mirror it breaks all, again and again,
-// each split faster than the last (1 → 2 → 4 → 8 → … → 128), lands on a heartbeat thump and a ring
-// of light, then reassembles. With reduced motion it steps through calm stills instead.
+// Encore: a slow, cinematic replay for screen recordings. One clean mirror, a single strike, a held
+// beat, then a cascade of strikes coming faster and faster until the glass is a full web, then a
+// restore. With reduced motion the strikes are spaced out calmly instead.
 
-const SPLIT_GAPS_MS = [700, 560, 440, 260, 170, 130, 110];   // before each "break all"
+const FIRST_HOLD_MS = 900;
+const CASCADE_GAPS_MS = [1300, 520, 400, 300, 230, 180, 140, 110, 90];
 const CALM_GAP_MS = 900;
-const THUMP_AFTER_MS = 450;
-const HOLD_MS = 1500;
+const HOLD_MS = 2200;
 
 /**
- * Play the encore. `actions` provides: wholeMirror(), breakAll(), thump(), ring(), reassemble().
+ * Play the encore. `actions` provides wholeMirror(), strike(x, y) and restore().
  * Returns a function that cancels whatever has not happened yet.
  */
-export function playEncore(actions, reduced, onDone) {
+export function playEncore(actions, size, reduced, onDone) {
   const timers = [];
   const at = (ms, fn) => timers.push(setTimeout(fn, ms));
-  let t = 0;
+  const somewhere = () => [size.width * (0.12 + Math.random() * 0.76), size.height * (0.12 + Math.random() * 0.76)];
 
   actions.wholeMirror();
-  for (const gap of SPLIT_GAPS_MS) {
+  let t = FIRST_HOLD_MS;
+  at(t, () => actions.strike(size.width * 0.5, size.height * 0.42));
+  for (const gap of CASCADE_GAPS_MS) {
     t += reduced ? CALM_GAP_MS : gap;
-    at(t, actions.breakAll);
+    at(t, () => actions.strike(...somewhere()));
   }
-  t += THUMP_AFTER_MS;
-  at(t, () => {
-    actions.thump();
-    if (!reduced) actions.ring();
-  });
   t += HOLD_MS;
   at(t, () => {
-    actions.reassemble();
+    actions.restore();
     onDone();
   });
 

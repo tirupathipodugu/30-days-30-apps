@@ -1,51 +1,62 @@
 <!doctype html>
+<!-- 30 Days, 30 Apps: the gallery. Lists every day's app from apps.json. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:">
 <title>30 Days, 30 Apps</title>
 <meta name="description" content="One new browser app every day for 30 days. Built in public by @tirupathipodugu.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Figtree:wght@400;600&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 fill=%22%23050506%22/%3E%3Ctext x=%2216%22 y=%2221%22 font-family=%22sans-serif%22 font-size=%2213%22 fill=%22%23d8dce4%22 text-anchor=%22middle%22%3E30%3C/text%3E%3C/svg%3E">
 <style>
-:root{--bg:#f3f4f8;--surface:#fff;--fg:#141826;--muted:#5a6076;--line:#dcdfe9;--accent:#e4572e;color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--bg:#0e1120;--surface:#171b2e;--fg:#eceef7;--muted:#9aa1bd;--line:#2a3050;--accent:#ff7a52;color-scheme:dark}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 Figtree,system-ui,sans-serif}
-.wrap{max-width:1100px;margin:0 auto;padding:48px 16px 64px}
-h1{font:700 clamp(36px,7vw,72px)/1 Unbounded,system-ui,sans-serif;letter-spacing:-.02em;margin:0 0 12px}
-h1 span{color:var(--accent)}
-.lead{color:var(--muted);max-width:60ch;margin:0 0 32px}
-.lead a{color:inherit}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-.card{display:grid;gap:6px;padding:18px;border-radius:12px;background:var(--surface);border:1px solid var(--line);color:inherit;text-decoration:none;transition:transform .15s,border-color .15s}
-.card:hover{transform:translateY(-2px);border-color:var(--accent)}
-.card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.day{font:500 13px Unbounded,system-ui,sans-serif;color:var(--accent)}
-.name{font-weight:600;font-size:19px}
-.hook{color:var(--muted);font-size:14.5px}
-.soon{opacity:.5;pointer-events:none}
-.empty{color:var(--muted)}
+:root { --bg: #050506; --text: rgba(255,255,255,.86); --quiet: rgba(255,255,255,.4); --line: rgba(255,255,255,.08); color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 300 14px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: .02em; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 96px 16px 80px; }
+h1 { margin: 0 0 20px; font-size: 13px; font-weight: 300; text-transform: uppercase; letter-spacing: .3em; }
+.lead { margin: 0 0 72px; max-width: 52ch; color: var(--quiet); }
+.lead a { text-decoration: none; }
+.lead a:hover { color: var(--text); }
+.list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.list li { border-bottom: 1px solid var(--line); }
+.list a { display: grid; grid-template-columns: 4.5em 1fr; gap: 4px 16px; padding: 22px 0; text-decoration: none; }
+.list a:focus-visible { outline: 1px solid rgba(255,255,255,.7); outline-offset: 4px; }
+.day { grid-row: span 2; font: 400 11px/2 ui-monospace, "SF Mono", Consolas, monospace; color: var(--quiet); }
+.name { font-size: 15px; transition: color .25s; }
+.list a:hover .name { color: #fff; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 6px; text-decoration-color: rgba(255,255,255,.4); }
+.hook { color: var(--quiet); font-size: 13px; }
+.empty { color: var(--quiet); padding: 22px 0; margin: 0; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>30 Days, <span>30 Apps</span></h1>
-  <p class="lead">One new app every day, built in public. Everything runs in your browser: camera apps never upload your video. Follow along on X: <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a>.</p>
-  <div class="grid" id="grid"><p class="empty">Day 1 is on its way.</p></div>
+  <h1>30 Days, 30 Apps</h1>
+  <p class="lead">One new app every day, built in public. Everything runs in your browser, and camera apps never upload your video. Follow along at <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a>.</p>
+  <ul class="list" id="list"><li><p class="empty">Day 1 is on its way.</p></li></ul>
 </div>
 <script>
-fetch("apps.json",{cache:"no-store"}).then(r=>r.json()).then(apps=>{
-  if(!apps.length)return;
-  const g=document.getElementById("grid");g.innerHTML="";
-  for(const a of apps){
-    const el=document.createElement("a");el.className="card";el.href=a.path;
-    const d=document.createElement("span");d.className="day";d.textContent="Day "+a.day;
-    const n=document.createElement("span");n.className="name";n.textContent=a.name;
-    const h=document.createElement("span");h.className="hook";h.textContent=a.hook;
-    el.append(d,n,h);g.append(el);
-  }
-}).catch(()=>{});
+fetch("apps.json", { cache: "no-store" }).then((r) => r.json()).then((apps) => {
+  if (!apps.length) return;
+  const list = document.getElementById("list");
+  list.replaceChildren(...apps.map((app) => {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = app.path;
+    const day = document.createElement("span");
+    day.className = "day";
+    day.textContent = String(app.day).padStart(2, "0") + " / 30";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = app.name;
+    const hook = document.createElement("span");
+    hook.className = "hook";
+    hook.textContent = app.hook;
+    a.append(day, name, hook);
+    li.append(a);
+    return li;
+  }));
+}).catch(() => {});
 </script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // Mirror Room entry point: opens the camera (or the demo feed), runs the frame loop and connects
-// taps, keys and buttons to the mirror. The interesting parts live in the modules imported below.
+// taps, keys and the quiet controls to the glass. The interesting parts live in the modules below.
 
-import { Mirror } from './pieces.js';
+import { Mirror } from './shards.js';
 import { MirrorRenderer } from './mirror-renderer.js';
 import { Ripple } from './ripple.js';
 import { TimeBuffer } from './time-buffer.js';
@@ -10,7 +10,7 @@ import { createDemoFeed } from './demo-feed.js';
 import { Sound } from './sound.js';
 import { clipFormat, recordCanvas, showClip } from './recorder.js';
 import { playEncore } from './encore.js';
-import { PieceFocus } from './piece-focus.js';
+import { Aim } from './aim.js';
 import { prefersReducedMotion } from './motion.js';
 
 const $ = (id) => document.getElementById(id);
@@ -20,7 +20,9 @@ const counter = $('counter');
 const hint = $('hint');
 
 const RECORD_MS = 6000;
-const TAG = 'Mirror Room · Day 1 of 30 · @tirupathipodugu';
+const IDLE_MS = 3000;
+const LIGHT_HEIGHT = 900;              // px: how high above the glass the pointer light hangs
+const TAG = 'Mirror Room · Day 1 / 30 · @tirupathipodugu';
 const ENCORE_KEYS = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown'];
 
 const mirror = new Mirror();
@@ -28,7 +30,6 @@ const sound = new Sound();
 let renderer = null;
 let ripple = null;
 let timeBuffer = null;
-let focus = null;
 
 let source = null;
 let sourceKind = 'camera';
@@ -38,13 +39,13 @@ let timeOn = false;
 let recording = false;
 let photoPending = false;
 let cancelEncore = null;
-let lastTap = { x: 0, y: 0, t: -Infinity };
+let volley = [];                       // timers for a "shatter" volley
+let idleTimer = 0;
 let titleTaps = [];
 let recentKeys = [];
-let announceTimer = 0;
 
-const effects = { glintAt: -Infinity, ringAt: -Infinity };
-const pointer = { x: 0, y: 0, inside: false, down: null };
+const effects = { glintAt: -Infinity };
+const pointer = { x: 0, y: 0, down: null, movedAt: -Infinity };
 // Everything the renderer needs each frame, allocated once.
 const frame = {
   mirror,
@@ -52,9 +53,8 @@ const frame = {
   ripple: null,
   timeBuffer: null,
   timeOn: false,
-  pointerGlow: new Float32Array(3),
+  light: new Float32Array([0, 0, LIGHT_HEIGHT]),
   glint: 0,
-  ring: new Float32Array(4),
   tagOn: false,
 };
 
@@ -71,7 +71,7 @@ function setUpGraphics() {
   ripple = new Ripple(renderer.gl);
   timeBuffer = new TimeBuffer(renderer.gl);
   renderer.setTag(TAG);
-  focus = new PieceFocus($('pieces'), mirror, (index) => breakPiece(index, mirror.pieces[index].cx, mirror.pieces[index].cy));
+  new Aim($('aim'), $('reticle'), strike);
   frame.ripple = ripple;
   frame.timeBuffer = timeBuffer;
   new ResizeObserver(() => { if (running) resize(); }).observe(stage);
@@ -89,12 +89,14 @@ async function start(kind) {
   $('landing').hidden = true;
   $('error').hidden = true;
   stage.hidden = false;
-  $('camera-off').setAttribute('aria-label', kind === 'demo' ? 'Leave the demo' : 'Turn camera off');
-  $('sound').setAttribute('aria-pressed', String(sound.enabled));
+  setSoundLabel();
   mirror.reset(stage.clientWidth, stage.clientHeight);
   resize();
-  updateCounter(false);
-  hint.hidden = false;
+  frame.light[0] = mirror.width * 0.3;
+  frame.light[1] = mirror.height * 0.25;
+  updateCounter();
+  hint.classList.remove('gone');
+  wake();
   running = true;
   frameId = requestAnimationFrame(tick);
 }
@@ -103,6 +105,7 @@ function stop() {
   running = false;
   cancelAnimationFrame(frameId);
   cancelEncore?.();
+  stopVolley();
   setTime(false);
   source?.stop();
   source = null;
@@ -136,25 +139,15 @@ function tick(now) {
   frameId = requestAnimationFrame(tick);
   if (source.width && source.takeFrame()) renderer.uploadFrame(source.element, source.width, source.height);
 
-  const reduced = prefersReducedMotion();
-  mirror.reduced = reduced;
-  if (mirror.update(now)) onReassembled(now);
+  mirror.reduced = prefersReducedMotion();
+  if (mirror.update(now)) onRestored(now);
   ripple.update(now);
-  focus.sync();
+  moveLight(now);
 
   frame.now = now;
   frame.timeOn = timeOn;
   frame.tagOn = recording || photoPending;
-  const glow = reduced || !ripple.supported;
-  frame.pointerGlow[0] = pointer.x;
-  frame.pointerGlow[1] = pointer.y;
-  frame.pointerGlow[2] = glow && pointer.inside ? 1 : 0;
-  frame.glint = (now - effects.glintAt) / 700;
-  const ring = (now - effects.ringAt) / 900;
-  frame.ring[0] = mirror.width / 2;
-  frame.ring[1] = mirror.height / 2;
-  frame.ring[2] = ring * Math.hypot(mirror.width, mirror.height) * 0.6;
-  frame.ring[3] = ring < 1 ? 0.9 * (1 - ring) : 0;
+  frame.glint = (now - effects.glintAt) / 1400;
   renderer.render(frame);
 
   // A photo must be read in the same frame it was drawn.
@@ -164,63 +157,82 @@ function tick(now) {
   }
 }
 
-// ---------------------------------------------------------------- breaking and mending
+/**
+ * The light follows the pointer. Without one (on a phone, or when the mouse rests) it drifts
+ * slowly on its own, so the shards keep catching light at their own angles.
+ */
+function moveLight(now) {
+  let x = pointer.x;
+  let y = pointer.y;
+  if (now - pointer.movedAt > 2500 && !pointer.down) {
+    const t = now / 1000;
+    x = mirror.width * (0.5 + 0.38 * Math.sin(t * 0.23));
+    y = mirror.height * (0.45 + 0.3 * Math.sin(t * 0.31 + 1));
+  }
+  const follow = prefersReducedMotion() ? 1 : 0.12;
+  frame.light[0] += (x - frame.light[0]) * follow;
+  frame.light[1] += (y - frame.light[1]) * follow;
+}
 
-function breakPiece(index, x, y) {
-  if (index < 0) return;
-  const result = mirror.breakAt(index, x, y, performance.now());
+// ---------------------------------------------------------------- breaking and restoring
+
+function strike(x, y, force = 1) {
+  const now = performance.now();
+  const result = mirror.impact(x, y, now);
   if (result === 'broke') {
-    sound.tink(Math.random() * 3);
+    sound.crack(force);
     navigator.vibrate?.(8);
-    afterBreak();
+    if (!prefersReducedMotion()) ripple.touch(x, y, 0.3, 22, now);
+    hint.classList.add('gone');
+    updateCounter();
+    announce(`${mirror.count} shards`);
   } else if (result === 'full') {
-    announce(`${mirror.count} mirrors. That's as small as it goes.`);
+    announce('The glass can’t break any further.');
   }
 }
 
-function breakAll() {
-  const made = mirror.breakAll(performance.now());
-  if (!made) return;
-  // Each wave rings a little higher than the last.
-  sound.tink(Math.log2(mirror.count) * 2 - 4);
-  navigator.vibrate?.(8);
-  afterBreak();
+/** Shatter: a volley of 5–7 strikes at random points, a few hundred ms apart. */
+function shatter() {
+  if (!running || volley.length) return;
+  const strikes = 5 + Math.floor(Math.random() * 3);
+  let t = 0;
+  for (let i = 0; i < strikes; i++) {
+    const x = mirror.width * (0.1 + Math.random() * 0.8);
+    const y = mirror.height * (0.1 + Math.random() * 0.8);
+    volley.push(setTimeout(() => {
+      strike(x, y, 1 - i * 0.08);
+      if (i === strikes - 1) volley = [];
+    }, t));
+    t += 140 + Math.random() * 160;
+  }
 }
 
-function reassemble() {
-  if (!mirror.reassemble(performance.now())) return;
-  sound.whoosh(mirror.reassembleDuration() / 1000);
+function stopVolley() {
+  for (const id of volley) clearTimeout(id);
+  volley = [];
 }
 
-function afterBreak() {
-  hint.hidden = true;
-  updateCounter(true);
-  clearTimeout(announceTimer);
-  announceTimer = setTimeout(() => announce(counterText()), 400);
+function restore() {
+  stopVolley();
+  if (!mirror.heal(performance.now())) return;
+  sound.restore(mirror.healDuration() / 1000);
 }
 
-function onReassembled(now) {
+function onRestored(now) {
   if (!mirror.reduced) effects.glintAt = now;
-  updateCounter(false);
-  announce('Reassembled');
+  updateCounter();
+  announce('Restored');
 }
 
-function counterText() {
-  return mirror.count === 1 ? '1 mirror' : `${mirror.count} mirrors`;
-}
-
-function updateCounter(pop) {
-  counter.textContent = counterText();
-  if (pop && !prefersReducedMotion()) {
-    counter.animate([{ transform: 'scale(1.15)' }, { transform: 'scale(1)' }], { duration: 220, easing: 'ease-out' });
-  }
+function updateCounter() {
+  counter.textContent = mirror.whole ? '' : String(mirror.count);
 }
 
 function announce(text) {
   $('live').textContent = text;
 }
 
-// ---------------------------------------------------------------- time, encore, recording
+// ---------------------------------------------------------------- time, encore, recording, sound
 
 function setTime(on) {
   timeOn = on;
@@ -231,16 +243,15 @@ function setTime(on) {
 
 function encore() {
   if (cancelEncore || !running) return;
+  stopVolley();
   cancelEncore = playEncore({
     wholeMirror: () => {
       mirror.reset(mirror.width, mirror.height);
-      updateCounter(false);
+      updateCounter();
     },
-    breakAll,
-    thump: () => sound.thump(),
-    ring: () => { effects.ringAt = performance.now(); },
-    reassemble,
-  }, prefersReducedMotion(), () => { cancelEncore = null; });
+    strike: (x, y) => strike(x, y, 0.9),
+    restore,
+  }, mirror, prefersReducedMotion(), () => { cancelEncore = null; });
 }
 
 async function record() {
@@ -255,8 +266,8 @@ async function record() {
   recording = true;
   button.classList.add('recording');
   let left = RECORD_MS / 1000;
-  label.textContent = `${left}s`;
-  const countdown = setInterval(() => { label.textContent = `${--left}s`; }, 1000);
+  label.textContent = `recording ${left}`;
+  const countdown = setInterval(() => { label.textContent = `recording ${--left}`; }, 1000);
   try {
     const blob = await recordCanvas(canvas, format, RECORD_MS);
     showClip(blob, format.extension);
@@ -267,20 +278,40 @@ async function record() {
     clearInterval(countdown);
     recording = false;
     button.classList.remove('recording');
-    label.textContent = 'Rec 6s';
+    label.textContent = 'record';
   }
 }
 
+function setSoundLabel() {
+  $('sound').setAttribute('aria-pressed', String(sound.enabled));
+  $('sound').textContent = sound.enabled ? 'sound on' : 'sound off';
+}
+
 // ---------------------------------------------------------------- input
+
+/** Show the controls, and hide them again after a few seconds without movement. */
+function wake() {
+  stage.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (!stage.querySelector('.chrome :focus-visible')) stage.classList.add('idle');
+  }, IDLE_MS);
+}
 
 function stagePoint(event) {
   const box = canvas.getBoundingClientRect();
   return [event.clientX - box.left, event.clientY - box.top];
 }
 
+stage.addEventListener('pointermove', wake);
+stage.addEventListener('pointerdown', wake);
+
 canvas.addEventListener('pointerdown', (event) => {
   const [x, y] = stagePoint(event);
   pointer.down = { x, y, t: event.timeStamp };
+  pointer.x = x;
+  pointer.y = y;
+  pointer.movedAt = performance.now();
   canvas.setPointerCapture(event.pointerId);
 });
 
@@ -288,9 +319,9 @@ canvas.addEventListener('pointermove', (event) => {
   const [x, y] = stagePoint(event);
   pointer.x = x;
   pointer.y = y;
-  pointer.inside = true;
-  // Mouse: ripple wherever it moves. Touch: only while a finger is down, which is the only time we hear it.
-  if (!prefersReducedMotion() && running) ripple.touch(x, y, pointer.down ? 0.5 : 0.3, 16, performance.now());
+  pointer.movedAt = performance.now();
+  // Mouse: ripple wherever it moves. Touch: only while a finger drags.
+  if (!prefersReducedMotion() && running) ripple.touch(x, y, pointer.down ? 0.3 : 0.15, 16, performance.now());
 });
 
 canvas.addEventListener('pointerup', (event) => {
@@ -298,25 +329,10 @@ canvas.addEventListener('pointerup', (event) => {
   pointer.down = null;
   if (!down) return;
   const [x, y] = stagePoint(event);
-  if (Math.hypot(x - down.x, y - down.y) < 10 && event.timeStamp - down.t < 600) tap(x, y);
+  if (Math.hypot(x - down.x, y - down.y) < 10 && event.timeStamp - down.t < 600 && !cancelEncore) strike(x, y);
 });
 
 canvas.addEventListener('pointercancel', () => { pointer.down = null; });
-canvas.addEventListener('pointerleave', () => { pointer.inside = false; });
-
-function tap(x, y) {
-  if (cancelEncore) return;
-  const now = performance.now();
-  if (!prefersReducedMotion()) ripple.touch(x, y, 1.1, 30, now);
-  // A second quick tap in the same spot is a double-tap: break everything.
-  if (now - lastTap.t < 300 && Math.hypot(x - lastTap.x, y - lastTap.y) < 40) {
-    lastTap.t = -Infinity;
-    breakAll();
-    return;
-  }
-  lastTap = { x, y, t: now };
-  breakPiece(mirror.pieceAt(x, y), x, y);
-}
 
 $('stage-title').addEventListener('pointerdown', (event) => {
   titleTaps = titleTaps.filter((t) => event.timeStamp - t < 600);
@@ -329,6 +345,7 @@ $('stage-title').addEventListener('pointerdown', (event) => {
 
 document.addEventListener('keydown', (event) => {
   if (!running || event.metaKey || event.ctrlKey || event.altKey || $('sheet').open) return;
+  wake();
   if (event.key.startsWith('Arrow')) {
     recentKeys = [...recentKeys, event.key].slice(-ENCORE_KEYS.length);
     if (recentKeys.join() === ENCORE_KEYS.join()) {
@@ -337,7 +354,7 @@ document.addEventListener('keydown', (event) => {
     }
     return;
   }
-  const actions = { b: breakAll, 0: reassemble, t: () => setTime(!timeOn), r: record };
+  const actions = { b: shatter, 0: restore, t: () => setTime(!timeOn), r: record };
   const action = actions[event.key.toLowerCase()];
   if (action) {
     event.preventDefault();
@@ -345,14 +362,14 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-$('break-all').addEventListener('click', breakAll);
-$('reassemble').addEventListener('click', reassemble);
+$('shatter').addEventListener('click', shatter);
+$('restore').addEventListener('click', restore);
 $('time').addEventListener('click', () => setTime(!timeOn));
 $('rec').addEventListener('click', record);
 $('camera-off').addEventListener('click', stop);
 $('sound').addEventListener('click', () => {
   sound.setEnabled(!sound.enabled);
-  $('sound').setAttribute('aria-pressed', String(sound.enabled));
+  setSoundLabel();
 });
 $('open').addEventListener('click', () => start('camera'));
 $('retry').addEventListener('click', () => start(sourceKind));

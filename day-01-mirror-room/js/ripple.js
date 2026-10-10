@@ -78,7 +78,7 @@ export class Ripple {
     this.active = false;
   }
 
-  /** Disturb the water at a stage point. `strength` ~0.3 for a moving finger, ~1 for a tap. */
+  /** Disturb the water at a stage point. `strength` ~0.15–0.3 for a moving pointer, ~0.3 for a strike. */
   touch(x, y, strength, radiusPx, now) {
     if (!this.supported) return;
     if (!this.active) {

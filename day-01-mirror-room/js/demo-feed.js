@@ -1,87 +1,84 @@
 // Demo feed: an animated canvas that stands in for the camera (?demo=1), so anyone can try the mirror.
-// It draws a simple figure swaying in a room, with a sweeping clock so the Time toggle is easy to see.
-// It has the same shape as the camera source: { element, width, height, takeFrame(), stop() }.
+// A dim room lit by a tall window, with a silhouette that breathes and sways in front of it. The
+// window's hard lines show off how each shard shifts the reflection. It has the same shape as the
+// camera source: { element, width, height, takeFrame(), stop() }.
 
 const WIDTH = 1280;
 const HEIGHT = 720;
-const HUES = Array.from({ length: 48 }, (_, i) => `hsl(${i * 7.5}, 70%, 55%)`);
 
 export function createDemoFeed() {
   const canvas = document.createElement('canvas');
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
   const ctx = canvas.getContext('2d');
+
+  // Gradients are made once around the origin and moved with translate(), so drawing allocates nothing.
   const wall = ctx.createLinearGradient(0, 0, 0, HEIGHT);
-  wall.addColorStop(0, '#1d2340');
-  wall.addColorStop(0.7, '#2b2f55');
-  wall.addColorStop(1, '#3a2c3f');
+  wall.addColorStop(0, '#2a2d33');
+  wall.addColorStop(1, '#141519');
+  const daylight = ctx.createLinearGradient(0, -260, 0, 260);
+  daylight.addColorStop(0, '#dfe6ee');
+  daylight.addColorStop(1, '#9aa6b4');
+  const spill = ctx.createRadialGradient(0, 0, 0, 0, 0, 520);
+  spill.addColorStop(0, 'rgba(210, 222, 236, 0.32)');
+  spill.addColorStop(1, 'rgba(210, 222, 236, 0)');
+  const lamp = ctx.createRadialGradient(0, 0, 0, 0, 0, 300);
+  lamp.addColorStop(0, 'rgba(255, 196, 140, 0.35)');
+  lamp.addColorStop(1, 'rgba(255, 196, 140, 0)');
   const start = performance.now();
 
   function draw(t) {
     ctx.fillStyle = wall;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // Coloured tiles along the back wall, cycling slowly.
-    for (let i = 0; i < 16; i++) {
-      ctx.fillStyle = HUES[(i * 3 + Math.floor(t * 4)) % HUES.length];
-      ctx.globalAlpha = 0.35;
-      ctx.fillRect(i * 80 + 6, 560, 68, 160);
-    }
-    ctx.globalAlpha = 1;
-
-    // A clock with a sweeping hand: with Time on, far pieces show it a few seconds behind.
-    const cx = WIDTH / 2, cy = 115;
-    ctx.fillStyle = '#f2f3f7';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 80, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#07070b';
-    ctx.lineWidth = 10;
-    ctx.lineCap = 'round';
-    const a = t * Math.PI / 3;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.sin(a) * 62, cy - Math.cos(a) * 62);
-    ctx.stroke();
-
-    // The figure: sways side to side and nods.
-    const x = WIDTH / 2 + Math.sin(t * 0.7) * 150;
-    const y = 360 + Math.sin(t * 1.4) * 14;
+    // A tall window with mullions, and the light it throws on the wall.
     ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(Math.sin(t * 0.9) * 0.12);
-    ctx.fillStyle = '#ff3b5c';
-    ctx.beginPath();
-    ctx.ellipse(0, 330, 230, 190, 0, Math.PI, 0);
-    ctx.fill();
-    ctx.fillStyle = '#e9b48f';
-    ctx.fillRect(-45, 100, 90, 70);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 120, 145, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#2a1a14';
-    ctx.beginPath();
-    ctx.ellipse(0, -70, 128, 88, 0, Math.PI, 0);
-    ctx.fill();
-    const blink = (t % 4) < 0.15 ? 0.15 : 1;
-    ctx.beginPath();
-    ctx.ellipse(-44, -5, 13, 16 * blink, 0, 0, Math.PI * 2);
-    ctx.ellipse(44, -5, 13, 16 * blink, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#2a1a14';
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.arc(0, 45, 42, 0.15 * Math.PI, 0.85 * Math.PI);
-    ctx.stroke();
+    ctx.translate(WIDTH / 2, 300);
+    ctx.fillStyle = spill;
+    ctx.fillRect(-520, -520, 1040, 1040);
+    ctx.fillStyle = daylight;
+    ctx.fillRect(-150, -260, 300, 520);
+    ctx.fillStyle = '#1b1c20';
+    ctx.fillRect(-6, -260, 12, 520);
+    ctx.fillRect(-150, -40, 300, 10);
+    ctx.fillRect(-160, -270, 320, 12);
+    ctx.fillRect(-160, 258, 320, 14);
     ctx.restore();
 
-    // Label written backwards, so it reads correctly once the mirror flips it.
+    // A warm lamp off to one side, breathing very slightly.
     ctx.save();
-    ctx.scale(-1, 1);
-    ctx.fillStyle = 'rgba(242, 243, 247, 0.85)';
-    ctx.font = '700 44px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('DEMO', -WIDTH / 2, 545);
+    ctx.translate(250, 220);
+    ctx.globalAlpha = 0.85 + Math.sin(t * 0.7) * 0.08;
+    ctx.fillStyle = lamp;
+    ctx.fillRect(-300, -300, 600, 600);
+    ctx.restore();
+
+    // Skirting board and door frame lines.
+    ctx.fillStyle = '#0e0f12';
+    ctx.fillRect(0, 610, WIDTH, 6);
+    ctx.fillRect(960, 120, 5, 490);
+
+    // The silhouette: head and shoulders, swaying gently, with a faint cool rim light.
+    const x = WIDTH / 2 + Math.sin(t * 0.45) * 90 + Math.sin(t * 1.3) * 8;
+    const y = 400 + Math.sin(t * 0.9) * 6;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.sin(t * 0.6) * 0.05);
+    ctx.fillStyle = '#0b0b0d';
+    ctx.strokeStyle = 'rgba(190, 205, 222, 0.35)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-250, 330);
+    ctx.bezierCurveTo(-240, 180, -150, 150, -60, 135);
+    ctx.lineTo(-48, 70);
+    ctx.bezierCurveTo(-95, 40, -100, -60, -92, -95);
+    ctx.bezierCurveTo(-80, -170, 80, -170, 92, -95);
+    ctx.bezierCurveTo(100, -60, 95, 40, 48, 70);
+    ctx.lineTo(60, 135);
+    ctx.bezierCurveTo(150, 150, 240, 180, 250, 330);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
     ctx.restore();
   }
 
