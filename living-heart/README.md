@@ -2,7 +2,7 @@
 
 A real, beating human heart you can fly inside: a heart study centre. Tap any part to learn what it does, follow the blood through the heart one stop at a time, or block the glass threads around it and watch the heart fight to keep up.
 
-**Live:** https://tirupathipodugu.github.io/30-days-30-apps/day-02-living-heart/ (start at any resting rate with `?bpm=120`)
+**Live:** https://tirupathipodugu.github.io/ideas/living-heart/ (start at any resting rate with `?bpm=120`)
 
 For learning, not medical advice.
 

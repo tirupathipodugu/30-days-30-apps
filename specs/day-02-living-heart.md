@@ -2,8 +2,8 @@
 
 **Hook:** A real human heart beats in the middle of the page, and every beat pushes blood through glass threads that cover the whole screen.
 
-**URL:** https://tirupathipodugu.github.io/30-days-30-apps/day-02-living-heart/
-**Folder:** `day-02-living-heart/` (index.html, style.css, js/*.js, vendor/, assets/)
+**URL:** https://tirupathipodugu.github.io/ideas/living-heart/
+**Folder:** `living-heart/` (index.html, style.css, js/*.js, vendor/, assets/)
 **Tech:**
 - three.js **r170** (`three@0.170.0`), vendored as ES modules into `vendor/three/`. Copy `build/three.module.js`, plus `GLTFLoader`, `RoomEnvironment`, `EffectComposer`, `RenderPass`, `UnrealBloomPass`, `ShaderPass`, `OutputPass` and their imports from `examples/jsm/`. Use an import map, and nothing loads from a CDN.
 - No build step, no backend, and a CSP of `default-src 'self'`. Because of that CSP there are no Draco/meshopt WASM decoders (see §2).
@@ -42,7 +42,7 @@
     --compress quantize --texture-compress webp --texture-size 2048 --simplify false
   ```
   Target ≤ 4 MB (`KHR_mesh_quantization` + WebP, both decoded natively by GLTFLoader without WASM). Drop the metalness map, because tissue is not metal.
-- **Attribution.** It goes in `day-02-living-heart/README.md` and as a tiny footer line ("Heart model: neshallads, CC BY 4.0", linked):
+- **Attribution.** It goes in `living-heart/README.md` and as a tiny footer line ("Heart model: neshallads, CC BY 4.0", linked):
   > "Realistic Human Heart" (https://sketchfab.com/3d-models/realistic-human-heart-3f8072336ce94d18b3d0d055a1ece089) by neshallads (https://sketchfab.com/neshallads), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Changes: recompressed, re-shaded, animated.
 
 **Fallback: "Anatomically Correct Human Heart" by Pigcraft (@s8819296), CC BY 4.0**
@@ -228,7 +228,7 @@ Same restrained style as Day 1, but darker and quieter.
 
 **Files:** `js/main.js` (setup, loop, tiers), `cycle.js`, `heart.js` (load, weights, material), `threads.js` (generate, geometry, shader), `post.js`, `ui.js`, `sound.js`. Each file gets a one-line comment at the top saying what it does.
 
-**`day-02-living-heart/README.md`:**
+**`living-heart/README.md`:**
 - what it is and the live link
 - how to call `setHeartRate` from the WHOOP bridge
 - five bullets on how it works
@@ -238,7 +238,7 @@ Same restrained style as Day 1, but darker and quieter.
 
 - **No test suite** (the founder's decision). The builder serves it locally (`python -m http.server 8000`), opens `?bpm=120` once in headless Chromium, and checks that there are no console errors and the canvas isn't blank. Then the builder pushes. The founder tests on the Pages link.
 - `apps.json` entry:
-  `{"day":2,"name":"Living Heart","hook":"A real heart beats at the centre of the page and pumps blood through glass threads to every edge.","path":"day-02-living-heart/"}`
+  `{"day":2,"name":"Living Heart","hook":"A real heart beats at the centre of the page and pumps blood through glass threads to every edge.","path":"living-heart/"}`
 - An OG image: a 1200×630 still with a pulse caught halfway out.
 - X post draft (personal account, with the video):
   ```
@@ -246,7 +246,7 @@ Same restrained style as Day 1, but darker and quieter.
 
   every beat pushes blood out through glass threads to the edges of the screen
 
-  https://tirupathipodugu.github.io/30-days-30-apps/day-02-living-heart/
+  https://tirupathipodugu.github.io/ideas/living-heart/
   ```
 - **Demo video (12–15 s)**, a screen recording with a small `BPM` overlay plus a phone-camera inset of the founder:
   1. 0–3 s: a slow push-in on the heart at about 62 BPM, with the first pulse running out to the edges.

@@ -2,8 +2,8 @@
 
 **Hook:** One mirror. Tap it and it breaks. Keep tapping.
 
-**URL:** https://tirupathipodugu.github.io/30-days-30-apps/day-01-mirror-room/
-**Folder:** `day-01-mirror-room/` (index.html, style.css, js/*.js)
+**URL:** https://tirupathipodugu.github.io/ideas/mirror-room/
+**Folder:** `mirror-room/` (index.html, style.css, js/*.js)
 **Tech:**
 - Plain, readable HTML, CSS and JS ES modules, hand-written WebGL2, no libraries, no build step.
 - No network requests: a CSP of `default-src 'self'`.
@@ -95,11 +95,11 @@
 - No test suite. The founder decided this: people use it and read the code.
 - Before pushing, the builder opens it once locally (`python -m http.server 8000`, `?demo=1`) only to make sure the page loads and a tap breaks the mirror. That's all.
 - The code is meant to be read and shared. Write small, clearly named modules with a short comment at the top of each file saying what it does. No dead code, no debug-only features.
-- Add `day-01-mirror-room/README.md`: what it is, the live link, and how it works in 5–6 bullets (camera → texture, the split tree, one draw call, ripple sim, time buffer).
+- Add `mirror-room/README.md`: what it is, the live link, and how it works in 5–6 bullets (camera → texture, the split tree, one draw call, ripple sim, time buffer).
 
 ## 7. Ship
 
-- Add to `apps.json`: `{"day":1,"name":"Mirror Room","hook":"One mirror. Tap it and it breaks. Keep tapping.","path":"day-01-mirror-room/"}`
+- Add to `apps.json`: `{"day":1,"name":"Mirror Room","hook":"One mirror. Tap it and it breaks. Keep tapping.","path":"mirror-room/"}`
 - An OG image of a 128-piece broken mirror.
 - X post draft (personal account, attach the demo video):
 
@@ -112,7 +112,7 @@ every shard still shows you, slightly off, like real broken glass. drag your fin
 
 runs in your browser, nothing uploaded
 
-https://tirupathipodugu.github.io/30-days-30-apps/day-01-mirror-room/
+https://tirupathipodugu.github.io/ideas/mirror-room/
 ```
 
 - **Demo video (12 s):**

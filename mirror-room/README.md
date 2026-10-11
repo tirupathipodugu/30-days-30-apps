@@ -2,7 +2,7 @@
 
 A mirror you can break.
 
-**Live:** https://tirupathipodugu.github.io/30-days-30-apps/day-01-mirror-room/ (no camera? add `?demo=1`)
+**Live:** https://tirupathipodugu.github.io/ideas/mirror-room/ (no camera? add `?demo=1`)
 
 Your camera opens as a full-screen silvered mirror. Tap the glass and it cracks like a real struck mirror: jagged radial cracks, rough concentric rings, a crushed and chipped centre. Every shard still shows you, tipped a fraction of a degree in its frame, so the reflection no longer lines up. Everything runs in your browser and nothing is uploaded.
 
