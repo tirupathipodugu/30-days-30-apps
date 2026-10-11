@@ -315,7 +315,8 @@ const SWEEP = [
 // side, then the other. Turned frames give the cheek and under-eye facing the camera a clear view.
 const STRAIGHT_S = 3;       // seconds of straight-on frames
 const TURN_HOLD_S = 1.5;    // seconds to hold each turn
-const TURN_DEG = 14;        // how far a turn has to go
+const TURN_DEG = 12;        // how far a turn has to go
+const TURN_MAX = 40;        // past this the far cheek hides and the tracker can lose the face
 const TURN_GIVE_UP_S = 7;   // move on anyway, so nobody gets stuck
 const WEIGHT = [0.4, 0.3, 0.3];
 
@@ -352,14 +353,17 @@ function tickScan(now) {
     if (face && Math.abs(yaw) < 10) sc.hold += dt;
     text = 'Look straight at the camera';
     if (sc.hold >= STRAIGHT_S || sc.inPhase >= STRAIGHT_S + 2) nextPhase(sc);   // a phone held at an angle never reads perfectly straight
-  } else if (sc.phase === 1) {
-    if (face && Math.abs(yaw) >= TURN_DEG && Math.abs(yaw) <= 32) { sc.side = sc.side || Math.sign(yaw); if (Math.sign(yaw) === sc.side) sc.hold += dt; }
-    text = sc.hold > 0 ? 'Hold it there…' : Math.abs(yaw) > 5 ? '← A little more' : '← Turn slowly to your left';
-    if (sc.hold >= TURN_HOLD_S || sc.inPhase >= TURN_GIVE_UP_S) nextPhase(sc);
-  } else if (sc.phase === 2) {
-    const want = -(sc.side || 1);
-    if (face && Math.sign(yaw) === want && Math.abs(yaw) >= TURN_DEG && Math.abs(yaw) <= 32) sc.hold += dt;
-    text = sc.hold > 0 ? 'Hold it there…' : Math.sign(yaw) === want && Math.abs(yaw) > 5 ? 'A little more →' : 'Now the other side →';
+  } else if (sc.phase === 1 || sc.phase === 2) {
+    // The words follow where the head is right now, not what has been collected so far.
+    const a = Math.abs(yaw);
+    if (sc.phase === 1 && !sc.side && a >= TURN_DEG && a <= TURN_MAX) sc.side = Math.sign(yaw);
+    const want = sc.phase === 1 ? (sc.side || Math.sign(yaw) || 1) : -(sc.side || 1);
+    const right = Math.sign(yaw) === want;
+    const inRange = right && a >= TURN_DEG && a <= TURN_MAX;
+    if (face && inRange) sc.hold += dt;
+    const ask = sc.phase === 1 ? '← Turn slowly to your left' : 'Now the other side →';
+    const more = sc.phase === 1 ? '← A little more' : 'A little more →';
+    text = !face ? ask : inRange ? 'Hold it there…' : right && a > TURN_MAX ? 'Not so far. Come back a little' : right && a > 5 ? more : ask;
     if (sc.hold >= TURN_HOLD_S || sc.inPhase >= TURN_GIVE_UP_S) nextPhase(sc);
   } else {
     text = 'Look straight at the camera';
@@ -384,7 +388,7 @@ function tickScan(now) {
 
 function addScanFrame(r, meta) {
   const p = meta.pose;
-  if (Math.abs(p.yaw) > 32 || Math.abs(p.pitch) > 24 || r.light.clip > 0.12) return;
+  if (Math.abs(p.yaw) > TURN_MAX || Math.abs(p.pitch) > 24 || r.light.clip > 0.12) return;
   // A cheek or under-eye turned away from the camera is foreshortened: don't count it in that frame.
   const c = r.counts;
   const weights = {
@@ -512,7 +516,7 @@ function drawOverlay(now) {
 const INFO_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></svg>';
 
 // What the level describes, so a card reads "Some redness" rather than a number to decode.
-const WHAT = { redness: 'redness', shine: 'shine', tone: 'uneven tone', darkCircles: 'dark circles', lines: 'fine lines', texture: 'roughness' };
+const WHAT = { spots: 'spots', redness: 'redness', shine: 'shine', tone: 'uneven tone', darkCircles: 'dark circles', lines: 'fine lines', texture: 'roughness' };
 
 function renderResults() {
   const res = state.results;

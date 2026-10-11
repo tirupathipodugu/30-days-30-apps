@@ -39,14 +39,15 @@ export function intensitiesFor(k, raw) {
   const out = {};
   const set = (regs, f) => { for (const [r, v] of Object.entries(regs || {})) if (Number.isFinite(v)) out[r] = f(v, r); };
   switch (k) {
+    case 'spots': set(raw.blem?.regions, (v) => clamp01(v / 4)); break;
     case 'redness': set(raw.redness.regions, (v) => clamp01(v / 5)); break;
     case 'shine': set(raw.shine.regions, (v) => clamp01(v / 0.08)); break;
     case 'tone':
       set(raw.tone.regions, (v, r) => Math.max(clamp01((v - 0.5) / 1.7), clamp01((raw.tone.spotRegions?.[r] || 0) / 6)));
       break;
-    case 'darkCircles': set(raw.dark.regions, (v) => clamp01((v - 1.5) / 11)); break;
+    case 'darkCircles': set(raw.dark.regions, (v) => clamp01((v - 1) / 8)); break;
     case 'lines': set(raw.lines.regions, (v) => clamp01((v - 0.2) / 0.9)); break;
-    case 'texture': set(raw.texture.regions, (v) => clamp01((v - 0.9) / 1.7)); break;
+    case 'texture': set(raw.texture.regions, (v) => clamp01((v - 0.4) / 1.2)); break;
     default: break;
   }
   return out;

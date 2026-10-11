@@ -320,6 +320,51 @@ function analyse(msg) {
     tone.spotRegions = perRegion;
   }
 
+  // ---- Spots & bumps: small, compact patches redder OR darker than the skin right around them ----
+  // A breakout can show red on lighter skin and darker or brown on deeper skin, so both count.
+  const blem = { count: NaN, regions: {} };
+  {
+    const regs = ['forehead', 'cheekA', 'cheekB', 'nose', 'chin'].filter(ok);
+    if (regs.length) {
+      const mask = new Uint8Array(n);
+      for (const r of regs) for (const i of idx[r]) if (b.skin[i] && !b.spec[i]) mask[i] = 1;
+      const mA = maskedBox(A, mask, w, h, r1, new Float32Array(n));
+      const mL = maskedBox(L, mask, w, h, r1, new Float32Array(n));
+      const dA = [], dL = [];
+      for (const r of regs) for (const i of idx[r]) if (mask[i]) { dA.push(A[i] - mA[i]); dL.push(L[i] - mL[i]); }
+      const sdA = Math.max(0.6, mad(dA, median(dA))), sdL = Math.max(0.8, mad(dL, median(dL)));
+      const cutA = Math.max(2.2, 2.4 * sdA), cutL = -Math.max(3, 2.4 * sdL);
+      b.spot.fill(0, 0, n);
+      for (const r of regs) for (const i of idx[r]) if (mask[i] && (A[i] - mA[i] > cutA || L[i] - mL[i] < cutL)) b.spot[i] = 1;
+      const minA = Math.max(4, Math.round(0.0002 * ed * ed)), maxA = Math.round(0.03 * ed * ed);
+      b.seen.fill(0, 0, n);
+      let count = 0;
+      const stack = [];
+      for (let i = 0; i < n; i++) {
+        if (!b.spot[i] || b.seen[i]) continue;
+        let size = 0, x0 = w, x1 = 0, y0 = h, y1 = 0;
+        stack.push(i); b.seen[i] = 1;
+        while (stack.length) {
+          const j = stack.pop();
+          size++;
+          const x = j % w, y = (j - x) / w;
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+          for (const k of [j - 1, j + 1, j - w, j + w]) {
+            if (k >= 0 && k < n && b.spot[k] && !b.seen[k] && Math.abs((k % w) - x) <= 1) { b.seen[k] = 1; stack.push(k); }
+          }
+        }
+        const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+        // Hairs, stubble and pore lines are long and thin; spots are round-ish.
+        if (size >= minA && size <= maxA && Math.max(bw, bh) / Math.min(bw, bh) < 2.6 && size / (bw * bh) > 0.35) {
+          count++;
+          const reg = names[b.region[i]];
+          blem.regions[reg] = (blem.regions[reg] || 0) + 1;
+        }
+      }
+      blem.count = count;
+    }
+  }
+
   // ---- Dark circles: under-eye vs upper cheek, per side ----
   const dark = { regions: {} };
   {
@@ -399,7 +444,7 @@ function analyse(msg) {
   for (const name of names) counts[name] = stats[name] ? stats[name].skinN : 0;
   const colour = {};
   for (const name of names) if (stats[name]) colour[name] = [stats[name].L, stats[name].a, stats[name].b].map((v) => Math.round(v * 10) / 10);
-  return { light, redness, shine, tone, dark, lines, texture, counts, colour };
+  return { light, redness, shine, tone, blem, dark, lines, texture, counts, colour };
 }
 
 self.onmessage = (ev) => {

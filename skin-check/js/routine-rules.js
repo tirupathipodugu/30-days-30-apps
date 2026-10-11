@@ -22,6 +22,7 @@
 //   [SPF-AGE]    Hughes MCB et al. Sunscreen and prevention of skin aging: a randomized trial. Ann Intern Med 2013;158:781–90.
 
 export const GOALS = [
+  { id: 'spots', label: 'Fewer spots & breakouts' },
   { id: 'tone', label: 'Even tone & fade dark spots' },
   { id: 'lines', label: 'Fewer fine lines' },
   { id: 'oil', label: 'Less oil & shine' },
@@ -97,7 +98,7 @@ export const INGREDIENTS = {
   niacinamide: {
     name: 'Niacinamide',
     when: 'both', order: 4, active: true,
-    goals: ['oil', 'pores', 'redness', 'tone', 'undereye'],
+    goals: ['oil', 'pores', 'redness', 'tone', 'undereye', 'spots'],
     types: ['oily', 'combination', 'sensitive'],
     forText: 'A calm, well-tolerated vitamin that helps with oil, the look of pores, redness and uneven tone.',
     start: { normal: '4–5% once a day, morning or night. It plays well with almost everything.', sensitive: 'Start at 2–4%, every other day for two weeks, then daily.' },
@@ -111,7 +112,7 @@ export const INGREDIENTS = {
   azelaic: {
     name: 'Azelaic acid',
     when: 'pm', order: 5, active: true,
-    goals: ['redness', 'tone', 'pores'],
+    goals: ['redness', 'tone', 'pores', 'spots'],
     types: ['sensitive', 'oily', 'combination'],
     forText: 'Gently evens tone and calms redness, and helps keep pores clear. Considered suitable in pregnancy.',
     start: { normal: '10% (over the counter) every other night for two weeks, then nightly. A mild tingle at first is common.', sensitive: '10% two or three nights a week for the first month, on dry skin, after moisturiser if it stings.' },
@@ -126,7 +127,7 @@ export const INGREDIENTS = {
   retinoid: {
     name: 'Retinol / retinal',
     when: 'pm', order: 6, active: true, flags: ['retinoid'],
-    goals: ['lines', 'tone', 'pores'],
+    goals: ['lines', 'tone', 'pores', 'spots'],
     forText: 'The best-studied ingredient for fine lines and texture. Night only, because light breaks it down.',
     start: { normal: '2–3 nights a week for the first month, a pea-sized amount for the whole face, then build up to nightly if your skin is happy.', sensitive: 'Once a week for the first two weeks, then twice a week. Use it after moisturiser (a “sandwich”) to soften it.' },
     avoid: [
@@ -143,7 +144,7 @@ export const INGREDIENTS = {
   bha: {
     name: 'Salicylic acid (BHA)',
     when: 'pm', order: 5, active: true, flags: ['leaveOnBHA', 'strongAcid'],
-    goals: ['oil', 'pores'],
+    goals: ['oil', 'pores', 'spots'],
     types: ['oily', 'combination'],
     forText: 'Oil-soluble, so it gets into pores and helps with shine and the look of pores.',
     start: { normal: '1–2% leave-on, two or three nights a week, on oily areas first.', sensitive: '0.5–1%, once or twice a week, T-zone only.' },
@@ -357,7 +358,7 @@ function dedupe(list) {
 
 /** Map measures from a scan to suggested goals (the user can change them). */
 export function suggestGoals(results) {
-  const map = { redness: 'redness', shine: 'oil', tone: 'tone', darkCircles: 'undereye', lines: 'lines', texture: 'pores' };
+  const map = { spots: 'spots', redness: 'redness', shine: 'oil', tone: 'tone', darkCircles: 'undereye', lines: 'lines', texture: 'pores' };
   return results.focus.map((k) => map[k]).filter(Boolean).slice(0, 2);
 }
 
