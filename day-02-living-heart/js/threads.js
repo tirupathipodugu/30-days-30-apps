@@ -8,12 +8,13 @@ const SEED = 20261011;
  * roots: [{ pos: [x,y,z], dir: [x,y,z] }] at the vessel cuts (heart units, heart at the origin)
  * slab:  { halfW, halfH, halfD } — the frustum at the heart's depth × 1.15, ±0.6 heart heights deep
  */
-export function growThreads(roots, slab, { attractors: nAttr, wanderers: nWand, maxSamples }) {
+export function growThreads(roots, slab, { attractors: nAttr, wanderers: nWand, maxSamples }, clear = { x: 0.42, y: 0.55 }) {
   const rand = rng(SEED);
-  const nodes = [];   // { p, parent, s, kids }
+  const nodes = [];   // { p, parent, s, kids, root }
+  let rootIndex = -1;
   const addNode = (p, parent) => {
     const s = parent < 0 ? 0 : nodes[parent].s + dist(p, nodes[parent].p);
-    nodes.push({ p, parent, s, kids: [] });
+    nodes.push({ p, parent, s, kids: [], root: parent < 0 ? ++rootIndex : nodes[parent].root });
     if (parent >= 0) nodes[parent].kids.push(nodes.length - 1);
     return nodes.length - 1;
   };
@@ -21,23 +22,30 @@ export function growThreads(roots, slab, { attractors: nAttr, wanderers: nWand, 
   // Trunks: along each vessel, then curving out toward the page.
   for (const r of roots) {
     let p = r.pos.slice(), dir = norm(r.dir), idx = addNode(p, -1);
-    const out = norm([r.pos[0] + r.dir[0] * 0.3, r.pos[1] + r.dir[1] * 0.3, 0]);
-    for (let i = 0; i < 26; i++) {
-      const k = Math.min(1, i / 16);
-      dir = norm([dir[0] * (1 - 0.12 * k) + out[0] * 0.12 * k, dir[1] * (1 - 0.12 * k) + out[1] * 0.12 * k, dir[2] * (1 - 0.12 * k)]);
+    const out = norm([r.pos[0] + r.dir[0] * 0.3 + Math.sign(r.pos[0] || 1) * 0.25, (r.pos[1] + r.dir[1] * 0.3) * 0.45, 0]);   // fan out sideways, so no trunk leaves the page straight up or down
+    // Each trunk runs unbranched until it is clear of the heart, so it reads as one main vessel.
+    const inside = (q) => Math.abs(q[0]) < clear.x && Math.abs(q[1]) < clear.y;
+    let outside = 0;
+    for (let i = 0; i < 80 && (i < 26 || outside < 4); i++) {
+      if (!inside(p)) outside++;
+      const k = Math.min(1, i / 6) * 0.2;
+      dir = norm([dir[0] * (1 - k) + out[0] * k, dir[1] * (1 - k) + out[1] * k, dir[2] * (1 - k)]);
       p = [p[0] + dir[0] * 0.025, p[1] + dir[1] * 0.025, p[2] + dir[2] * 0.025];
       idx = addNode(p, idx);
     }
   }
 
-  colonise(nodes, addNode, slab, rand, nAttr);
-  const paths = treePaths(nodes);
+  colonise(nodes, addNode, slab, rand, nAttr, clear);
+  const { paths, nodePath } = treePaths(nodes);
 
   // Wanderers: long curl-noise walks from random branch nodes, out past the edges.
   const c = [0, 0, 0];
   const limitX = slab.halfW * 1.05, limitY = slab.halfH * 1.05;
   for (let w = 0; w < nWand; w++) {
-    const start = nodes[Math.floor(rand() * nodes.length)];
+    // Wanderers leave from the open page, never from a trunk still crossing the heart.
+    let startIdx = Math.floor(rand() * nodes.length);
+    for (let tries = 0; tries < 20 && Math.abs(nodes[startIdx].p[0]) < clear.x && Math.abs(nodes[startIdx].p[1]) < clear.y; tries++) startIdx = Math.floor(rand() * nodes.length);
+    const start = nodes[startIdx];
     let p = start.p.slice();
     const pts = [p];
     const off = rand() * 100;
@@ -56,22 +64,27 @@ export function growThreads(roots, slab, { attractors: nAttr, wanderers: nWand, 
       pts.push(p);
       if (Math.abs(p[0]) > limitX || Math.abs(p[1]) > limitY) break;
     }
-    paths.push({ pts, s0: start.s, w0: 0.8 + rand() * 0.6, wanderer: true });
+    paths.push({ pts, s0: start.s, w0: 0.8 + rand() * 0.6, wanderer: true, root: start.root, parentKey: nodePath[startIdx] });
   }
 
   // Smooth and resample everything, keeping under the vertex budget.
   let total = 0;
   for (const p of paths) total += polyLength(p.pts);
   const step = Math.max(0.01, total / maxSamples);
-  return paths.map((p, i) => ({ ...p, id: i, pts: catmullResample(p.pts, step) }))
-    .filter((p) => p.pts.length >= 2);
+  // Ids are dense after filtering; each path keeps its parent (where it branched off) so a block upstream
+  // can shut everything downstream. Parents always come before their children.
+  const kept = paths.map((p, key) => ({ ...p, key, pts: catmullResample(p.pts, step) })).filter((p) => p.pts.length >= 2);
+  const idOf = new Map(kept.map((p, i) => [p.key, i]));
+  // A parent dropped as too short hands its children on to its own parent.
+  const resolve = (key) => { while (key >= 0 && !idOf.has(key)) key = paths[key].parentKey ?? -1; return key >= 0 ? idOf.get(key) : -1; };
+  return kept.map((p, i) => ({ ...p, id: i, parent: resolve(p.parentKey ?? -1), trunk: !p.wanderer && (p.parentKey ?? -1) < 0 }));
 }
 
-function colonise(nodes, addNode, slab, rand, count) {
+function colonise(nodes, addNode, slab, rand, count, clear) {
   const attr = [];
   while (attr.length < count) {
     const p = [(rand() * 2 - 1) * slab.halfW * 1.05, (rand() * 2 - 1) * slab.halfH * 1.05, (rand() * 2 - 1) * slab.halfD];
-    if (Math.abs(p[0]) < 0.42 && Math.abs(p[1]) < 0.55) continue;   // keep the heart's own footprint clear
+    if (Math.abs(p[0]) < clear.x && Math.abs(p[1]) < clear.y) continue;   // keep the heart's own footprint clear
     attr.push(p);
   }
   const alive = new Uint8Array(attr.length).fill(1);
@@ -91,6 +104,7 @@ function colonise(nodes, addNode, slab, rand, count) {
   const meetNewNodes = () => {
     for (; seen < nodes.length; seen++) {
       const q = nodes[seen].p;
+      if (Math.abs(q[0]) < clear.x && Math.abs(q[1]) < clear.y) continue;   // no branches over the heart
       const gx = Math.floor(q[0] / CELL), gy = Math.floor(q[1] / CELL), gz = Math.floor(q[2] / CELL);
       for (let dz = -2; dz <= 2; dz++) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
         const b = grid.get(key(gx + dx, gy + dy, gz + dz));
@@ -150,13 +164,16 @@ function treePaths(nodes) {
   let maxTips = 1;
   for (let i = 0; i < nodes.length; i++) if (nodes[i].parent < 0) maxTips = Math.max(maxTips, tips[i]);
   const paths = [];
+  const nodePath = new Int32Array(nodes.length).fill(-1);
   const stack = nodes.map((n, i) => i).filter((i) => nodes[i].parent < 0).map((i) => ({ start: i, from: -1, gen: 0 }));
   while (stack.length) {
     const { start, from, gen } = stack.pop();
     const pts = [], widths = [];
+    const key = paths.length;
     if (from >= 0) { pts.push(nodes[from].p); widths.push(Math.pow(tips[start] / maxTips, 0.42)); }
     let i = start;
     for (;;) {
+      nodePath[i] = key;
       pts.push(nodes[i].p);
       widths.push(Math.pow(tips[i] / maxTips, 0.42));
       const kids = nodes[i].kids;
@@ -166,9 +183,10 @@ function treePaths(nodes) {
       for (let k = 1; k < kids.length; k++) stack.push({ start: kids[k], from: i, gen: gen + 1 });
       i = kids[0];
     }
-    if (pts.length >= 3) paths.push({ pts, widths, s0: nodes[from >= 0 ? from : start].s, gen });
+    // Short stubs still hold a slot so the node-to-path map stays valid; they are dropped after resampling.
+    paths.push({ pts: pts.length >= 3 ? pts : [], widths, s0: nodes[from >= 0 ? from : start].s, gen, root: nodes[start].root, parentKey: from >= 0 ? nodePath[from] : -1 });
   }
-  return paths;
+  return { paths, nodePath };
 }
 
 function catmullResample(pts, step) {

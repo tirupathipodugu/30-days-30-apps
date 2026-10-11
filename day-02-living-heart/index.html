@@ -1,15 +1,15 @@
 <!doctype html>
-<!-- Living Heart: Day 2 of 30 Days, 30 Apps. A heart beats at the centre of the page and pumps blood through glass threads. -->
+<!-- Living Heart: Day 2 of 30 Days, 30 Apps. A real, beating heart you can fly inside: a heart study centre. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gh7NRJ7MEWdYUGMcXx0SUMJY93gUi2UqlztG1amlvwA='; img-src 'self' data: blob:; connect-src 'self' data: blob:">
-<title>Living Heart</title>
-<meta name="description" content="A heart beats at the centre of the page and pumps blood through glass threads to every edge.">
+<title>Living Heart · Heart Study Centre</title>
+<meta name="description" content="A real, beating heart you can fly inside. Tap any part to learn what it does.">
 <meta name="theme-color" content="#050507">
-<meta property="og:title" content="Living Heart">
-<meta property="og:description" content="A heart beats at the centre of the page and pumps blood through glass threads to every edge.">
+<meta property="og:title" content="Living Heart · Heart Study Centre">
+<meta property="og:description" content="A real, beating heart you can fly inside. Tap any part to learn what it does.">
 <meta property="og:image" content="https://tirupathipodugu.github.io/30-days-30-apps/day-02-living-heart/og.png">
 <meta property="og:url" content="https://tirupathipodugu.github.io/30-days-30-apps/day-02-living-heart/">
 <meta name="twitter:card" content="summary_large_image">
@@ -19,27 +19,104 @@
 <script type="module" src="js/main.js"></script>
 </head>
 <body>
-<canvas id="scene" aria-label="A beating human heart with glass threads carrying pulses of blood to the edges of the page" role="img"></canvas>
+<canvas id="scene" aria-label="A beating human heart. Drag or use the arrow keys to turn it, zoom to fly inside, and click a part to learn about it." role="img"></canvas>
 
 <header class="top">
-  <div class="title chrome">
+  <div class="title">
     <h1 class="mark">Living Heart</h1>
-    <p class="sub">blood through glass threads, at the speed of a heart</p>
+    <p class="sub">A heart study centre. Tap any part to learn what it does.</p>
   </div>
-  <p class="rate-readout chrome" aria-live="off"><span class="dot" id="dot" aria-hidden="true"></span><span id="bpm">72</span> BPM <span class="mode" id="mode">Manual</span></p>
+  <div class="topbar glass">
+    <button class="readout" id="rate" type="button" aria-expanded="false" aria-controls="ratebox" title="Set the resting heart rate">
+      <canvas id="ecg" width="64" height="22" aria-hidden="true"></canvas>
+      <span class="bpm"><span id="bpm">72</span> BPM</span>
+      <span class="mode" id="mode">Rest</span>
+    </button>
+    <button class="btn" id="sound" type="button" aria-pressed="true">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/><path class="mute" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+      <span id="soundLabel">Sound on</span>
+    </button>
+    <button class="btn icon" id="help" type="button" aria-label="Controls guide" aria-haspopup="dialog">?</button>
+  </div>
 </header>
 
-<footer class="bottom">
-  <p class="beats chrome">Beats since you arrived <span id="beats">0</span></p>
-  <div class="credits chrome">
-    <p class="honest">A visualisation, not a medical device.</p>
-    <p class="footer">Day 2 / 30 · <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a> · <a href="../">← all apps</a> · <a id="credit">Heart: procedural, built in code</a></p>
+<div class="ratebox glass" id="ratebox" hidden>
+  <label for="slider">Resting rate <output id="rateOut">72</output> BPM</label>
+  <input class="slider" id="slider" type="range" min="40" max="200" step="1" value="72">
+</div>
+
+<nav class="dock glass" id="dock" aria-label="View controls">
+  <div class="group" role="group" aria-label="Rotate and tilt">
+    <button class="btn icon" type="button" data-nav="yaw:1" aria-label="Rotate left" title="Rotate left (←)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button>
+    <button class="btn icon" type="button" data-nav="pitch:-1" aria-label="Tilt up" title="Tilt up (↑)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 14.5l6-6 6 6"/></svg></button>
+    <button class="btn icon" type="button" data-nav="pitch:1" aria-label="Tilt down" title="Tilt down (↓)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg></button>
+    <button class="btn icon" type="button" data-nav="yaw:-1" aria-label="Rotate right" title="Rotate right (→)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
   </div>
-  <div class="controls chrome">
-    <button class="text" id="rate" type="button" aria-expanded="false" aria-controls="slider">Rate</button>
-    <input class="slider" id="slider" type="range" min="40" max="200" step="1" value="72" aria-label="Heart rate in beats per minute" hidden>
-    <button class="text" id="sound" type="button" aria-pressed="false">Sound off</button>
+  <div class="group" role="group" aria-label="Zoom">
+    <button class="btn icon" type="button" data-nav="zoom:-1" aria-label="Zoom out" title="Zoom out (− or S)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+    <button class="btn icon" type="button" data-nav="zoom:1" aria-label="Zoom in" title="Zoom in (+ or W)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button>
   </div>
+  <div class="group">
+    <button class="btn" id="cutaway" type="button" aria-pressed="false" title="Slice the heart open"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><path d="M9 6.5C6 7.5 4 9.8 4 13c0 3.5 2.6 6 5 6.5M15 6.5c3 1 5 3.3 5 6.5 0 3.5-2.6 6-5 6.5"/></svg><span>Cutaway</span></button>
+    <button class="btn" id="tour" type="button" title="Follow the blood through the heart"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5"/></svg><span>Tour</span></button>
+    <button class="btn" id="reset" type="button" title="Back to the starting view"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4v4h4"/></svg><span class="long">Reset view</span><span class="short">Reset</span></button>
+  </div>
+</nav>
+
+<aside class="panel glass" id="panel" hidden aria-labelledby="panelTitle">
+  <div class="grip" aria-hidden="true"></div>
+  <div class="panel-head">
+    <h2 id="panelTitle"></h2>
+    <button class="btn icon" id="panelClose" type="button" aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="panel-body" id="panelBody"></div>
+  <div class="panel-foot">
+    <button class="btn primary" id="flyTo" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg><span>Fly to</span></button>
+    <p class="disclaimer">For learning, not medical advice.</p>
+  </div>
+</aside>
+
+<section class="tourcard glass" id="tourcard" hidden aria-live="polite" aria-label="Tour of the blood's path">
+  <p class="step" id="tourStep"></p>
+  <h2 id="tourTitle"></h2>
+  <p id="tourText"></p>
+  <div class="row">
+    <button class="btn" id="tourBack" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg><span>Back</span></button>
+    <button class="btn primary" id="tourNext" type="button"><span>Next</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
+    <button class="btn" id="tourEnd" type="button"><span>End tour</span></button>
+  </div>
+</section>
+
+<div class="arrest" id="arrest" hidden>
+  <div class="card glass" role="alertdialog" aria-labelledby="arrestTitle" aria-describedby="arrestText">
+    <h2 id="arrestTitle"></h2>
+    <p id="arrestText"></p>
+    <button class="btn primary" id="restart" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg><span>Restart heart</span></button>
+    <p class="disclaimer">For learning, not medical advice.</p>
+  </div>
+</div>
+
+<dialog class="guide glass" id="guide" aria-labelledby="guideTitle">
+  <h2 id="guideTitle">How to explore</h2>
+  <ul>
+    <li><kbd>←</kbd> <kbd>→</kbd> rotate, <kbd>↑</kbd> <kbd>↓</kbd> tilt. On a phone, drag with one finger.</li>
+    <li><kbd>+</kbd> <kbd>−</kbd> (or <kbd>W</kbd> <kbd>S</kbd>, <kbd>Shift</kbd>+<kbd>↑</kbd> <kbd>↓</kbd>, the mouse wheel, or a pinch) zoom. Keep zooming in to fly inside the heart.</li>
+    <li>Click or tap any part of the heart to learn what it does. <strong>Fly to</strong> takes you there.</li>
+    <li><strong>Cutaway</strong> slices the heart open; <strong>Tour</strong> follows the blood through it, one stop at a time.</li>
+    <li>Click a glass thread to block it with a clot, and click the clot to clear it. Watch how the heart copes.</li>
+  </ul>
+  <p class="disclaimer">For learning, not medical advice.</p>
+  <form method="dialog"><button class="btn primary" type="submit">Got it</button></form>
+</dialog>
+
+<div class="loading" id="loading" role="status">
+  <div class="bar"><span id="loadBar"></span></div>
+  <p>Loading the heart <span id="loadPct"></span></p>
+</div>
+
+<footer class="foot">
+  <p class="beats">Beats since you arrived <span id="beats">0</span></p>
+  <p class="credits"><span class="honest">For learning, not medical advice.</span> <span class="extra">Day 2 / 30 · <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a> · </span><a href="../">← all apps</a> · <a id="credit" href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/">Heart: BodyParts3D, CC BY-SA</a></p>
 </footer>
 
 <div class="tip" id="tip" hidden aria-hidden="true"></div>

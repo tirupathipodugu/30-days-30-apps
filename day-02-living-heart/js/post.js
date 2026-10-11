@@ -34,11 +34,21 @@ const FinishShader = {
     }`,
 };
 
-export function createPost(renderer, scene, camera, { bloom, samples }) {
+// Three scene passes: the threads behind the heart (page camera), the heart (study camera), the threads in
+// front (page camera). The study camera can orbit and fly while the threads stay fixed to the page.
+export function createPost(renderer, { back, heart, front, pageCamera, heartCamera }, { bloom, samples }) {
   // A multisampled half-float target keeps hairline threads smooth.
   const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples });
   const composer = new EffectComposer(renderer, target);
-  composer.addPass(new RenderPass(scene, camera));
+  composer.addPass(new RenderPass(back, pageCamera));
+  const heartPass = new RenderPass(heart, heartCamera);
+  heartPass.clear = false;
+  heartPass.clearDepth = true;
+  composer.addPass(heartPass);
+  const frontPass = new RenderPass(front, pageCamera);
+  frontPass.clear = false;
+  frontPass.clearDepth = true;
+  composer.addPass(frontPass);
   let bloomPass = null;
   if (bloom) {
     bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.6, 1.2);

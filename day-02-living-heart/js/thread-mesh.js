@@ -5,15 +5,18 @@ import * as THREE from 'three';
 const VERT = /* glsl */`
 attribute vec3 aTangent;
 attribute float aSide, aS, aWidth, aSeed;
-uniform float uTime, uDpr, uV, uAtten, uHover, uReduced, uHalfD;
+uniform float uTime, uDpr, uV, uAtten, uHover, uReduced, uHalfD, uStrength, uBlockW;
+uniform sampler2D uBlockTex;
 uniform vec4 uBeats;
 uniform vec2 uRes;
-varying float vSide, vAlpha, vHover, vS, vSeed;
+varying float vSide, vAlpha, vHover, vS, vSeed, vDrained;
 varying vec2 vGlow;
 
-// The pulse front (x) and the blood left filling the thread behind it (y).
-vec2 glowAt(float s) {
+// The pulse front (x) and the blood left filling the thread behind it (y). A pulse that meets a block (bs)
+// stops there and piles up against it; nothing passes beyond.
+vec2 glowAt(float s, float bs) {
   vec2 g = vec2(0.0);
+  if (s > bs) return g;
   for (int i = 0; i < 4; i++) {
     float dt = uTime - uBeats[i];
     if (dt < 0.0 || dt > 6.0) continue;
@@ -25,8 +28,11 @@ vec2 glowAt(float s) {
       float pass = dt - s / uV;
       if (pass > 0.0) g.y += 0.25 * exp(-pass / 0.15);
     }
+    // Pressure building behind a block: each arriving pulse swells the glow just upstream, then eases off.
+    float arrive = dt - bs / uV;
+    if (bs < 1e3 && arrive > 0.0) g.x += 0.9 * exp(-arrive / 0.5) * exp(-(bs - s) / 0.05);
   }
-  return g * exp(-s / uAtten);
+  return g * exp(-s / uAtten) * uStrength;
 }
 
 void main() {
@@ -37,7 +43,9 @@ void main() {
     vec3 n = normalize(cross(aTangent, vec3(0.0, 0.0, 1.0)) + vec3(0.0, 0.0, 0.0001));
     p += n * 0.004 * min(aS, 4.0) * sin(uTime * 0.3 + aSeed * 1.7 + aS * 2.0);
   }
-  vec2 gg = glowAt(aS);
+  float bs = texelFetch(uBlockTex, ivec2(int(mod(aSeed, uBlockW)), int(floor(aSeed / uBlockW))), 0).r;
+  vec2 gg = glowAt(aS, bs);
+  vDrained = aS > bs ? 1.0 : 0.0;
   float g = gg.x + gg.y;
   vec4 c0 = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   vec4 c1 = projectionMatrix * modelViewMatrix * vec4(p + aTangent * 0.02, 1.0);
@@ -50,7 +58,7 @@ void main() {
   c0.xy += perp * aSide * drawW / uRes * c0.w;
   gl_Position = c0;
   vSide = aSide * drawW / max(drawW - uDpr, 0.5);
-  vAlpha = (1.0 - 0.6 * depthF) * min(1.0, w / uDpr);
+  vAlpha = (1.0 - 0.6 * depthF) * min(1.0, w / uDpr) * (aS > bs ? 0.3 : 1.0);
   vGlow = gg;
   vHover = abs(aSeed - uHover) < 0.5 ? 1.0 : 0.0;
   vS = aS;
@@ -59,9 +67,9 @@ void main() {
 `;
 
 const FRAG = /* glsl */`
-uniform float uTime;
+uniform float uTime, uFade;
 uniform vec3 uGlass, uBlood, uHot;
-varying float vSide, vAlpha, vHover, vS, vSeed;
+varying float vSide, vAlpha, vHover, vS, vSeed, vDrained;
 varying vec2 vGlow;
 
 void main() {
@@ -80,12 +88,15 @@ void main() {
   vec3 blood = mix(uBlood, uHot, smoothstep(0.7, 1.0, g)) * (0.6 + 0.4 * core);
   col = mix(col, blood * 0.85, clamp(g, 0.0, 1.0)) + blood * (max(g - 1.0, 0.0) * 0.5 + g * g * 1.2 * core);   // the core is bright enough to bloom
   col += uBlood * 0.12 * vGlow.y * (0.4 + 0.6 * core);
-  float k = vAlpha * edge * (1.0 + vHover);
+  col = mix(col, vec3(dot(col, vec3(0.33))) * 0.7, vDrained);   // drained past a block: grey glass
+  float k = vAlpha * edge * (1.0 + vHover) * uFade;
   gl_FragColor = vec4(col * k, 1.0);
 }
 `;
 
 const linear = (hex) => new THREE.Color(hex);
+
+export const BLOCK_W = 512;
 
 export function buildThreadMeshes(paths, { dpr, halfD, v, atten }) {
   let samples = 0;
@@ -128,7 +139,8 @@ export function buildThreadMeshes(paths, { dpr, halfD, v, atten }) {
     uniforms: {
       uTime: { value: 0 }, uDpr: { value: dpr }, uV: { value: v }, uAtten: { value: atten }, uHover: { value: -10 },
       uReduced: { value: 0 }, uHalfD: { value: halfD }, uBeats: { value: new THREE.Vector4(-99, -99, -99, -99) },
-      uRes: { value: new THREE.Vector2(1, 1) },
+      uRes: { value: new THREE.Vector2(1, 1) }, uStrength: { value: 1 }, uFade: { value: 1 },
+      uBlockTex: { value: blockTexture(paths.length) }, uBlockW: { value: BLOCK_W },
       uGlass: { value: linear(0xcfe3ee) }, uBlood: { value: linear(0xb3001b).multiplyScalar(3.2) }, uHot: { value: linear(0xff3b30).multiplyScalar(8.0) },
     },
     transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
@@ -143,6 +155,15 @@ export function buildThreadMeshes(paths, { dpr, halfD, v, atten }) {
     return m;
   };
   return { back: make(back, 1), front: make(front, 3), material, hover: new Float32Array(hover), vertices: samples * 2 };
+}
+
+// One float per path: the arc position where flow stops (1e6 when open), read in the vertex shader.
+function blockTexture(n) {
+  const h = Math.max(1, Math.ceil(n / BLOCK_W));
+  const tex = new THREE.DataTexture(new Float32Array(BLOCK_W * h).fill(1e6), BLOCK_W, h, THREE.RedFormat, THREE.FloatType);
+  tex.minFilter = tex.magFilter = THREE.NearestFilter;
+  tex.needsUpdate = true;
+  return tex;
 }
 
 // CSS-pixel widths: trunks taper to tips by how much tree each segment feeds; wanderers stay fine.

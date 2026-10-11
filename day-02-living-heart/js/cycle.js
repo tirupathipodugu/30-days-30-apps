@@ -27,10 +27,30 @@ export class Cycle {
     this.s2Done = false;
   }
 
-  /** A new rate never changes the current beat; the period eases to it over the next 3 beats. */
-  setBpm(bpm) {
+  /** A new rate never changes the current beat; the period eases to it over the next few beats. */
+  setBpm(bpm, beats = 3) {
     this.target = 60 / bpm;
-    this.stepsLeft = 3;
+    this.stepsLeft = beats;
+  }
+
+  /** The very next beat comes after rr seconds (for the irregular beats of a failing heart). */
+  nextAfter(rr) {
+    this.target = rr;
+    this.stepsLeft = 1;
+  }
+
+  /** Stops the heart: no more beats until restart. */
+  stop() {
+    this.stopped = true;
+  }
+
+  /** One strong beat now, then the rate eases from bpm down to the resting rate over `beats` beats. */
+  restart(now, bpm, restBpm, beats = 8) {
+    this.stopped = false;
+    this.rr = 60 / bpm;
+    this.timing = beatTiming(this.rr);
+    this.start = now - this.rr + 0.02;
+    this.setBpm(restBpm, beats);
   }
 
   get bpm() { return 60 / this.rr; }
@@ -38,6 +58,11 @@ export class Cycle {
   update(now) {
     const ev = this.events;
     ev.newBeat = false; ev.s2 = false;
+    if (this.stopped) {
+      const o = this.out;
+      o.vent = 0; o.twist = 0; o.atria = 0; o.eject = 0; o.phase = 0;
+      return o;
+    }
     while (now - this.start >= this.rr) {
       this.start += this.rr;
       if (this.stepsLeft > 0) {

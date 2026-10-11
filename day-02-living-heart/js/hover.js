@@ -1,8 +1,9 @@
-// Thread hit-testing: a 32×32 grid of projected samples, nearest sample within 8 px of the pointer.
+// Thread hit-testing: a 32×32 grid of projected samples, nearest sample within a radius of the pointer
+// (8 px for a mouse, much more for a finger).
 
 import * as THREE from 'three';
 
-const GRID = 32, RADIUS = 8;
+const GRID = 32;
 
 export class Hover {
   constructor(camera, canvas) {
@@ -53,7 +54,8 @@ export class Hover {
     this.refScreen.set(r.x, r.y);
   }
 
-  pick(x, y) {
+  /** Nearest sample within RADIUS px; weight(id) < 1 favours some threads (the main trunks). */
+  pick(x, y, RADIUS = 8, weight = null) {
     if (!this.samples) return null;
     if (!this.cells) this.rebuild();
     const cw = innerWidth / GRID, ch = innerHeight / GRID;
@@ -63,12 +65,14 @@ export class Hover {
     for (let cy = Math.max(0, y0); cy <= Math.min(GRID - 1, y1); cy++) {
       for (let cx = Math.max(0, x0); cx <= Math.min(GRID - 1, x1); cx++) {
         for (const i of this.cells[cy * GRID + cx]) {
-          const d = (this.xy[i * 2] - x) ** 2 + (this.xy[i * 2 + 1] - y) ** 2;
+          let d = (this.xy[i * 2] - x) ** 2 + (this.xy[i * 2 + 1] - y) ** 2;
+          if (weight) d *= weight(this.samples[i * 5 + 4]);
           if (d < bd) { bd = d; best = i; }
         }
       }
     }
     if (best < 0) return null;
-    return { id: this.samples[best * 5 + 4], delay: this.samples[best * 5 + 3] / this.speed };
+    const s = this.samples;
+    return { id: s[best * 5 + 4], s: s[best * 5 + 3], delay: s[best * 5 + 3] / this.speed, pos: [s[best * 5], s[best * 5 + 1], s[best * 5 + 2]] };
   }
 }

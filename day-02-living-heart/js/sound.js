@@ -22,10 +22,36 @@ export class HeartSound {
     }
     if (this.ctx) await (on ? this.ctx.resume() : this.ctx.suspend()).catch(() => {});
     this.on = on && this.ctx?.state === 'running';
+    if (!this.on && this.flat) this.flat = null;
     return this.on;
   }
 
-  lub() { this.thump(0.11, 45, 140, 0.09, 1.0); }
+  /** A quiet monitor tone for a stopped heart: it holds for a few seconds, then fades out by itself. */
+  flatline(on) {
+    if (this.flat) {
+      const { osc, env } = this.flat, t = this.ctx.currentTime;
+      env.gain.cancelScheduledValues(t);
+      env.gain.setTargetAtTime(0.0001, t, 0.08);
+      osc.stop(t + 0.5);
+      this.flat = null;
+    }
+    if (!on || !this.on || !this.ctx || this.ctx.state !== 'running') return;
+    const ctx = this.ctx, t = ctx.currentTime + 0.01;
+    const osc = ctx.createOscillator(), env = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.035, t + 0.08);
+    env.gain.setValueAtTime(0.035, t + 3.5);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 5);
+    osc.connect(env).connect(this.master);
+    osc.start(t);
+    osc.stop(t + 5.1);
+    this.flat = { osc, env };
+    osc.onended = () => { if (this.flat?.osc === osc) this.flat = null; };
+  }
+
+  lub(strength = 1) { this.thump(0.11, 45, 140, 0.09, Math.min(1.6, strength)); }
   dub() { this.thump(0.07, 65, 220, 0.055, 0.7); }
 
   // A short burst of noise plus a low sine, through a lowpass, with a fast attack and quick decay.
@@ -51,7 +77,7 @@ export class HeartSound {
     const src = ctx.createBufferSource();
     src.buffer = this.noise;
     const nGain = ctx.createGain();
-    nGain.gain.value = 0.6;
+    nGain.gain.value = 0.35;   // mostly the low sine: a soft thud, not a click
     src.connect(nGain).connect(lp);
     osc.start(t); src.start(t);
     osc.stop(t + duration + 0.05); src.stop(t + duration + 0.05);
