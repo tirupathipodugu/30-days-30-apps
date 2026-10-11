@@ -316,3 +316,5 @@ input[type="range"]::-moz-range-thumb { width: 30px; height: 30px; border-radius
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+.linkbtn { display: inline; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; min-height: 0; }

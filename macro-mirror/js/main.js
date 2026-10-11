@@ -37,7 +37,7 @@ function problemOf(error) {
 
 // ---- State -----------------------------------------------------------------------------------
 const state = {
-  plate: { ...DEFAULT_PLATE },
+  plate: DEMO ? { ...DEFAULT_PLATE } : {},   // the visitor's own day, built from nothing (the demo starts filled)
   profile: { age: '30', sex: 'x', height: 170, weight: 72, activity: 'walk', smoking: false },
   pos: 0,               // slider 0..6
   future: 'this',       // 'this' | 'better'
@@ -68,6 +68,8 @@ function numbers() {
   const burn = maintenance(state.profile);
   const eat = intake(state.plate);
   const better = betterPlate(state.plate, burn);
+  // An empty plate isn't a day of eating nothing: the face waits until there is something on it.
+  if (!eat) return { burn, eat, surplus: 0, better, betterSurplus: 0, empty: true };
   return { burn, eat, surplus: eat - burn, better, betterSurplus: better.kcal - burn };
 }
 
@@ -85,7 +87,7 @@ function updateReadout() {
   const surplus = which === 'better' ? n.betterSurplus : n.surplus;
   const days = daysAt(state.pos);
   const kg = kgAfter(surplus, days);
-  $('kcal').innerHTML = (which === 'better' ? 'Better plate: ' : '') + kcalText(surplus);
+  $('kcal').innerHTML = n.empty ? 'Tap <strong>Your plate</strong> and add everything you eat in a day' : (which === 'better' ? 'Better plate: ' : '') + kcalText(surplus);
   $('sheet-kcal').innerHTML = `${Math.round(n.eat)} kcal eaten · ${Math.round(n.burn)} burned · ${kcalText(n.surplus).replace('About ', 'about ')}`;
   const idx = stopIndex(state.pos);
   const near = Math.abs(state.pos - idx) < 0.08;
@@ -545,6 +547,7 @@ $('info').addEventListener('click', () => $('info-dialog').showModal());
 document.addEventListener('click', (e) => { if (e.target.closest('[data-info]')) $('info-dialog').showModal(); });
 
 // ---- The plate sheet -------------------------------------------------------------------------------------
+const foodRenders = [];
 function buildPlate() {
   const foods = $('foods');
   for (const f of FOODS) {
@@ -565,6 +568,7 @@ function buildPlate() {
     // Tapping the card itself adds one too.
     card.querySelector('.label').addEventListener('click', () => plus.click());
     render();
+    foodRenders.push(render);
     foods.append(card);
   }
   chips('activity', ACTIVITY, () => state.profile.activity, (v) => { state.profile.activity = v; });
@@ -650,7 +654,8 @@ function showError(key) {
   $('error-text').textContent = PROBLEMS[key] || PROBLEMS.missing;
 }
 
-$('open').addEventListener('click', () => start(DEMO));
+$('open').addEventListener('click', () => { start(DEMO); if (!intake(state.plate)) $('plate').hidden = false; });
+$('plate-typical').addEventListener('click', () => { state.plate = { ...DEFAULT_PLATE }; foodRenders.forEach((r) => r()); updateReadout(); });
 $('retry').addEventListener('click', () => start(DEMO));
 $('error-demo').addEventListener('click', () => { location.search = '?demo=1'; });
 $('close').addEventListener('click', () => {
