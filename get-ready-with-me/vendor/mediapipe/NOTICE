@@ -1,0 +1,4 @@
+MediaPipe Tasks Vision 1.0.1 (npm @mediapipe/tasks-vision), Copyright Google LLC, Apache License 2.0.
+vision_bundle.js is the package's vision_bundle.mjs renamed (and its source-map comment removed) so every static
+host serves it as JavaScript. wasm/ holds the SIMD build. face_landmarker.task and hand_landmarker.task are the
+float16 models from storage.googleapis.com/mediapipe-models (Apache License 2.0).

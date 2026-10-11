@@ -1,0 +1,153 @@
+<!doctype html>
+<!-- Get Ready With Me: try accessories from Amazon on yourself, live on your camera. Part of 30 Days, 30 Apps. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cse.google.com https://www.google.com https://*.gstatic.com https://www.googleapis.com; style-src 'self' 'unsafe-inline' https://www.google.com https://*.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https:; frame-src https://cse.google.com https://www.google.com; media-src 'self' blob: mediastream:; worker-src 'self' blob:">
+<title>Get Ready With Me</title>
+<meta name="description" content="Try sunglasses, caps, earrings and watches from Amazon on yourself, live on your camera. Nothing is uploaded.">
+<meta name="theme-color" content="#08080a">
+<meta property="og:title" content="Get Ready With Me">
+<meta property="og:description" content="Try it on before you buy it. Live, on your camera.">
+<meta property="og:url" content="https://tirupathipodugu.github.io/ideas/get-ready-with-me/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%2308080a%22/%3E%3Ccircle cx=%2210.5%22 cy=%2216%22 r=%225%22 fill=%22none%22 stroke=%22%23e8dcc4%22 stroke-width=%221.6%22/%3E%3Ccircle cx=%2221.5%22 cy=%2216%22 r=%225%22 fill=%22none%22 stroke=%22%23e8dcc4%22 stroke-width=%221.6%22/%3E%3Cpath d=%22M15.5 15.4q.5-.8 1 0%22 stroke=%22%23e8dcc4%22 stroke-width=%221.4%22 fill=%22none%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <h1 class="mark">Get Ready With Me</h1>
+  <div class="top-controls">
+    <label class="store">
+      <span class="label">Store</span>
+      <select id="store" aria-label="Amazon store"></select>
+    </label>
+    <button class="control" id="sound" type="button" aria-pressed="true">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" data-when="on"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" data-when="off"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+      <span id="sound-label">Sound on</span>
+    </button>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Panels">
+  <button class="tab" type="button" id="tab-find" aria-controls="find" aria-selected="true">1 · Find a product</button>
+  <button class="tab" type="button" id="tab-try" aria-controls="try" aria-selected="false">2 · Try it on</button>
+</nav>
+
+<main class="panels">
+  <section class="panel find" id="find" aria-label="Find a product">
+    <div class="block">
+      <h2 class="block-title">Search Amazon</h2>
+      <div id="cse-wrap" hidden>
+        <div id="cse"></div>
+        <p class="note">Tap a product photo in the results to try it on.</p>
+      </div>
+      <form class="field-row" id="search-form" hidden>
+        <input class="field" id="search-text" type="search" placeholder="e.g. aviator sunglasses" autocomplete="off" aria-label="Search text">
+        <button class="button" type="submit">Search on Amazon<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M17 14v5H5V7h5"/></svg></button>
+      </form>
+      <p class="note" id="search-note" hidden>Search inside this page isn't set up yet, so this opens Amazon in a new tab. Find your product there, then paste its link or photo address below.</p>
+    </div>
+
+    <div class="notice" id="clothing" hidden role="status">
+      <p class="notice-text">Shirts and pants are coming soon 👕👖 Want them sooner? Comment on <a id="post-link" href="https://x.com/tirupathipodugu" target="_blank" rel="noopener">the post on X</a> and tell us what you want to try on.</p>
+    </div>
+
+    <div class="block">
+      <h2 class="block-title">Paste a link</h2>
+      <form class="field-row" id="link-form">
+        <input class="field" id="link-text" type="url" placeholder="Amazon product link or image address" autocomplete="off" aria-label="Amazon product link or image address">
+        <button class="button" type="submit">Use link</button>
+      </form>
+      <p class="note">On Amazon, right-click the product photo and choose <b>Copy image address</b> to paste the photo itself.</p>
+    </div>
+
+    <div class="block">
+      <h2 class="block-title">Or drop a photo</h2>
+      <label class="drop" id="drop">
+        <input id="file" type="file" accept="image/*" hidden>
+        <svg class="icon big" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v4h16v-4"/></svg>
+        <span><b>Choose a product photo</b> or drop it here</span>
+        <span class="note">Works best on a plain white background, like Amazon's main photos.</span>
+      </label>
+    </div>
+
+    <div class="message" id="message" hidden role="status"></div>
+
+    <div class="block" id="ask" hidden>
+      <h2 class="block-title">What is it?</h2>
+      <div class="chips" id="ask-chips"></div>
+    </div>
+
+    <div class="block">
+      <div class="block-head">
+        <h2 class="block-title">Samples</h2>
+        <div class="chips small" id="filters" role="group" aria-label="Filter samples"></div>
+      </div>
+      <ul class="catalog" id="catalog"></ul>
+      <p class="note">Sample products are our own renders, to show how it works.</p>
+    </div>
+
+    <p class="credit">Your camera and photos stay on this device. Nothing is uploaded. · Part of <a href="../">30 Days, 30 Apps</a> by <a href="https://x.com/tirupathipodugu" target="_blank" rel="noopener">@tirupathipodugu</a></p>
+  </section>
+
+  <section class="panel try" id="try" aria-label="Try it on">
+    <div class="stage-wrap">
+      <canvas id="stage" aria-label="Camera with the product on you"></canvas>
+      <video id="video" playsinline muted hidden></video>
+      <p class="status" id="status" hidden></p>
+      <div class="start" id="start">
+        <p class="start-title">See it on you</p>
+        <p class="note">Your camera stays on this device. Nothing is uploaded.</p>
+        <button class="button primary" id="camera-on" type="button"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h3l2-3h8l2 3h3v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>Start camera</button>
+        <label class="button" id="photo-pick"><input id="selfie" type="file" accept="image/*" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/></svg>Use a photo of me</label>
+        <p class="note error" id="camera-error" hidden></p>
+      </div>
+    </div>
+
+    <div class="product" id="product" hidden>
+      <img class="thumb" id="product-thumb" alt="">
+      <div class="product-text">
+        <p class="product-title" id="product-title"></p>
+        <label class="kind"><span class="label">Worn as</span><select id="product-kind" aria-label="Worn as"></select></label>
+      </div>
+      <div class="buy-col">
+        <a class="button buy" id="buy" href="#" target="_blank" rel="noopener sponsored"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14l-1.5 11h-11z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg><span id="buy-label">Buy on Amazon</span></a>
+        <p class="disclosure" id="disclosure" hidden>As an Amazon Associate, GRWM earns from qualifying purchases.</p>
+      </div>
+    </div>
+
+    <div class="controls" id="controls" role="group" aria-label="Try-on controls">
+      <button class="control" id="snap" type="button"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg><span>Snap photo</span></button>
+      <button class="control" id="record" type="button"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle class="fill" cx="12" cy="12" r="4"/></svg><span id="record-label">Record 6 s</span></button>
+      <div class="stepper" role="group" aria-label="Size">
+        <span class="label">Size</span>
+        <button class="control round" type="button" data-adjust="size:-1" aria-label="Smaller">−</button>
+        <button class="control round" type="button" data-adjust="size:1" aria-label="Bigger">+</button>
+      </div>
+      <div class="stepper" role="group" aria-label="Height">
+        <span class="label">Height</span>
+        <button class="control round" type="button" data-adjust="lift:-1" aria-label="Lower">↓</button>
+        <button class="control round" type="button" data-adjust="lift:1" aria-label="Higher">↑</button>
+      </div>
+      <button class="control" id="flip" type="button" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg><span>Switch camera</span></button>
+      <button class="control" id="camera-off" type="button" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Stop camera</span></button>
+    </div>
+  </section>
+</main>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-title">
+  <p class="mark" id="sheet-title">Your photo</p>
+  <div class="preview" id="preview"></div>
+  <div class="row">
+    <button class="button" id="share" type="button">Share</button>
+    <a class="button primary" id="save" href="#" download>Save</a>
+    <button class="button" id="close-sheet" type="button">Close</button>
+  </div>
+</dialog>
+
+</body>
+</html>
