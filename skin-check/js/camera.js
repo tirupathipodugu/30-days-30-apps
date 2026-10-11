@@ -1,6 +1,5 @@
-// Camera (or the demo clip) into one muted, inline <video>. Nothing is recorded or uploaded.
+// Camera into one muted, inline <video>. Nothing is recorded or uploaded.
 
-export const DEMO_SRC = 'assets/demo-portrait.mp4';
 
 export async function startCamera(video) {
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -16,20 +15,7 @@ export async function startCamera(video) {
   video.srcObject = stream;
   await video.play().catch(() => {});
   await ready(video);
-  return { stream, mirrored: true, demo: false };
-}
-
-export async function startDemo(video, src = DEMO_SRC) {
-  video.srcObject = null;
-  video.muted = true;
-  video.playsInline = true;
-  video.loop = true;
-  video.setAttribute('playsinline', '');
-  video.poster = 'assets/demo-poster.jpg';
-  video.src = src;
-  await video.play().catch(() => {});
-  await ready(video);
-  return { stream: null, mirrored: false, demo: true };
+  return { stream, mirrored: true };
 }
 
 export function stopCamera(video, cam) {

@@ -1,7 +1,7 @@
 // Skin Check: the flow. Landing → light check → 10-second scan → results → goals → routine,
 // plus progress and a share card. Camera frames are analysed in a worker and never leave the device.
 
-import { startCamera, startDemo, stopCamera } from './camera.js';
+import { startCamera, stopCamera } from './camera.js';
 import { loadTracker, track } from './tracker.js';
 import { buildRegions, headPose, noseOffset } from './regions.js';
 import { aggregate, MEASURES, NAMES, HOW, level, sentence, summary, escalation } from './measures.js';
@@ -13,7 +13,6 @@ import { Sound } from './sound.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-const DEMO = params.has('demo');
 const DEBUG = params.has('debug');
 const FACE_W = 360;            // every face crop is scaled to this width, so measures are normalised by face size
 const SCAN_SECONDS = 9;
@@ -76,8 +75,7 @@ document.addEventListener('visibilitychange', () => {
 
 // ------------------------------------------------------------------ landing
 function renderLanding() {
-  $('startLabel').textContent = DEMO ? 'Start demo scan' : 'Start scan';
-  $('demoLink').hidden = DEMO;
+  $('startLabel').textContent = 'Start scan';
   $('openProgress').hidden = loadScans().length === 0;
 }
 $('start').addEventListener('click', () => openCamera());
@@ -94,9 +92,8 @@ async function openCamera() {
   resetTicks();
   try {
     const trackerP = loadTracker();
-    state.cam = DEMO ? await startDemo(video, DEBUG && params.get('src') ? params.get('src') : undefined) : await startCamera(video);
+    state.cam = await startCamera(video);
     $('feed').classList.toggle('mirrored', state.cam.mirrored);
-    if (DEBUG && params.get('t0')) video.currentTime = +params.get('t0');
     $('guide').textContent = 'Loading the face tracker…';
     await trackerP;
     $('guide').textContent = 'Finding your face…';
@@ -108,8 +105,8 @@ async function openCamera() {
     closeCamera();
     const denied = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError');
     $('errorText').textContent = denied
-      ? 'Camera access was blocked. Allow the camera for this site and try again, or try the demo.'
-      : `The camera couldn’t start${err?.message ? ` (${err.message})` : ''}. You can try again, or try the demo.`;
+      ? 'Camera access was blocked. Allow the camera for this site and try again.'
+      : `The camera couldn’t start${err?.message ? ` (${err.message})` : ''}. Please try again.`;
     show('error');
   }
 }
@@ -278,8 +275,7 @@ function tickModes(now) {
   }
   setTick('face', !!state.face, state.face ? '' : 'Bring your face into the oval');
   if (!state.face) state.lightHistory = [];
-  // The demo is fixed footage: it can't turn to the light, so it only needs the face found.
-  const ok = allOk() || (DEBUG && params.has('force') && !!state.face) || (DEMO && !!state.face);
+  const ok = allOk() || (DEBUG && params.has('force') && !!state.face);
   if (ok) {
     if (!state.readySince) state.readySince = now;
     if (state.mode === 'light' && now - state.readySince > 800) {
@@ -358,13 +354,13 @@ function tickScan(now) {
     if (sc.hold >= STRAIGHT_S) nextPhase(sc);
   } else if (sc.phase === 1) {
     if (face && Math.abs(yaw) >= TURN_DEG && Math.abs(yaw) <= 32) { sc.side = sc.side || Math.sign(yaw); if (Math.sign(yaw) === sc.side) sc.hold += dt; }
-    text = DEMO ? '← Turn slowly to your left' : sc.hold > 0 ? 'Hold it there…' : Math.abs(yaw) > 5 ? '← A little more' : '← Turn slowly to your left';
-    if (sc.hold >= TURN_HOLD_S || sc.inPhase >= (DEMO ? 2 : TURN_GIVE_UP_S)) nextPhase(sc);
+    text = sc.hold > 0 ? 'Hold it there…' : Math.abs(yaw) > 5 ? '← A little more' : '← Turn slowly to your left';
+    if (sc.hold >= TURN_HOLD_S || sc.inPhase >= TURN_GIVE_UP_S) nextPhase(sc);
   } else if (sc.phase === 2) {
     const want = -(sc.side || 1);
     if (face && Math.sign(yaw) === want && Math.abs(yaw) >= TURN_DEG && Math.abs(yaw) <= 32) sc.hold += dt;
-    text = DEMO ? 'Now the other side →' : sc.hold > 0 ? 'Hold it there…' : Math.sign(yaw) === want && Math.abs(yaw) > 5 ? 'A little more →' : 'Now the other side →';
-    if (sc.hold >= TURN_HOLD_S || sc.inPhase >= (DEMO ? 2 : TURN_GIVE_UP_S)) nextPhase(sc);
+    text = sc.hold > 0 ? 'Hold it there…' : Math.sign(yaw) === want && Math.abs(yaw) > 5 ? 'A little more →' : 'Now the other side →';
+    if (sc.hold >= TURN_HOLD_S || sc.inPhase >= TURN_GIVE_UP_S) nextPhase(sc);
   } else {
     text = 'Look straight at the camera';
   }
@@ -415,7 +411,6 @@ function finishScan() {
   res.frames = sc.frames.length;
   res.light = median(sc.lights);
   res.date = new Date();
-  res.demo = !!state.cam?.demo;
   const sum = summary(res);
   res.focus = sum.focus;
   state.results = res;
@@ -443,7 +438,7 @@ function drawOverlay(now) {
   octx.clearRect(0, 0, cw, ch);
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw) return;
-  // A tall video on a wide screen (the demo clip on a laptop) is shown whole, not cropped.
+  // A tall video on a wide screen (a portrait camera on a laptop) is shown whole, not cropped.
   const contain = vw / vh < 0.85 && cw / ch > 1.1;
   video.classList.toggle('contain', contain);
   const s = contain ? Math.min(cw / vw, ch / vh) : Math.max(cw / vw, ch / vh);
@@ -522,7 +517,6 @@ const WHAT = { redness: 'redness', shine: 'shine', tone: 'uneven tone', darkCirc
 function renderResults() {
   const res = state.results;
   $('resultsDate').textContent = res.date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
-  $('demoNote').hidden = !res.demo;
   const sum = summary(res);
   $('summaryText').textContent = sum.text;
   $('summaryPositive').textContent = sum.positive;

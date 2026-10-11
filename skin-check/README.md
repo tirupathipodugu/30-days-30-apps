@@ -2,7 +2,7 @@
 
 A 10-second skin scan from your camera. It tells you what it sees and builds a routine for your goals. Nothing leaves your phone.
 
-**Live:** https://tirupathipodugu.github.io/ideas/skin-check/ (no camera? add `?demo=1`)
+**Live:** https://tirupathipodugu.github.io/ideas/skin-check/
 
 A cosmetic check, not a medical diagnosis. It never names skin conditions.
 
@@ -46,11 +46,11 @@ Each tick is a majority vote over the last 8 frames.
 
 ### Stability and what's unreliable
 
-These are headless checks on the demo clip (12–41 frames per scan in headless Chrome; a phone typically processes several times more):
+These were headless checks on a public-domain test clip (no longer shipped) (12–41 frames per scan in headless Chrome; a phone typically processes several times more):
 
 - **Repeat scans in the same light** (four scans of the same clip at two different start times) gave tone 29–34, texture 51–55, fine lines 0–3, shine 0–5, and redness and dark circles 0. That's within ±5. A second clip (another volunteer) gave tone 15/16 and texture 38/38.
 - **The values change with the light.** Darkening the frame by 30% moved tone from 30 to 21 and texture from 52 to 25. That's why the gate exists and the progress page says "same light as last time".
-- **Redness responds to colour.** A simulated red flush on the cheeks moved redness from 0 to 47 on the demo clip. On deeper skin tones the shift in a\* is smaller, so a low score there is less certain. The (i) says so.
+- **Redness responds to colour.** A simulated red flush on the cheeks moved redness from 0 to 47 on that clip. On deeper skin tones the shift in a\* is smaller, so a low score there is less certain. The (i) says so.
 - **Texture is a rough estimate.** Phone cameras denoise, sharpen and compress, so it varies by device. It only becomes a "focus" when it's clearly noticeable.
 - **Fine lines** need resolution. A face that is far away or softly focused reads smoother than it is.
 - **Dark circles** depend on light from above: overhead light adds shadow and front light hides it.
@@ -101,7 +101,6 @@ The rules table and engine are in [js/routine-rules.js](js/routine-rules.js):
 
 - **MediaPipe Tasks Vision** (`@mediapipe/tasks-vision` 0.10.35 from npm), Apache License 2.0, © Google LLC. It's vendored in [vendor/mediapipe/](vendor/mediapipe/): `vision_bundle.js` (the package's `vision_bundle.mjs`, renamed so any static server serves it as JavaScript, with the source-map comment removed) and the SIMD and no-SIMD WASM files. The licence text is in [vendor/mediapipe/LICENSE](vendor/mediapipe/LICENSE).
 - **Face Landmarker model** (`face_landmarker.task`, float16 v1, from `storage.googleapis.com/mediapipe-models`), Apache License 2.0 per the MediaPipe Face Landmarker model card. It's vendored in `vendor/mediapipe/`. Nothing loads from a CDN at runtime.
-- **Demo clip** ([assets/demo-portrait.mp4](assets/demo-portrait.mp4), with poster [assets/demo-poster.jpg](assets/demo-poster.jpg)): ["IBAN student Story 4"](https://commons.wikimedia.org/wiki/File:IBAN_student_Story_4.webm) by Bile rene on Wikimedia Commons, [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) (public domain). It's cut to 24 s from 0:01, cropped to the top 1080×1440, scaled to 720×960 and encoded as H.264 with no audio. It was chosen because the light is frontal and even, so the light check passes on it honestly. Two other CC0 clips were tried; they're side-lit or overexposed, and the gate correctly refused them.
 
 No build step. It's plain HTML, CSS and ES modules. Sounds are synthesised with WebAudio.
 
