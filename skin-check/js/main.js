@@ -314,39 +314,72 @@ const SWEEP = [
   { until: 8, regions: ['nlA', 'nlB'], text: 'Measuring your smile lines' },
   { until: 9, regions: ['chin'], text: 'Measuring your chin' },
 ];
-const POSES = [
-  { until: 3, text: 'Look straight at the camera' },
-  { until: 6, text: 'Turn slightly to your left' },
-  { until: 9, text: 'Now slightly to your right' },
-];
+// The scan waits for each pose instead of running on a timer: straight on, then a turn to one
+// side, then the other. Turned frames give the cheek and under-eye facing the camera a clear view.
+const STRAIGHT_S = 3;       // seconds of straight-on frames
+const TURN_HOLD_S = 1.5;    // seconds to hold each turn
+const TURN_DEG = 14;        // how far a turn has to go
+const TURN_GIVE_UP_S = 7;   // move on anyway, so nobody gets stuck
+const WEIGHT = [0.4, 0.3, 0.3];
 
 function beginScan() {
   state.mode = 'scan';
   state.photo = null;
-  state.scan = { start: performance.now(), frames: [], lost: 0, lastFace: performance.now(), elapsed: 0, last: performance.now(), lights: [] };
+  state.scan = { start: performance.now(), frames: [], lost: 0, lastFace: performance.now(), elapsed: 0, last: performance.now(), lights: [],
+    phase: 0, hold: 0, inPhase: 0, side: 0 };
   $('lightPanel').hidden = true;
   $('scanPanel').hidden = false;
   sound.startSweep(SCAN_SECONDS);
   say('Scan started. Look straight at the camera.');
 }
 
+function nextPhase(sc) {
+  sc.phase += 1;
+  sc.hold = 0;
+  sc.inPhase = 0;
+  if (sc.phase === 1) say('Now turn slowly to your left.');
+  if (sc.phase === 2) say('Now the other side.');
+}
+
 function tickScan(now) {
   const sc = state.scan;
   const dt = (now - sc.last) / 1000;
   sc.last = now;
+  const face = state.face;
   // The clock only runs while a face is in view.
-  if (state.face) { sc.elapsed += dt; sc.lastFace = now; }
-  const t = sc.elapsed;
-  const lost = !state.face && now - sc.lastFace > 700;
-  const pose = POSES.find((p) => t < p.until) || POSES[POSES.length - 1];
-  $('guide').textContent = lost ? 'I’ve lost your face. Look back at the camera' : pose.text;
+  if (face) { sc.elapsed += dt; sc.lastFace = now; sc.inPhase += dt; }
+  const lost = !face && now - sc.lastFace > 700;
+  const yaw = face ? face.pose.yaw : 0;
+  let text = '';
+  if (sc.phase === 0) {
+    if (face && Math.abs(yaw) < 10) sc.hold += dt;
+    text = 'Look straight at the camera';
+    if (sc.hold >= STRAIGHT_S) nextPhase(sc);
+  } else if (sc.phase === 1) {
+    if (face && Math.abs(yaw) >= TURN_DEG && Math.abs(yaw) <= 32) { sc.side = sc.side || Math.sign(yaw); if (Math.sign(yaw) === sc.side) sc.hold += dt; }
+    text = sc.hold > 0 ? 'Hold it there…' : Math.abs(yaw) > 5 ? '← A little more' : '← Turn slowly to your left';
+    if (sc.hold >= TURN_HOLD_S || sc.inPhase >= TURN_GIVE_UP_S) nextPhase(sc);
+  } else if (sc.phase === 2) {
+    const want = -(sc.side || 1);
+    if (face && Math.sign(yaw) === want && Math.abs(yaw) >= TURN_DEG && Math.abs(yaw) <= 32) sc.hold += dt;
+    text = sc.hold > 0 ? 'Hold it there…' : Math.sign(yaw) === want && Math.abs(yaw) > 5 ? 'A little more →' : 'Now the other side →';
+    if (sc.hold >= TURN_HOLD_S || sc.inPhase >= TURN_GIVE_UP_S) nextPhase(sc);
+  } else {
+    text = 'Look straight at the camera';
+  }
+  $('guide').textContent = lost ? 'I’ve lost your face. Look back at the camera' : text;
+  // Progress follows the poses; the region sweep runs along with it.
+  const need = [STRAIGHT_S, TURN_HOLD_S, TURN_HOLD_S];
+  let p = 0;
+  for (let i = 0; i < 3; i++) p += WEIGHT[i] * (i < sc.phase ? 1 : i === sc.phase ? Math.min(1, sc.hold / need[i]) : 0);
+  const t = p * SCAN_SECONDS;
   const step = SWEEP.find((s) => t < s.until) || SWEEP[SWEEP.length - 1];
   $('scanStep').textContent = step.text;
-  const pct = Math.min(100, Math.round((t / SCAN_SECONDS) * 100));
+  const pct = Math.min(100, Math.round(p * 100));
   $('scanBar').firstElementChild.style.width = pct + '%';
   $('scanBar').setAttribute('aria-valuenow', String(pct));
-  if (t >= SCAN_SECONDS) {
-    if (sc.frames.length >= MIN_FRAMES || t >= SCAN_SECONDS + 6) finishScan();
+  if (sc.phase >= 3) {
+    if (sc.frames.length >= MIN_FRAMES || sc.inPhase >= 6) finishScan();
     else $('scanStep').textContent = 'Just a moment more…';
   }
 }
@@ -480,6 +513,9 @@ function drawOverlay(now) {
 // ------------------------------------------------------------------ results
 const INFO_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></svg>';
 
+// What the level describes, so a card reads "Some redness" rather than a number to decode.
+const WHAT = { redness: 'redness', shine: 'shine', tone: 'uneven tone', darkCircles: 'dark circles', lines: 'fine lines', texture: 'roughness' };
+
 function renderResults() {
   const res = state.results;
   $('resultsDate').textContent = res.date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
@@ -499,8 +535,8 @@ function renderResults() {
     card.innerHTML = `
       <h3>${NAMES[k]}${k === 'texture' ? ' <span class="rough">rough estimate</span>' : ''}
         <button class="info" type="button" aria-expanded="false" aria-controls="${howId}" aria-label="How ${NAMES[k].toLowerCase()} is measured">${INFO_ICON}</button></h3>
-      <div class="lvl ${lv.id}"><b>${lv.label}</b> · ${Number.isFinite(m.score) ? m.score : '–'}/100</div>
-      <div class="bar" aria-hidden="true"><span style="width:${Number.isFinite(m.score) ? Math.max(3, m.score) : 0}%"></span></div>
+      <div class="lvl ${lv.id}"><b>${lv.id === 'na' ? lv.label : `${lv.label} ${WHAT[k]}`}</b></div>
+      <div class="scale" aria-hidden="true">${['low', 'some', 'noticeable'].map((id) => `<i class="${id}${lv.id === id ? ' on' : ''}">${level({ low: 10, some: 50, noticeable: 90 }[id]).label}</i>`).join('')}</div>
       ${faceMapSVG(intensitiesFor(k, res.raw), `Where ${NAMES[k].toLowerCase()} was seen`)}
       <p>${sentence(k, res)}</p>
       <p class="how" id="${howId}" hidden>${HOW[k]}</p>`;
@@ -512,8 +548,7 @@ function renderResults() {
     });
     cards.append(card);
   }
-  const maxSe = Math.max(...MEASURES.map((k) => res.m[k].se).filter(Number.isFinite));
-  $('steady').textContent = `Averaged over ${res.frames} frames.${Number.isFinite(maxSe) ? ` Frame-to-frame wobble in this scan: about ±${Math.max(1, Math.round(maxSe * 2))} points.` : ''} To compare like with like, re-scan in the same light.`;
+  $('steady').textContent = `Averaged over ${res.frames} frames. Each card shows how much the scan saw: Low, Some or Noticeable. To compare like with like, re-scan in the same light.`;
   $('saveLabel').textContent = 'Save this scan';
   $('saveScan').disabled = false;
 }

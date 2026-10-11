@@ -207,8 +207,14 @@ body:not(.camera):not(.at-landing) .top { background: linear-gradient(var(--bg) 
 .card .lvl { font-size: 14px; color: var(--quiet); }
 .card .lvl b { font-weight: 600; color: var(--text); }
 .card .lvl.noticeable b { color: var(--hl); }
-.card .bar { grid-column: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .12); margin: 6px 0 4px; overflow: hidden; }
-.card .bar span { display: block; height: 100%; background: var(--hl); border-radius: 3px; }
+.card .lvl.low b { color: #7fd8a4; }
+.card .lvl.some b { color: #f0c46a; }
+.card .scale { grid-column: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 8px 0 4px; }
+.card .scale i { font-style: normal; font-size: 13px; text-align: center; padding: 4px 0; border-radius: 6px; color: var(--faint); background: rgba(255, 255, 255, .06); }
+.card .scale i.on { font-weight: 600; color: #0b0c12; }
+.card .scale i.low.on { background: #7fd8a4; }
+.card .scale i.some.on { background: #f0c46a; }
+.card .scale i.noticeable.on { background: var(--hl); }
 .card .facemap { grid-column: 2; grid-row: 1 / span 3; width: 76px; height: auto; }
 .card p { grid-column: 1 / -1; margin: 6px 0 0; font-size: 15px; }
 .card .how { grid-column: 1 / -1; margin: 6px 0 0; font-size: 14px; color: var(--quiet); }
