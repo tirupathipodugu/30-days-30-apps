@@ -1,11 +1,11 @@
-// Time buffer: the last 3 s of mirror frames kept on the GPU, for the Time toggle.
+// Time buffer: the last 2 s of mirror frames kept on the GPU, for the Time toggle.
 // A texture array used as a ring: 20 frames a second, 60 layers, sized to stay under 40 MB.
 // Each layer stores the mirror image already fitted to the stage, so pieces sample it by stage position.
 
 import { FULLSCREEN_VERTEX, createProgram, setSampling, bindTexture } from './gl-utils.js';
 
 export const HISTORY_FPS = 20;
-export const HISTORY_LAYERS = 60;               // 3 s
+export const HISTORY_LAYERS = 40;               // 2 s
 const BUDGET_BYTES = 40 * 1024 * 1024;
 const FRAME_MS = 1000 / HISTORY_FPS;
 

@@ -51,6 +51,7 @@ let sourceKind = 'camera';
 let frameId = 0;
 let running = false;
 let timeOn = false;
+let timeAuto = false;                  // turn Time on at the first strike (unless the visitor chose)
 let recording = false;
 let photoPending = false;
 let cancelEncore = null;
@@ -131,7 +132,7 @@ async function start(kind) {
   mirror.reset(stage.clientWidth, stage.clientHeight);
   debris.clear();
   resize();
-  setTime(true);                       // Time is on by default: farther shards show a moment ago
+  timeAuto = true;                     // Time switches itself on with the first tap
   frame.light[0] = mirror.width * 0.3;
   frame.light[1] = mirror.height * 0.25;
   updateCounter();
@@ -270,6 +271,7 @@ function moveLight(now) {
  * Shatter and the encore only crack (`mayFall` false).
  */
 function strike(x, y, force = 1, mayFall = true) {
+  if (timeAuto) { timeAuto = false; setTime(true); }
   if (broken) return;
   const now = performance.now();
   const shard = mirror.shardAt(x, y);
@@ -641,7 +643,7 @@ document.addEventListener('keydown', (event) => {
     hint.classList.add('gone');
     return;
   }
-  const actions = { b: shatter, 0: restore, t: () => setTime(!timeOn), r: record };
+  const actions = { b: shatter, 0: restore, t: () => { timeAuto = false; setTime(!timeOn); }, r: record };
   const action = actions[event.key.toLowerCase()];
   if (action) {
     event.preventDefault();
@@ -696,7 +698,7 @@ for (const button of document.querySelectorAll('#pad [data-hold]')) {
 
 $('shatter').addEventListener('click', shatter);
 $('restore').addEventListener('click', restore);
-$('time').addEventListener('click', () => setTime(!timeOn));
+$('time').addEventListener('click', () => { timeAuto = false; setTime(!timeOn); });
 $('rec').addEventListener('click', record);
 $('camera-off').addEventListener('click', stop);
 $('sound').addEventListener('click', () => {
