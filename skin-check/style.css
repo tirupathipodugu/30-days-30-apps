@@ -310,3 +310,6 @@ body:not(.camera):not(.at-landing) .top { background: linear-gradient(var(--bg) 
 }
 .actions.wide .btn { white-space: nowrap; }
 @media (max-width: 400px) { .actions.wide .btn { padding: 0 10px; gap: 6px; font-size: 14.5px; } }
+
+/* The one tip that most changes the result, right under the button. */
+.daylight { margin: 10px 0 0; font-size: 15px; font-weight: 600; color: #f0c46a; text-align: center; }
