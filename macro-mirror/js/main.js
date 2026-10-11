@@ -61,6 +61,7 @@ let fresh = false;
 let lastP = null;          // landmarks in canvas px from the latest frame
 let recording = null;      // { canvas, ctx, start, guess }
 let pausedDemoAt = null;
+let lastCard = null;
 
 // ---- Numbers -----------------------------------------------------------------------------------
 function numbers() {
@@ -99,8 +100,14 @@ function updateReadout() {
       ? ` Swapped: ${n.better.swaps.map((s) => `${s.from.toLowerCase()} → ${s.to.toLowerCase()}`).join(', ')}.` : '';
     $('numbers').innerHTML = `about ${formatKg(kg)} after ${label} at this rate${capped}.${swaps} <button type="button" data-info>(i) Not a prediction</button>`;
   }
-  // Split view tags carry their own numbers.
+  // Split view: the tags carry each future's numbers, the readout just says what changed.
   if (state.split) {
+    const k = (v) => `${v >= 0 ? '+' : '−'}${Math.round(Math.abs(v) / 10) * 10}`;
+    $('kcal').innerHTML = `Better plate <strong>${k(n.betterSurplus)}</strong> · this plate <strong>${k(n.surplus)}</strong> kcal/day`;
+    if (days >= 1) {
+      const swaps = n.better.swaps.length ? `Swapped: ${n.better.swaps.map((x) => `${x.from.toLowerCase()} → ${x.to.toLowerCase()}`).join(', ')}.` : 'Your plate is already in balance.';
+      $('numbers').innerHTML = `${swaps} <button type="button" data-info>(i) Not a prediction</button>`;
+    }
     $('split-left').textContent = `Better plate · ${formatKg(kgAfter(n.betterSurplus, days))}`;
     $('split-right').textContent = `This plate · ${formatKg(kgAfter(n.surplus, days))}`;
   }
@@ -327,8 +334,8 @@ function faceCrop() {
   const P = lastP;
   const s = Math.hypot(P[454].x - P[234].x, P[454].y - P[234].y);
   const cx = (P[6].x + P[152].x) / 2;
-  const cy = P[6].y + (P[152].y - P[6].y) * 0.55;
-  let h = s * 2.35, w = h * (480 / 720);
+  const cy = P[6].y + (P[152].y - P[6].y) * 0.42;
+  let h = s * 2.05, w = h * (480 / 720);
   const W = canvas.width, H = canvas.height;
   h = Math.min(h, H); w = Math.min(w, W);
   let x = cx - w / 2, y = cy - h * 0.5;
@@ -367,6 +374,7 @@ function makeCard() {
   const v = Math.round(Math.abs(n.surplus) / 10) * 10;
   const header = v < 30 ? 'My plate: about even with what I burn' : `My plate: about ${n.surplus > 0 ? '+' : '−'}${v} kcal/day ${n.surplus > 0 ? 'over' : 'under'} what I burn`;
   const card = composeCard(panels, header, 'An illustration from a simple energy-balance model, not a prediction or medical advice.');
+  lastCard = card;
   card.toBlob((blob) => { if (blob) showResult(blob, 'png', 'Your future'); }, 'image/png');
 }
 
@@ -385,12 +393,15 @@ async function startRecording(guess) {
   const format = clipFormat(document.createElement('canvas'));
   if (!format) { flashStatus("This browser can't record clips"); return; }
   $('result').close();
-  const W = canvas.width, H = canvas.height;
-  const scale = Math.min(1, 1080 / Math.max(W, H));
+  // Record the picture itself (a letterboxed demo clip leaves dark bands around it).
+  const [mx, my, mw, mh] = viewMapping().map;
+  const x0 = Math.max(0, mx), y0 = Math.max(0, my);
+  const src = [x0, y0, Math.min(canvas.width, mx + mw) - x0, Math.min(canvas.height, my + mh) - y0];
+  const scale = Math.min(1, 1080 / Math.max(src[2], src[3]));
   const c = document.createElement('canvas');
-  c.width = Math.round(W * scale / 2) * 2;
-  c.height = Math.round(H * scale / 2) * 2;
-  recording = { canvas: c, ctx: c.getContext('2d'), start: performance.now(), guess, savedPos: state.pos };
+  c.width = Math.round(src[2] * scale / 2) * 2;
+  c.height = Math.round(src[3] * scale / 2) * 2;
+  recording = { canvas: c, ctx: c.getContext('2d'), src, start: performance.now(), guess, savedPos: state.pos };
   document.body.classList.add('recording');
   $('rec-badge').hidden = false;
   const blob = await recordCanvas(c, format, 6000);
@@ -409,8 +420,8 @@ function driveRecording(now) {
 }
 
 function drawRecordingFrame() {
-  const { canvas: c, ctx, guess } = recording;
-  ctx.drawImage(canvas, 0, 0, c.width, c.height);
+  const { canvas: c, ctx, guess, src } = recording;
+  ctx.drawImage(canvas, src[0], src[1], src[2], src[3], 0, 0, c.width, c.height);
   const u = c.width / 400;
   const n = numbers();
   const days = daysAt(state.pos);
@@ -671,6 +682,8 @@ window.__mm = {
   setSplit,
   openPlate: () => { $('plate').hidden = false; },
   card: makeCard,
+  record: (guess) => startRecording(guess),
+  showCard: () => { if (!lastCard) return; running = false; document.body.replaceChildren(lastCard); lastCard.style.cssText = 'display:block;width:100vw;height:auto'; },
   ready: () => Boolean(tracker && lastP),
   pauseAt: (t) => new Promise((resolve) => {
     pausedDemoAt = t;

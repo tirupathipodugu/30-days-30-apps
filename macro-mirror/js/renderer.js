@@ -108,6 +108,8 @@ uniform float u_scale;      // face width in px
 uniform vec4 u_grey[4];     // x, y, 1/r^2, amount
 uniform vec4 u_red[3];
 uniform float u_amount;
+uniform vec4 u_map;
+uniform vec2 u_res;
 in vec2 v_uv;
 in vec2 v_src;
 in vec2 v_grad;
@@ -184,7 +186,13 @@ void main() {
     c = mix(c, vec3(L), 0.04 * a);
     c *= 1.0 + n * 0.03 * a;
   }
-  o = vec4(c, 1.0);
+  // The same soft letterbox edge as the background, so the patch never shows as a rectangle.
+  vec2 p = v_src;
+  float fade = 1.0;
+  if (u_map.x > 1.0) fade *= smoothstep(0.0, 28.0, min(p.x - u_map.x, u_map.x + u_map.z - p.x));
+  if (u_map.y > 1.0) fade *= smoothstep(0.0, 28.0, p.y - u_map.y);
+  if (u_map.y + u_map.w < u_res.y - 1.0) fade *= smoothstep(0.0, 28.0, u_map.y + u_map.w - p.y);
+  o = vec4(mix(vec3(0.02, 0.02, 0.024), c, fade), 1.0);
 }`;
 
 const RIB_VS = `#version 300 es
