@@ -131,6 +131,7 @@ async function start(kind) {
   mirror.reset(stage.clientWidth, stage.clientHeight);
   debris.clear();
   resize();
+  setTime(true);                       // Time is on by default: farther shards show a moment ago
   frame.light[0] = mirror.width * 0.3;
   frame.light[1] = mirror.height * 0.25;
   updateCounter();
