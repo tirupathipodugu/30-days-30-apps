@@ -10,6 +10,7 @@ import { openCamera, cameraProblem, PROBLEMS } from './camera.js';
 import { createDemoFeed } from './demo-feed.js';
 import { Sound } from './sound.js';
 import { clipFormat, recordCanvas, showClip } from './recorder.js';
+import { postOnX } from '../../shared/share-x.js';
 import { playEncore } from './encore.js';
 import { Shooter } from './shooter.js';
 import { prefersReducedMotion } from './motion.js';
@@ -710,5 +711,7 @@ $('retry').addEventListener('click', () => start(sourceKind));
 $('error-demo').addEventListener('click', () => start('demo'));
 $('close-sheet').addEventListener('click', () => $('sheet').close());
 $('restart').addEventListener('click', () => location.reload());
+$('postX').addEventListener('click', () => postOnX({ path: 'mirror-room/', text: `I broke the mirror into ${mirror.shards.length} pieces. 🪞` }));
+$('saveShot').addEventListener('click', () => { photoPending = true; });   // the frame loop snaps the ending and opens the photo sheet
 
 if (new URLSearchParams(location.search).get('demo') === '1') start('demo');

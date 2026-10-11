@@ -2,6 +2,7 @@
 // press pad over the heart, the metronome and the scorecard; main.js moves the heart and the threads.
 
 import { CPR } from './cpr-facts.js';
+import { postOnX } from '../../shared/share-x.js';
 
 const $ = (id) => document.getElementById(id);
 const BEAT = 60 / 110;          // the metronome: 110 a minute, the middle of the 100–120 range
@@ -55,6 +56,10 @@ export class CprCoach {
     $('padsOn').addEventListener('click', () => this.analyse());
     $('shockBtn').addEventListener('click', () => this.shock());
     $('cprAgain').addEventListener('click', () => this.onTryAgain());
+    $('cprPostX').addEventListener('click', () => postOnX({
+      path: 'living-heart/',
+      text: `I brought him back with CPR. ${this.inRange || 0}% of my pushes were on the beat. ❤️`,
+    }));
     $('cprClose').addEventListener('click', () => { this.close(); this.onDone(); });
 
     // Pushing: the pad over the heart and the Push button press on pointerdown and let go on pointerup.
@@ -298,6 +303,7 @@ export class CprCoach {
     const s = CPR.saved;
     const avg = this.rates.length ? this.rates.reduce((a, b) => a + b, 0) / this.rates.length : 0;
     const inRange = this.rates.length ? Math.min(100, Math.round(100 * this.good / this.rates.length)) : 0;
+    this.inRange = inRange;
     const first = this.presses.length ? Math.max(0, this.presses[0] - this.collapseAt) : 0;
     const rows = [
       [s.avgRate, avg ? `${Math.round(avg)}/min` : '—'],

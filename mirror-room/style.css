@@ -258,6 +258,10 @@ button { font: inherit; letter-spacing: inherit; color: inherit; }
   pointer-events: none;
 }
 .ending.shown { opacity: 1; }
+.ending { align-content: center; gap: 26px; }
+.ending-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; pointer-events: none; }
+.ending.shown .ending-actions { pointer-events: auto; }
+.restart.share { min-height: 48px; padding: 0 18px; font-size: 16px; animation: none; }
 .ending-text {
   margin: 0;
   max-width: 21ch;

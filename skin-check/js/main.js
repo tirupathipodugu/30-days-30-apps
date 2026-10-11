@@ -9,6 +9,7 @@ import { faceMapSVG, intensitiesFor } from './facemap.js';
 import { GOALS, SKIN_TYPES, AGE_BANDS, BUDGETS, buildRoutine, suggestGoals, suggestSkinType } from './routine-rules.js';
 import { loadScans, saveScan, deleteAll, trends, history, saveProfile, loadProfile } from './progress.js';
 import { drawShareCard, shareCanvas } from './share.js';
+import { postOnX } from '../../shared/share-x.js';
 import { Sound } from './sound.js';
 
 const $ = (id) => document.getElementById(id);
@@ -693,6 +694,10 @@ $('shareGo').addEventListener('click', async () => {
   const how = await shareCanvas($('card'));
   if (how === 'downloaded') say('Saved the card as an image.');
 });
+$('postX').addEventListener('click', () => postOnX({
+  path: 'skin-check/',
+  text: `Scanned my skin in 10 seconds. ${state.results ? summary(state.results).text : ''}`.trim(),
+}));
 
 // ------------------------------------------------------------------ start
 renderSound();
