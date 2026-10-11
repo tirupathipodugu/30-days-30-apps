@@ -11,8 +11,7 @@ const CHIN = 152;
 
 // Weight gain at +15 kg, in face widths: [out, down] for each oval point above. Most of the new
 // volume goes on the lower cheeks, the jaw corners and under the jaw; the upper face barely moves.
-const GAIN = [[0.008, 0], [0.022, 0.003], [0.04, 0.008], [0.054, 0.016], [0.06, 0.03], [0.052, 0.044],
-  [0.04, 0.056], [0.025, 0.062], [0.012, 0.064], [0.004, 0.064]];
+const GAIN = [[0.0152, 0.0], [0.0418, 0.0054], [0.076, 0.0144], [0.1026, 0.0288], [0.114, 0.054], [0.0988, 0.0792], [0.076, 0.1008], [0.0475, 0.1116], [0.0228, 0.1152], [0.0076, 0.1152]];
 // Weight loss at -8 kg: the lower cheeks and jaw corners come in a little; the bones stay.
 const LEAN = [[0, 0], [-0.005, 0], [-0.016, 0], [-0.021, -0.003], [-0.016, -0.005], [-0.012, -0.005],
   [-0.008, -0.003], [-0.005, -0.002], [-0.002, 0], [0, 0]];
@@ -118,29 +117,29 @@ export function buildRig(P, view, fp, amount, canvasW, canvasH) {
     const pm = P[mouth], p58 = P[side[3]], p132 = P[side[2]], p150 = P[side[6]], p172 = P[side[4]];
     // Lower cheek (buccal fat): moves out and down, and gains volume for the light to fall across.
     const m1 = lerp(pm, p58, 0.55);
-    anchor(m1, 0.08, disp(m1, 0.028 * g - 0.008 * l, 0.012 * g), 0.05 * g - 0.012 * l, 0.11);
+    anchor(m1, 0.13, disp(m1, 0.045 * g - 0.008 * l, 0.02 * g), 0.035 * g - 0.012 * l, 0.11);
     // Under the cheekbone: fills out with weight, hollows with leanness.
     const m2 = lerp(P[ala], p132, 0.5);
-    anchor(m2, 0.08, disp(m2, 0.018 * g - 0.006 * l, 0.004 * g), 0.025 * g - 0.02 * l, 0.09);
+    anchor(m2, 0.11, disp(m2, 0.028 * g - 0.006 * l, 0.006 * g), 0.025 * g - 0.02 * l, 0.09);
     // Apple of the cheek: a little puffiness.
-    anchor(P[cheek], 0.06, disp(P[cheek], 0.006 * g, 0.004 * g + 0.003 * A), 0.018 * g + 0.006 * A, 0.07);
+    anchor(P[cheek], 0.06, disp(P[cheek], 0.012 * g, 0.006 * g + 0.004 * A), 0.032 * g + 0.006 * A, 0.07);
     // Jowl: hangs beside the chin.
     const m3 = lerp(pm, p150, 0.55);
-    anchor(m3, 0.07, disp(m3, 0.016 * g, 0.034 * g + 0.008 * A), 0.032 * g + 0.006 * A, 0.07);
+    anchor(m3, 0.1, disp(m3, 0.03 * g, 0.05 * g + 0.012 * A), 0.03 * g + 0.008 * A, 0.1);
     // Neck: thickens below the jaw corner.
     const n1 = add(lerp(p172, P[CHIN], 0.3), mul(down, 0.22 * s));
-    anchor(n1, 0.12, disp(n1, 0.045 * g, 0.02 * g));
+    anchor(n1, 0.12, disp(n1, 0.085 * g, 0.03 * g));
     const n2 = add(p172, mul(down, 0.62 * s));
     anchor(n2, 0.15, v3());
   }
 
   // Chin and under it: the chin's underside rolls down into a soft second chin.
   const chin = P[CHIN];
-  anchor(chin, 0.075, mul(down, (0.062 * g - 0.004 * l + 0.006 * A) * s), 0.045 * g, 0.085);
+  anchor(chin, 0.075, mul(down, (0.1 * g - 0.004 * l + 0.008 * A) * s), 0.045 * g, 0.085);
   const c1 = lerp(P[17], chin, 0.5);
   anchor(c1, 0.05, mul(down, 0.01 * g * s));
   const sub1 = add(chin, mul(down, 0.12 * s));
-  anchor(sub1, 0.1, mul(down, 0.05 * g * s), 0.02 * g, 0.1);
+  anchor(sub1, 0.11, mul(down, 0.09 * g * s), 0.04 * g, 0.1);
   anchor(add(chin, mul(down, 0.55 * s)), 0.16, v3());
 
   // Ribbons: creases, folds and lines, in source pixels (they get displaced in the shader).
@@ -182,10 +181,10 @@ export function buildRig(P, view, fp, amount, canvasW, canvasH) {
     const cR = add(lerp(P[SIDE_B[6]], P[SIDE_B[7]], 0.5), mul(up, 0.05 * s));
     const cl = add(lerp(cL, cM, 0.5), mul(down, 0.012 * s));
     const cr = add(lerp(cR, cM, 0.5), mul(down, 0.012 * s));
-    addRibbon([cL, cl, cM, cr, cR].map(to2), 0.03, 1, 0.16 * g, 3.1, lightRef, 24);
+    addRibbon([cL, cl, cM, cr, cR].map(to2), 0.034, 1, 0.24 * g, 3.1, lightRef, 24);
     // Ambient occlusion where the new fullness meets the neck.
     const under = [SIDE_A[5], SIDE_A[7], CHIN, SIDE_B[7], SIDE_B[5]].map((i) => to2(add(P[i], mul(down, 0.035 * s))));
-    addRibbon(under, 0.06, 2, 0.22 * g, 5.7, lightRef, 24);
+    addRibbon(under, 0.07, 2, 0.3 * g, 5.7, lightRef, 24);
   }
   // A crisper jaw shadow when leaner.
   if (l > 0.02) {
@@ -204,12 +203,12 @@ export function buildRig(P, view, fp, amount, canvasW, canvasH) {
     const n0 = add(add(P[ala], mul(L, 0.02 * s)), mul(up, 0.01 * s));
     const n2 = add(add(pm, mul(L, 0.05 * s)), mul(down, 0.035 * s));
     const n1 = add(lerp(n0, n2, 0.45), mul(L, 0.035 * s));
-    addRibbon([n0, n1, n2].map(to2), 0.075, 1, 0.07 * A + 0.07 * g + 0.02 * fp.flush, 11 + sgn, sideRef, 18);
+    addRibbon([n0, n1, n2].map(to2), 0.08, 1, 0.12 * A + 0.1 * g + 0.02 * fp.flush, 11 + sgn, sideRef, 18);
     // Marionette line: short, from just below the mouth corner toward the jowl.
     const j0 = add(add(pm, mul(L, 0.035 * s)), mul(down, 0.03 * s));
     const j2 = add(add(lerp(pm, P[side[7]], 0.7), mul(L, 0.01 * s)), mul(up, 0.02 * s));
     const j1 = add(lerp(j0, j2, 0.5), mul(L, 0.008 * s));
-    addRibbon([j0, j1, j2].map(to2), 0.06, 1, 0.05 * A + 0.07 * g, 21 + sgn, sideRef, 14);
+    addRibbon([j0, j1, j2].map(to2), 0.065, 1, 0.08 * A + 0.1 * g, 21 + sgn, sideRef, 14);
     // Crow's feet: a small fan from the outer eye corner, very fine.
     const eo = P[outer];
     for (let k = 0; k < 3; k++) {
@@ -224,9 +223,9 @@ export function buildRig(P, view, fp, amount, canvasW, canvasH) {
     const lid = lower.map((i) => P[i]);
     const eyeH = len(sub(P[lower[4]], P[upper]));
     const bag = [lid[2], lid[4], lid[6], lid[7]].map((p) => to2(add(p, mul(down, 0.024 * s + eyeH * 0.2))));
-    addRibbon(bag, 0.02, 3, 0.05 * A + 0.05 * g + 0.04 * fp.flush, 41 + sgn, lightRef, 14);
+    addRibbon(bag, 0.024, 3, 0.08 * A + 0.07 * g + 0.04 * fp.flush, 41 + sgn, lightRef, 14);
     const trough = [lid[1], lid[3], lid[5], lid[7]].map((p, k) => to2(add(p, mul(down, (0.05 + 0.01 * Math.sin(k / 3 * Math.PI)) * s + eyeH * 0.25))));
-    addRibbon(trough, 0.022, 1, 0.08 * A + 0.03 * g, 51 + sgn, lightRef, 14);
+    addRibbon(trough, 0.026, 1, 0.11 * A + 0.04 * g, 51 + sgn, lightRef, 14);
   }
 
   // Forehead lines: three shallow grooves across the forehead, between the brows and the hairline.
@@ -245,7 +244,7 @@ export function buildRig(P, view, fp, amount, canvasW, canvasH) {
         const wav = Math.sin(j * 1.7 + r * 2.3) * 0.003 * s;
         pts.push(to2(add(lerp(b, t, k), mul(up, wav))));
       }
-      addRibbon(pts, 0.018, 0, strength * A, 61 + r * 5, lightRef, 30);
+      addRibbon(pts, 0.026, 0, 0.6 * strength * A, 61 + r * 5, lightRef, 30);
     });
   }
 
