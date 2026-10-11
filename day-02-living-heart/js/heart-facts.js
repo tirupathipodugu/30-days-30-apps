@@ -218,4 +218,14 @@ export const BLOCKED = {
 export const ARREST = {
   title: 'The heart has stopped',
   text: 'With every vessel blocked, no blood can leave the heart. When the heart stops pumping effectively, it is called cardiac arrest.',
+  // The message to take away: standard heart-health guidance (WHO, American Heart Association "Life's Essential 8").
+  careTitle: 'Yours doesn’t come with a restart button. Take care of it.',
+  care: [
+    'Move for at least 150 minutes a week. A brisk walk counts.',
+    'Don’t smoke or vape.',
+    'Sleep 7 to 9 hours a night.',
+    'Eat more vegetables, fruit and whole grains, and less salt and sugar.',
+    'Know your blood pressure, cholesterol and blood sugar numbers.',
+    'Learn CPR. If someone collapses, call emergency services and push hard and fast on the centre of the chest.',
+  ],
 };

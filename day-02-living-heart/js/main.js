@@ -450,7 +450,7 @@ requestAnimationFrame(frame);
   } else if (circ.state === 'normal') circ.beatAmp += (1 - circ.beatAmp) * Math.min(1, dt * 3);
   if (circ.state === 'stopped') {
     if (!circ.flat && t - circ.stopAt > 0.6) { circ.flat = true; sound.flatline(true); }
-    if (!circ.arrestShown && t - circ.stopAt > 2.0) { circ.arrestShown = true; ui.closePanel(); ui.showArrest(ARREST.title, ARREST.text); }
+    if (!circ.arrestShown && t - circ.stopAt > 2.0) { circ.arrestShown = true; ui.closePanel(); ui.showArrest(ARREST.title, ARREST.text, ARREST.careTitle, ARREST.care); }
   } else circ.flat = false;
 
   const strainTarget = circ.state === 'normal' ? circ.load : 1;

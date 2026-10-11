@@ -154,9 +154,16 @@ export function createUi({ onRate, onSound, onFlyTo, onClosePanel, onTour, onCut
     },
     hideTour() { tourcard.hidden = true; },
 
-    showArrest(title, text) {
+    showArrest(title, text, careTitle = '', care = []) {
       $('arrestTitle').textContent = title;
       $('arrestText').textContent = text;
+      $('careTitle').textContent = careTitle;
+      $('careList').replaceChildren(...care.map((tip) => {
+        const li = document.createElement('li');
+        li.textContent = tip;
+        return li;
+      }));
+      $('care').hidden = !care.length;
       $('arrest').hidden = false;
       $('restart').focus({ preventScroll: true });
     },
