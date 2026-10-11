@@ -1,6 +1,7 @@
 // Sound: glass only, synthesised with WebAudio (no audio files). Off by default; the choice is
 // remembered in localStorage. A strike is a sharp crack, a fast crackle as the fracture runs, and a
-// faint high shimmer. A restore is a low, soft swell.
+// faint high shimmer. A restore is a low, soft swell. A piece coming loose is a small dry tick, and
+// one landing on the floor is a short glass tinkle. At the end, a quiet surf of filtered noise.
 
 const STORAGE_KEY = 'mirror-room:sound';
 
@@ -8,6 +9,7 @@ export class Sound {
   constructor() {
     this.context = null;
     this.noise = null;
+    this.surfNodes = null;
     try {
       this.enabled = localStorage.getItem(STORAGE_KEY) === 'on';
     } catch {
@@ -86,6 +88,77 @@ export class Sound {
     source.connect(filter).connect(gain).connect(ctx.destination);
     source.start(t);
     source.stop(t + duration * 1.1);
+  }
+
+  /** A piece coming out of its frame: a small, dry tick. */
+  loosen() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.burst(t, 0.018, 'bandpass', 1400 + Math.random() * 600, 0.09);
+    this.burst(t + 0.006, 0.006, 'highpass', 3500, 0.05);
+  }
+
+  /** A piece landing on the floor: a soft contact, then a few bright, tiny pings skittering away. */
+  land(size = 0.5) {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const level = 0.35 + 0.65 * size;
+    this.burst(t, 0.02, 'highpass', 2600, 0.14 * level);
+    for (let i = 0; i < 5; i++) {
+      this.burst(t + 0.01 + Math.pow(Math.random(), 1.5) * 0.18, 0.004 + Math.random() * 0.005,
+        'bandpass', 4000 + Math.random() * 5000, (0.04 + Math.random() * 0.06) * level);
+    }
+    for (let i = 0; i < 3; i++) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const at = t + Math.random() * 0.09;
+      osc.frequency.value = 3800 + Math.random() * 5200;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.014 * level, at + 0.003);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.08 + Math.random() * 0.18);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + 0.3);
+    }
+  }
+
+  /** The ocean behind the mirror: low filtered noise that swells and falls slowly, kept quiet. */
+  surf() {
+    const ctx = this.ready();
+    if (!ctx || this.surfNodes) return;
+    const t = ctx.currentTime;
+    const source = ctx.createBufferSource();
+    source.buffer = this.noise;
+    source.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 520;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.05, t + 3);
+    // A slow swell, roughly one wave every eight seconds.
+    const lfo = ctx.createOscillator();
+    const depth = ctx.createGain();
+    lfo.frequency.value = 0.12;
+    depth.gain.value = 0.03;
+    lfo.connect(depth).connect(gain.gain);
+    source.connect(filter).connect(gain).connect(ctx.destination);
+    source.start(t);
+    lfo.start(t);
+    this.surfNodes = { source, lfo, gain };
+  }
+
+  stopSurf() {
+    if (!this.surfNodes) return;
+    const { source, lfo, gain } = this.surfNodes;
+    const t = this.context.currentTime;
+    gain.gain.cancelScheduledValues(t);
+    gain.gain.setTargetAtTime(0, t, 0.2);
+    source.stop(t + 1);
+    lfo.stop(t + 1);
+    this.surfNodes = null;
   }
 
   burst(t, duration, type, frequency, level) {

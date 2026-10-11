@@ -1,11 +1,13 @@
 // The mirror's glass: a set of shard polygons, plus every crack drawn between them.
 // It starts as one rectangle. Each impact (see fracture.js) cuts shards in two along crack paths.
 // Every shard keeps showing its own part of the reflection, slightly misaligned, as if tilted a hair
-// in its frame: a facet normal, a small shift and twist, and its own brightness and tint. This module
-// is pure logic; every frame it writes each shard's look into a float array for the GPU.
+// in its frame: a facet normal, a small shift and twist, and its own brightness and tint. A broken
+// piece can also fall out of the frame (see debris.js), leaving a hole that shows the ocean behind
+// the mirror. This module is pure logic; every frame it writes each shard's look into a float array
+// for the GPU.
 
 import { fracture } from './fracture.js';
-import { splitPolygon, pointInPolygon, centroid, bounds, triangulate, distance } from './geometry.js';
+import { splitPolygon, pointInPolygon, centroid, bounds, triangulate, distance, signedArea } from './geometry.js';
 import { clamp01, easeInOutCubic } from './motion.js';
 
 export const MAX_SHARDS = 2000;
@@ -16,6 +18,10 @@ const SETTLE_MS = 180;                 // a shard tips to its new angle as the c
 const HEAL_MS = 1000;                  // restore: cracks heal back into the impact points
 const FADE_MS = 200;                   // reduced motion: restore is a short fade
 const MIN_AREA = 0.8;                  // px²: smaller slivers are not cut off
+export const LOOSE_AREA = 0.03;        // a tapped piece under this share of the glass falls out; a bigger one cracks
+export const RIM_PX = 6;               // px: the bevel drawn inside a hole, along the glass's cut edge
+const RIM_CELL = 48;                   // px: grid cell for finding which hole lies across an edge
+export const RIM_FLOATS = 5;           // x, y, normal into the hole x, y, across (0 at the edge, 1 inside)
 
 const SHIFT_PER_TILT = 240;            // px of reflection shift per radian of facet tilt
 const FLAT = Object.freeze({ dx: 0, dy: 0, rot: 0, nx: 0, ny: 0, light: 1, tint: 0 });
@@ -49,7 +55,9 @@ class Shard {
     this.from = from;
     this.to = to;
     this.settleAt = settleAt;
-    this.missing = false;              // chipped out at the impact: the dark backing shows
+    this.area = Math.abs(signedArea(poly));
+    this.missing = false;              // chipped out at the impact, or fallen: the ocean behind shows
+    this.fallen = false;               // knocked out of the frame by a tap or a sweep
     this.frost = 0;                    // crushed glass right by the impact scatters light
     this.triangles = null;
   }
@@ -79,6 +87,44 @@ export class Mirror {
     let n = 0;
     for (const s of this.shards) if (!s.missing) n++;
     return n;
+  }
+
+  /** Pieces that have fallen out of the frame. */
+  get fallen() {
+    let n = 0;
+    for (const s of this.shards) if (s.fallen) n++;
+    return n;
+  }
+
+  /** True once any glass is gone, so the ocean behind can show. */
+  get holes() {
+    for (const s of this.shards) if (s.missing) return true;
+    return false;
+  }
+
+  /** The share of the frame still covered by glass, 0..1. */
+  glassLeft() {
+    let area = 0;
+    for (const s of this.shards) if (!s.missing) area += s.area;
+    return area / (this.width * this.height);
+  }
+
+  /** Can this piece come out of the frame? Only once the mirror is broken, and not mid-restore. */
+  canFall(shard, now) {
+    return !!shard && !shard.missing && !this.whole && !this.isHealing(now);
+  }
+
+  /** Small enough that a tap knocks it out, rather than cracking it further. */
+  isLoose(shard) {
+    return shard.area <= LOOSE_AREA * this.width * this.height;
+  }
+
+  /** The piece leaves the frame; its outline stays behind as a hole. */
+  detach(shard, now) {
+    shard.missing = true;
+    shard.fallen = true;
+    shard.fallenAt = now;
+    this.version++;
   }
 
   get whole() {
@@ -111,6 +157,7 @@ export class Mirror {
       s.poly.forEach(scale);
       s.box = bounds(s.poly);
       s.center = centroid(s.poly);
+      s.area *= sx * sy;
       s.triangles = null;
     }
     for (const c of this.cracks) c.points.forEach(scale);
@@ -168,7 +215,7 @@ export class Mirror {
 
   /** Cut `shard` along `path` (both ends on its outline). Called by fracture.js. */
   split(shard, path) {
-    if (this.shards.length >= MAX_SHARDS) return false;
+    if (this.shards.length >= MAX_SHARDS || shard.fallen) return false;   // cracks stop at a hole
     const halves = splitPolygon(shard.poly, path, MIN_AREA);
     if (!halves) return false;
     const impact = this.current;
@@ -267,6 +314,54 @@ export class Mirror {
   }
 
   /**
+   * The bevel around every hole: a strip along each glass edge that has a hole on its other side,
+   * reaching RIM_PX into the hole. Holes are found through a coarse grid, so this stays quick with
+   * thousands of shards. Returns RIM_FLOATS per vertex, six vertices per edge.
+   */
+  buildRims() {
+    const grid = new Map();
+    for (const h of this.shards) {
+      if (!h.missing) continue;
+      const b = h.box;
+      for (let cx = Math.floor(b.x0 / RIM_CELL); cx <= Math.floor(b.x1 / RIM_CELL); cx++) {
+        for (let cy = Math.floor(b.y0 / RIM_CELL); cy <= Math.floor(b.y1 / RIM_CELL); cy++) {
+          const key = cx * 4096 + cy;
+          let cell = grid.get(key);
+          if (!cell) grid.set(key, (cell = []));
+          cell.push(h);
+        }
+      }
+    }
+    if (!grid.size) return new Float32Array(0);
+    const holeAt = (x, y) => {
+      const cell = grid.get(Math.floor(x / RIM_CELL) * 4096 + Math.floor(y / RIM_CELL));
+      if (cell) for (const h of cell) if (h.contains(x, y)) return true;
+      return false;
+    };
+    const out = [];
+    const vertex = (p, nx, ny, across) => out.push(p.x + nx * across * RIM_PX, p.y + ny * across * RIM_PX, nx, ny, across);
+    for (const s of this.shards) {
+      if (s.missing) continue;
+      const poly = s.poly;
+      const sign = signedArea(poly) >= 0 ? 1 : -1;
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length];
+        const length = Math.hypot(b.x - a.x, b.y - a.y);
+        if (length < 0.3) continue;
+        // Outward from this shard: the left normal points inward for a positive signed area.
+        const nx = (sign * (b.y - a.y)) / length, ny = (-sign * (b.x - a.x)) / length;
+        const mx = (a.x + b.x) / 2 + nx * 1.5, my = (a.y + b.y) / 2 + ny * 1.5;
+        if (!holeAt(mx, my)) continue;
+        const tx = ((b.x - a.x) / length) * 0.5, ty = ((b.y - a.y) / length) * 0.5;
+        const a2 = { x: a.x - tx, y: a.y - ty }, b2 = { x: b.x + tx, y: b.y + ty };
+        vertex(a2, nx, ny, 0); vertex(b2, nx, ny, 0); vertex(b2, nx, ny, 1);
+        vertex(a2, nx, ny, 0); vertex(b2, nx, ny, 1); vertex(a2, nx, ny, 1);
+      }
+    }
+    return new Float32Array(out);
+  }
+
+  /**
    * Fill `out` (Float32Array of MAX_SHARDS * GPU_ROWS * 4), one texel per shard in each row:
    *   row 0: reflection (shiftX, shiftY, twist, brightness)
    *   row 1: (centreX, centreY, facet normal x, facet normal y)
@@ -293,7 +388,7 @@ export class Mirror {
       k = row2 + i * 4;
       out[k] = look.tint;
       out[k + 1] = s.frost * (1 - heal);
-      out[k + 2] = s.missing && now >= s.settleAt ? heal : 1;
+      out[k + 2] = s.missing && (s.fallen || now >= s.settleAt) ? heal : 1;
       out[k + 3] = 0;
     }
   }

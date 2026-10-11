@@ -129,7 +129,7 @@ button { font: inherit; letter-spacing: inherit; color: inherit; }
 .aim:focus-visible .reticle { opacity: 1; }
 
 .hint {
-  position: absolute; left: 0; right: 0; bottom: 96px;
+  position: absolute; left: 0; right: 0; bottom: 150px;
   margin: 0;
   text-align: center;
   font-size: 11px; text-transform: uppercase; letter-spacing: .3em;
@@ -141,44 +141,136 @@ button { font: inherit; letter-spacing: inherit; color: inherit; }
 .hint.gone { opacity: 0; animation: none; }
 @keyframes breathe { 50% { opacity: .35; } }
 
-/* Barely-there controls that fade away when you stop moving */
+/* Controls: always visible, on frosted pills dark enough to read over any camera image or the
+   ocean (white on the darkest-case blend stays above 4.5:1). Idle only dims them slightly. */
 .chrome { transition: opacity .6s ease; }
-.stage.idle .chrome { opacity: 0; pointer-events: none; }
+.stage.idle .chrome { opacity: .82; }
+/* The bars span the screen; only their pills take taps, so the glass around them stays reachable. */
+.top, .bottom { pointer-events: none; }
+.top > *, .bottom > * > *, .controls { pointer-events: auto; }
+
+.pill {
+  background: rgba(8, 10, 14, .6);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 999px;
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .25);
+}
 
 .top {
   position: absolute; top: 0; left: 0; right: 0;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: max(16px, env(safe-area-inset-top)) var(--gutter) 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: max(12px, env(safe-area-inset-top)) var(--gutter) 12px;
 }
-.top .mark { font-size: 11px; color: var(--quiet); cursor: default; }
-.top .row { gap: 18px; }
+.top .mark {
+  display: inline-flex; align-items: center;
+  min-height: 44px; padding: 0 16px;
+  font-size: 12px; color: rgba(255, 255, 255, .92);
+  cursor: default;
+}
+
+.bar { display: flex; align-items: center; gap: 2px; padding: 3px; }
+
+.control {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-width: 44px; min-height: 44px;
+  padding: 0 14px;
+  border: 0; border-radius: 999px;
+  background: none;
+  color: rgba(255, 255, 255, .95);
+  font-size: 14px; font-weight: 400; letter-spacing: .03em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color .2s;
+}
+.control:hover { background: rgba(255, 255, 255, .1); }
+.control:focus-visible { outline: 2px solid rgba(255, 255, 255, .9); outline-offset: 1px; }
+.control[aria-pressed="true"], .control.recording { background: rgba(255, 255, 255, .18); }
+.control.recording .fill { fill: #ff5a52; stroke: #ff5a52; }
+
+.icon {
+  width: 18px; height: 18px; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
+.icon .fill { fill: currentColor; }
+#sound .icon[data-when="on"] { display: none; }
+#sound[aria-pressed="true"] .icon[data-when="on"] { display: block; }
+#sound[aria-pressed="true"] .icon[data-when="off"] { display: none; }
+
+.stage.broken #shatter, .stage.broken #restore { display: none; }
 
 .bottom {
   position: absolute; left: 0; right: 0; bottom: 0;
-  display: grid; gap: 14px;
-  padding: 16px var(--gutter) max(14px, env(safe-area-inset-bottom));
+  display: grid; gap: 10px; justify-items: center;
+  padding: 12px var(--gutter) max(12px, env(safe-area-inset-bottom));
 }
-.controls { display: flex; justify-content: center; align-items: center; gap: 4px 10px; flex-wrap: wrap; }
-.text {
-  padding: 6px 2px;
-  border: 0;
-  background: none;
-  color: var(--quiet);
-  font-size: 12px;
-  letter-spacing: .14em;
-  cursor: pointer;
-  transition: color .25s;
-}
-.text:hover, .text:focus-visible, .text[aria-pressed="true"] { color: rgba(255, 255, 255, .95); }
-.text.recording { color: rgba(255, 255, 255, .95); }
-.dot { color: var(--faint); }
+.controls { justify-content: center; }
 
-.meta { display: flex; justify-content: space-between; align-items: baseline; }
-.count {
-  font: 400 10px/1 ui-monospace, "SF Mono", Consolas, monospace;
-  color: rgba(255, 255, 255, .28);
-  letter-spacing: .08em;
+.meta {
+  justify-self: stretch;
+  display: flex; justify-content: space-between; align-items: baseline;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .8);
 }
+.meta .credit { color: rgba(255, 255, 255, .72); font-size: 12px; }
+.count {
+  font: 400 12px/1 ui-monospace, "SF Mono", Consolas, monospace;
+  color: rgba(255, 255, 255, .72);
+  letter-spacing: .06em;
+}
+
+/* Phones: icon above the label, so all four controls fit in one row */
+@media (max-width: 480px) {
+  .controls .control { flex-direction: column; gap: 3px; min-height: 56px; min-width: 70px; padding: 6px 8px; border-radius: 22px; }
+  .controls { border-radius: 26px; }
+  .top .control span { display: none; }
+  .top #sound span { display: inline; }
+}
+
+/* The ending: the whole mirror is gone, the ocean fills the screen */
+.ending {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  padding: 24px var(--gutter);
+  background: radial-gradient(60% 45% at 50% 50%, rgba(2, 10, 18, .45), rgba(2, 10, 18, 0) 70%);
+  opacity: 0;
+  transition: opacity 2.4s ease;
+  pointer-events: none;
+}
+.ending.shown { opacity: 1; }
+.ending-text {
+  margin: 0;
+  max-width: 21ch;
+  text-align: center;
+  font-size: clamp(20px, 4.6vw, 30px); font-weight: 300; line-height: 1.6; letter-spacing: .02em;
+  color: rgba(255, 255, 255, .96);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .45), 0 2px 26px rgba(0, 12, 24, .7);
+}
+.restart {
+  display: inline-flex; align-items: center; gap: .3em;
+  min-height: 44px;
+  margin: 0 .1em; padding: 0 .55em;
+  border: 1px solid rgba(255, 255, 255, .55); border-radius: 999px;
+  background: rgba(255, 255, 255, .14);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font: inherit; font-weight: 400;
+  text-shadow: 0 0 14px rgba(170, 225, 255, .8);
+  pointer-events: auto;
+  cursor: pointer;
+  animation: glow 2.8s ease-in-out infinite;
+  transition: background-color .2s;
+}
+.restart .icon { width: .8em; height: .8em; }
+.restart:hover { background: rgba(255, 255, 255, .24); }
+.restart:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(170, 225, 255, .0), 0 0 18px rgba(170, 225, 255, .25); }
+  50% { box-shadow: 0 0 0 6px rgba(170, 225, 255, .08), 0 0 30px rgba(170, 225, 255, .5); }
+}
+
+.offscreen { position: fixed; left: 0; top: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
 
 /* Recording sheet */
 .sheet {
@@ -194,5 +286,6 @@ button { font: inherit; letter-spacing: inherit; color: inherit; }
 .preview video, .preview img { display: block; width: 100%; max-height: 55dvh; object-fit: contain; background: #000; margin-bottom: 18px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .screen::before, .hint { animation: none; }
+  .screen::before, .hint, .restart { animation: none; }
+  .ending { transition-duration: .4s; }
 }

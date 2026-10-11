@@ -2,6 +2,7 @@
 // taps, keys and the quiet controls to the glass. The interesting parts live in the modules below.
 
 import { Mirror } from './shards.js';
+import { Debris } from './debris.js';
 import { MirrorRenderer } from './mirror-renderer.js';
 import { Ripple } from './ripple.js';
 import { TimeBuffer } from './time-buffer.js';
@@ -18,14 +19,21 @@ const canvas = $('glass');
 const stage = $('stage');
 const counter = $('counter');
 const hint = $('hint');
+const ocean = $('ocean');
 
 const RECORD_MS = 6000;
 const IDLE_MS = 3000;
 const LIGHT_HEIGHT = 900;              // px: how high above the glass the pointer light hangs
 const TAG = 'Mirror Room · Day 1 / 30 · @tirupathipodugu';
 const ENCORE_KEYS = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown'];
+const SWEEP_STEP = 6;                  // px between the points a sweep tests for pieces
+const SWEEP_SIDES = [0, -9, 9];        // px either side of the path a sweep also reaches
+const BROKEN_AT = 0.03;                // once less glass than this is left, the rest falls on its own
+const ENDING_DELAY_MS = 1600;          // from the last pieces falling to the message
+const SOUND_GAP_MS = 45;               // pieces landing together share one sound
 
 const mirror = new Mirror();
+const debris = new Debris();
 const sound = new Sound();
 let renderer = null;
 let ripple = null;
@@ -43,12 +51,17 @@ let volley = [];                       // timers for a "shatter" volley
 let idleTimer = 0;
 let titleTaps = [];
 let recentKeys = [];
+let broken = false;                    // the ending: all the glass is gone and only the ocean is left
+let sweeping = false;
+let lastSound = { loose: -Infinity, land: -Infinity };
+let oceanTime = -1;
 
 const effects = { glintAt: -Infinity };
 const pointer = { x: 0, y: 0, down: null, movedAt: -Infinity };
 // Everything the renderer needs each frame, allocated once.
 const frame = {
   mirror,
+  debris,
   now: 0,
   ripple: null,
   timeBuffer: null,
@@ -90,7 +103,9 @@ async function start(kind) {
   $('error').hidden = true;
   stage.hidden = false;
   setSoundLabel();
+  ocean.play().catch(() => {});        // muted and inline, so it may start without a gesture
   mirror.reset(stage.clientWidth, stage.clientHeight);
+  debris.clear();
   resize();
   frame.light[0] = mirror.width * 0.3;
   frame.light[1] = mirror.height * 0.25;
@@ -129,7 +144,10 @@ function resize() {
   renderer.resize(width, height);
   ripple.resize(width, height);
   if (timeOn) timeBuffer.allocate(width, height);
-  if (width !== mirror.width || height !== mirror.height) mirror.resize(width, height);
+  if (width !== mirror.width || height !== mirror.height) {
+    mirror.resize(width, height);
+    debris.clear();
+  }
 }
 
 // ---------------------------------------------------------------- the frame loop
@@ -138,9 +156,20 @@ function tick(now) {
   if (!running) return;
   frameId = requestAnimationFrame(tick);
   if (source.width && source.takeFrame()) renderer.uploadFrame(source.element, source.width, source.height);
+  // The ocean only needs uploading once something has opened a view onto it.
+  if (mirror.holes && ocean.readyState >= 2 && ocean.currentTime !== oceanTime) {
+    oceanTime = ocean.currentTime;
+    renderer.uploadOcean(ocean);
+  }
 
   mirror.reduced = prefersReducedMotion();
   if (mirror.update(now)) onRestored(now);
+  debris.update(now, mirror.height);
+  if (debris.landings.length && now - lastSound.land > SOUND_GAP_MS) {
+    lastSound.land = now;
+    const biggest = Math.max(...debris.landings.map((l) => l.size));
+    sound.land(Math.min(1, biggest / 120));
+  }
   ripple.update(now);
   moveLight(now);
 
@@ -176,8 +205,20 @@ function moveLight(now) {
 
 // ---------------------------------------------------------------- breaking and restoring
 
-function strike(x, y, force = 1) {
+/**
+ * A tap. On intact glass, or on a big piece, it cracks the glass. On a small piece of glass that is
+ * already broken off (under LOOSE_AREA of the mirror) it knocks that piece out of the frame.
+ * Shatter and the encore only crack (`mayFall` false).
+ */
+function strike(x, y, force = 1, mayFall = true) {
+  if (broken) return;
   const now = performance.now();
+  const shard = mirror.shardAt(x, y);
+  if (shard?.fallen) return;           // nothing left to hit there
+  if (mayFall && mirror.canFall(shard, now) && mirror.isLoose(shard)) {
+    knockOut(shard, x, y, now);
+    return;
+  }
   const result = mirror.impact(x, y, now);
   if (result === 'broke') {
     sound.crack(force);
@@ -191,17 +232,94 @@ function strike(x, y, force = 1) {
   }
 }
 
-/** Shatter: a volley of 5–7 strikes at random points, a few hundred ms apart. */
+/** Take one piece out of the frame: it falls, and the ocean shows where it was. */
+function knockOut(shard, x, y, now) {
+  const look = mirror.lookAt(shard, now);
+  debris.drop(shard, look, shard.frost, x, y, now, prefersReducedMotion());
+  mirror.detach(shard, now);
+  if (now - lastSound.loose > SOUND_GAP_MS) {
+    lastSound.loose = now;
+    sound.loosen();
+    navigator.vibrate?.(5);
+  }
+  hint.classList.add('gone');
+  updateCounter();
+  if (!broken && mirror.glassLeft() <= BROKEN_AT) breakDown(now);
+}
+
+/** A press-and-drag over broken glass knocks out every piece it passes over, whatever its size. */
+function sweep(x0, y0, x1, y1) {
+  if (broken || mirror.whole) return;
+  const now = performance.now();
+  const length = Math.hypot(x1 - x0, y1 - y0);
+  const steps = Math.max(1, Math.ceil(length / SWEEP_STEP));
+  // A fingertip is wide: test a few px either side of the path too.
+  const nx = length ? -(y1 - y0) / length : 0, ny = length ? (x1 - x0) / length : 1;
+  for (let i = 1; i <= steps; i++) {
+    for (const side of SWEEP_SIDES) {
+      const x = x0 + ((x1 - x0) * i) / steps + nx * side, y = y0 + ((y1 - y0) * i) / steps + ny * side;
+      const shard = mirror.shardAt(x, y);
+      if (mirror.canFall(shard, now)) knockOut(shard, x, y, now);
+      if (broken) return;
+    }
+  }
+}
+
+/** The ending: the last slivers drop on their own, the ocean fills the screen, and a message fades in. */
+function breakDown(now) {
+  broken = true;
+  stopVolley();
+  cancelEncore?.();
+  stage.classList.add('broken');
+  updateCounter();
+  const rest = mirror.shards.filter((s) => !s.missing);
+  rest.forEach((s, i) => {
+    setTimeout(() => {
+      if (!running || s.missing) return;
+      const t = performance.now();
+      debris.drop(s, mirror.lookAt(s, t), s.frost, s.center.x, s.center.y - 10, t, prefersReducedMotion());
+      mirror.detach(s, t);
+      updateCounter();
+    }, Math.min(900, i * 35));
+  });
+  setTimeout(() => {
+    if (!running) return;
+    sound.surf();
+    const ending = $('ending');
+    ending.hidden = false;
+    requestAnimationFrame(() => ending.classList.add('shown'));
+    announce('When you are broken, all you need is a break to restart.');
+    setTimeout(() => $('restart').focus({ preventScroll: true }), 400);
+  }, Math.min(900, rest.length * 35) + ENDING_DELAY_MS);
+}
+
+/** A few small pieces fall out after a shatter, for drama. Most of the glass stays. */
+function dropSome() {
+  if (broken || !running) return;
+  const now = performance.now();
+  const loose = mirror.shards.filter((s) => mirror.canFall(s, now) && mirror.isLoose(s) && s.area > 150);
+  for (let n = 2 + Math.floor(Math.random() * 2); n > 0 && loose.length; n--) {
+    const s = loose.splice(Math.floor(Math.random() * loose.length), 1)[0];
+    knockOut(s, s.center.x + (Math.random() - 0.5) * 10, s.center.y - 6, now);
+  }
+}
+
+/** Shatter: a volley of 5–7 strikes at random points, a few hundred ms apart, then a few pieces fall. */
 function shatter() {
-  if (!running || volley.length) return;
+  if (!running || volley.length || broken) return;
   const strikes = 5 + Math.floor(Math.random() * 3);
   let t = 0;
   for (let i = 0; i < strikes; i++) {
     const x = mirror.width * (0.1 + Math.random() * 0.8);
     const y = mirror.height * (0.1 + Math.random() * 0.8);
     volley.push(setTimeout(() => {
-      strike(x, y, 1 - i * 0.08);
-      if (i === strikes - 1) volley = [];
+      strike(x, y, 1 - i * 0.08, false);
+      if (i === strikes - 1) {
+        volley = [setTimeout(() => {
+          volley = [];
+          dropSome();
+        }, 420)];
+      }
     }, t));
     t += 140 + Math.random() * 160;
   }
@@ -213,19 +331,24 @@ function stopVolley() {
 }
 
 function restore() {
+  if (broken) return;                  // past the ending, the only way back is to restart
   stopVolley();
-  if (!mirror.heal(performance.now())) return;
+  const now = performance.now();
+  if (!mirror.heal(now)) return;
+  debris.vanish(now);
   sound.restore(mirror.healDuration() / 1000);
 }
 
 function onRestored(now) {
   if (!mirror.reduced) effects.glintAt = now;
+  debris.clear();
   updateCounter();
   announce('Restored');
 }
 
 function updateCounter() {
-  counter.textContent = mirror.whole ? '' : String(mirror.count);
+  const fallen = mirror.fallen;
+  counter.textContent = mirror.whole || broken ? '' : fallen ? `${mirror.count} · ${fallen} fallen` : String(mirror.count);
 }
 
 function announce(text) {
@@ -242,14 +365,15 @@ function setTime(on) {
 }
 
 function encore() {
-  if (cancelEncore || !running) return;
+  if (cancelEncore || !running || broken) return;
   stopVolley();
   cancelEncore = playEncore({
     wholeMirror: () => {
       mirror.reset(mirror.width, mirror.height);
+      debris.clear();
       updateCounter();
     },
-    strike: (x, y) => strike(x, y, 0.9),
+    strike: (x, y) => strike(x, y, 0.9, false),
     restore,
   }, mirror, prefersReducedMotion(), () => { cancelEncore = null; });
 }
@@ -266,8 +390,8 @@ async function record() {
   recording = true;
   button.classList.add('recording');
   let left = RECORD_MS / 1000;
-  label.textContent = `recording ${left}`;
-  const countdown = setInterval(() => { label.textContent = `recording ${--left}`; }, 1000);
+  label.textContent = `Recording ${left}`;
+  const countdown = setInterval(() => { label.textContent = `Recording ${--left}`; }, 1000);
   try {
     const blob = await recordCanvas(canvas, format, RECORD_MS);
     showClip(blob, format.extension);
@@ -278,13 +402,15 @@ async function record() {
     clearInterval(countdown);
     recording = false;
     button.classList.remove('recording');
-    label.textContent = 'record';
+    label.textContent = 'Record';
   }
 }
 
 function setSoundLabel() {
+  if (!sound.enabled) sound.stopSurf();
+  else if (broken) sound.surf();
   $('sound').setAttribute('aria-pressed', String(sound.enabled));
-  $('sound').textContent = sound.enabled ? 'sound on' : 'sound off';
+  $('sound-label').textContent = sound.enabled ? 'Sound on' : 'Sound off';
 }
 
 // ---------------------------------------------------------------- input
@@ -309,6 +435,7 @@ stage.addEventListener('pointerdown', wake);
 canvas.addEventListener('pointerdown', (event) => {
   const [x, y] = stagePoint(event);
   pointer.down = { x, y, t: event.timeStamp };
+  sweeping = false;
   pointer.x = x;
   pointer.y = y;
   pointer.movedAt = performance.now();
@@ -317,6 +444,15 @@ canvas.addEventListener('pointerdown', (event) => {
 
 canvas.addEventListener('pointermove', (event) => {
   const [x, y] = stagePoint(event);
+  // Press and drag: once the finger has moved off its starting point, it sweeps pieces out.
+  if (pointer.down && running && !cancelEncore) {
+    if (!sweeping && Math.hypot(x - pointer.down.x, y - pointer.down.y) >= 10) {
+      sweeping = true;
+      sweep(pointer.down.x, pointer.down.y, x, y);
+    } else if (sweeping) {
+      sweep(pointer.x, pointer.y, x, y);
+    }
+  }
   pointer.x = x;
   pointer.y = y;
   pointer.movedAt = performance.now();
@@ -329,7 +465,8 @@ canvas.addEventListener('pointerup', (event) => {
   pointer.down = null;
   if (!down) return;
   const [x, y] = stagePoint(event);
-  if (Math.hypot(x - down.x, y - down.y) < 10 && event.timeStamp - down.t < 600 && !cancelEncore) strike(x, y);
+  if (!sweeping && Math.hypot(x - down.x, y - down.y) < 10 && event.timeStamp - down.t < 600 && !cancelEncore) strike(x, y);
+  sweeping = false;
 });
 
 canvas.addEventListener('pointercancel', () => { pointer.down = null; });
@@ -375,5 +512,6 @@ $('open').addEventListener('click', () => start('camera'));
 $('retry').addEventListener('click', () => start(sourceKind));
 $('error-demo').addEventListener('click', () => start('demo'));
 $('close-sheet').addEventListener('click', () => $('sheet').close());
+$('restart').addEventListener('click', () => location.reload());
 
 if (new URLSearchParams(location.search).get('demo') === '1') start('demo');
