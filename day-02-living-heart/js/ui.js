@@ -1,5 +1,5 @@
 // The interface: rate readout with a live ECG trace, sound, help, the info panel, the tour card, the arrest
-// message, the hover label and the loading bar. The controls stay visible; nothing fades on idle.
+// message (with Give CPR), the hover label and the loading bar. The controls stay visible; nothing fades on idle.
 
 import { DISCLAIMER } from './heart-facts.js';
 
@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
 const fmt = new Intl.NumberFormat('en-US');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-export function createUi({ onRate, onSound, onFlyTo, onClosePanel, onTour, onCutaway, onReset, onRestart }) {
+export function createUi({ onRate, onSound, onFlyTo, onClosePanel, onTour, onCutaway, onReset, onRestart, onCpr }) {
   const bpmEl = $('bpm'), modeEl = $('mode'), beatsEl = $('beats');
   const rateBtn = $('rate'), ratebox = $('ratebox'), slider = $('slider'), rateOut = $('rateOut');
   const soundBtn = $('sound'), soundLabel = $('soundLabel'), tip = $('tip');
@@ -53,6 +53,7 @@ export function createUi({ onRate, onSound, onFlyTo, onClosePanel, onTour, onCut
   $('tourEnd').addEventListener('click', () => onTour('end'));
   $('reset').addEventListener('click', () => onReset());
   $('restart').addEventListener('click', () => onRestart());
+  $('giveCpr').addEventListener('click', () => onCpr());
 
   // The ECG trace: a scrolling line drawn from the cardiac cycle (flat when the heart stops).
   const ecg = $('ecg'), ectx = ecg.getContext('2d');
@@ -82,11 +83,11 @@ export function createUi({ onRate, onSound, onFlyTo, onClosePanel, onTour, onCut
   return {
     setSoundLabel,
     update(dt, bpm, beats, mode, ecgValue) {
-      const b = mode === 'stopped' ? '0' : String(Math.round(bpm));
+      const b = mode === 'stopped' || mode === 'cpr' ? '0' : String(Math.round(bpm));
       if (b !== shownBpm) { bpmEl.textContent = b; shownBpm = b; }
       if (beats !== shownBeats) { beatsEl.textContent = fmt.format(beats); shownBeats = beats; }
       if (mode !== shownMode) {
-        modeEl.textContent = { rest: 'Rest', live: 'Live', strain: 'Racing', failing: 'Failing', stopped: 'Stopped' }[mode];
+        modeEl.textContent = { rest: 'Rest', live: 'Live', strain: 'Racing', failing: 'Failing', stopped: 'Stopped', cpr: 'CPR' }[mode];
         modeEl.className = 'mode ' + mode;
         shownMode = mode;
       }
@@ -139,7 +140,9 @@ export function createUi({ onRate, onSound, onFlyTo, onClosePanel, onTour, onCut
         const r = panel.getBoundingClientRect();
         return r.left < 4 && r.bottom >= innerHeight - 2 ? r.height : 0;
       }
-      // On a portrait phone the tour card sits low too: keep the heart above it.
+      // On a portrait phone the CPR card and the tour card sit low too: keep the heart above them.
+      const cpr = $('cpr');
+      if (!cpr.hidden && innerWidth <= 720 && innerHeight > innerWidth) return innerHeight - cpr.getBoundingClientRect().top;
       if (!tourcard.hidden && innerWidth <= 720 && innerHeight > innerWidth) return innerHeight - tourcard.getBoundingClientRect().top;
       return 0;
     },
@@ -165,7 +168,7 @@ export function createUi({ onRate, onSound, onFlyTo, onClosePanel, onTour, onCut
       }));
       $('care').hidden = !care.length;
       $('arrest').hidden = false;
-      $('restart').focus({ preventScroll: true });
+      $('giveCpr').focus({ preventScroll: true });
     },
     hideArrest() { $('arrest').hidden = true; },
 

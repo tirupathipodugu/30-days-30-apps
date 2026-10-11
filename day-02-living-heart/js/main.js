@@ -1,5 +1,5 @@
-// Living Heart entry point: the scenes and cameras, the study controls, the blocked-thread circulation, and
-// the frame loop.
+// Living Heart entry point: the scenes and cameras, the study controls, the blocked-thread circulation, CPR
+// practice, and the frame loop.
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -14,6 +14,7 @@ import { Hover } from './hover.js';
 import { CameraRig, bindControls } from './camera-rig.js';
 import { PartPicker } from './picker.js';
 import { Blockage } from './blockage.js';
+import { CprCoach } from './cpr.js';
 import { PARTS, TOUR, BLOCKED, ARREST } from './heart-facts.js';
 
 const canvas = document.getElementById('scene');
@@ -193,7 +194,7 @@ const ui = createUi({
     soundStarted = true;
     stopListening();
     const applied = await sound.setOn(on);
-    if (circ.state === 'stopped' && applied) sound.flatline(true);
+    if (circ.state === 'stopped' && applied && !cpr.active) sound.flatline(true);
     return on ? applied : false;
   },
   onFlyTo: () => { if (selected) flyToPart(selected); },
@@ -202,6 +203,7 @@ const ui = createUi({
   onCutaway: (on) => setCutaway(on),
   onReset: () => { endTour(); select(null); setCutaway(false); rig.reset(); },
   onRestart: restart,
+  onCpr: beginCpr,
 });
 ui.setRest(Math.round(restBpm));
 
@@ -309,7 +311,7 @@ const threadsActive = () => threads && threadFade > 0.45 && circ.state !== 'stop
 const cutInfo = () => ({ plane: cut.k > 0.02 ? cutPlane : null, clipR: heart?.shared.uClipR.value || 0, camPos: heartCam.position });
 
 function onTap(x, y, type) {
-  if (!document.getElementById('arrest').hidden) return;
+  if (!document.getElementById('arrest').hidden || cpr.active) return;
   const touch = type !== 'mouse';
   // A clot first: it is small and sits on top.
   if (threadsActive()) {
@@ -376,7 +378,7 @@ function setThreadHover(id) { if (threads) threads.material.uniforms.uHover.valu
 canvas.addEventListener('pointerleave', () => { ui.hideTip(); setThreadHover(-10); hovered = null; });
 bindControls(rig, canvas, { onTap, onHover, onDragStart: () => ui.hideTip() });
 addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape' || document.querySelector('dialog[open]')) return;
+  if (e.key !== 'Escape' || document.querySelector('dialog[open]') || cpr.active) return;
   if (tourAt >= 0) endTour(); else if (ui.panelOpen()) select(null);
 });
 
@@ -386,8 +388,8 @@ blockage.onChange((load) => {
   if (circ.state === 'failing' && load < ARREST_AT) { circ.state = 'normal'; }
   applyRate();
 });
-function restart() {
-  blockage.clear();
+function restart({ dissolve = false } = {}) {
+  if (dissolve) blockage.dissolve(now()); else blockage.clear();
   circ.load = 0;
   circ.state = 'normal';
   circ.arrestShown = false;
@@ -397,6 +399,37 @@ function restart() {
   cycle.restart(now(), restBpm + 40, restBpm, 8);
   ui.closePanel();
 }
+
+// ---- CPR practice: the visitor's hands do the heart's job until the AED's shock restarts it ----
+let cprPushAt = -99;
+const cpr = new CprCoach({
+  sound, now, reduced, coarse,
+  // Each push squeezes the heart (from cpr.depth in the frame loop) and sends a weak pulse into the threads.
+  onCompress: (t) => { cprPushAt = t; pushPulse(t + 0.05); },
+  // The shock: the clots dissolve, and one strong beat starts a normal rhythm that eases back to rest.
+  onShock: () => restart({ dissolve: true }),
+  // Leaving part-way: the heart is still stopped, so the arrest card comes back.
+  onExit: () => { circ.arrestShown = false; circ.stopAt = Math.min(circ.stopAt, now() - 2); },
+  onTryAgain: () => { stopHeart(); cpr.start(circ.stopAt); },
+  onDone: () => {},
+});
+function stopHeart() {
+  if (circ.state !== 'stopped') { circ.state = 'stopped'; circ.stopAt = now(); cycle.stop(); }
+  circ.arrestShown = true;
+  circ.flat = true;            // no flatline tone under the metronome
+  sound.flatline(false);
+}
+function beginCpr() {
+  endTour();
+  select(null);
+  ui.hideTip();
+  ui.hideArrest();
+  setCutaway(false);
+  rig.reset();
+  stopHeart();
+  cpr.start(circ.stopAt);
+}
+document.getElementById('cprPromptGo').addEventListener('click', beginCpr);
 
 // Resizes: re-lay out at once, regrow the threads once the window settles.
 let resizeTimer = 0;
@@ -418,8 +451,13 @@ const keyView = new THREE.Vector3();
 const tmpM = new THREE.Matrix4();
 let lastFrame = now(), threadFade = 1, sheetShift = 0, sheetZoom = 1;
 
+function pushPulse(at) {
+  beats.setComponent(beatSlot, at);
+  beatSlot = (beatSlot + 1) % 4;
+}
+
 function ecgAt(t) {
-  if (cycle.stopped) return 0;
+  if (cycle.stopped) return cpr.active ? 0.3 * cpr.depth : 0;   // CPR shows on the monitor as push artefacts
   const rr = cycle.rr, tb = t - cycle.start;
   const g = (x, s) => Math.exp(-(x / s) * (x / s));
   return 1.0 * g(tb - 0.02, 0.012) - 0.18 * g(tb - 0.0, 0.01) - 0.25 * g(tb - 0.045, 0.012)
@@ -430,7 +468,7 @@ function frame() {
   // ?debug exposes the moving parts to the console for checking.
 if (params.has('debug')) {
   window.__lh = {
-    rig, cycle, circ, blockage, hover, projectPage, pick: (x, y) => picker?.pick(x, y, cutInfo()),
+    rig, cycle, circ, blockage, hover, cpr, projectPage, pick: (x, y) => picker?.pick(x, y, cutInfo()),
     get threads() { return threads; },
     trunkExits: () => threads.paths.filter((p) => p.trunk).map((p) => {
       const q = p.pts.find((v) => Math.abs(v[0]) > HEART_CLEAR.x + 0.08 || Math.abs(v[1]) > HEART_CLEAR.y + 0.08) || p.pts[p.pts.length - 1];
@@ -456,8 +494,12 @@ requestAnimationFrame(frame);
   } else if (circ.state === 'normal') circ.beatAmp += (1 - circ.beatAmp) * Math.min(1, dt * 3);
   if (circ.state === 'stopped') {
     if (!circ.flat && t - circ.stopAt > 0.6) { circ.flat = true; sound.flatline(true); }
-    if (!circ.arrestShown && t - circ.stopAt > 2.0) { circ.arrestShown = true; ui.closePanel(); ui.showArrest(ARREST.title, ARREST.text, ARREST.careTitle, ARREST.care); }
+    if (!circ.arrestShown && !cpr.active && t - circ.stopAt > 2.0) { circ.arrestShown = true; ui.closePanel(); ui.showArrest(ARREST.title, ARREST.text, ARREST.careTitle, ARREST.care); }
   } else circ.flat = false;
+  // The dying heart offers CPR before the arrest card does.
+  cpr.setPrompt(!!heart && !cpr.active && (circ.state === 'failing' || (circ.state === 'stopped' && !circ.arrestShown)));
+  cpr.update(t, dt);
+  const pushing = cpr.active && cycle.stopped;
 
   const strainTarget = circ.state === 'normal' ? circ.load : 1;
   circ.strain += (strainTarget - circ.strain) * Math.min(1, dt * 1.5);
@@ -467,8 +509,7 @@ requestAnimationFrame(frame);
   if (ev.s2) sound.dub();
   if (ev.ejectAt !== lastEject && t >= ev.ejectAt && !cycle.stopped) {
     lastEject = ev.ejectAt;
-    beats.setComponent(beatSlot, ev.ejectAt);
-    beatSlot = (beatSlot + 1) % 4;
+    pushPulse(ev.ejectAt);
   }
 
   // Camera, and the bottom sheet pushing the view up so the selected part stays visible.
@@ -478,7 +519,8 @@ requestAnimationFrame(frame);
   const headerBottom = cover ? document.querySelector('.topbar').getBoundingClientRect().bottom + 8 : 0;
   const freeH = view.h - cover - headerBottom;
   const shiftGoal = cover ? view.h / 2 - (headerBottom + view.h - cover) / 2 : 0;
-  const zoomGoal = cover ? THREE.MathUtils.clamp(freeH / (view.h * 0.85), 0.4, 1) : 1;
+  // During CPR the heart is the thing being pushed, so it keeps more of its size above the card.
+  const zoomGoal = cover ? THREE.MathUtils.clamp(freeH / (view.h * (cpr.active ? 0.5 : 0.85)), 0.4, 1) : 1;
   const sk = Math.min(1, dt * 6);
   sheetShift += (shiftGoal - sheetShift) * sk;
   sheetZoom += (zoomGoal - sheetZoom) * sk;
@@ -501,6 +543,14 @@ requestAnimationFrame(frame);
     // Under strain the heart dilates as it fills; the last beat bulges, then it stays a little swollen.
     let swell = (rm ? 0.4 : 1) * circ.strain * 0.045 * (1 - Math.min(1, c.vent));
     if (circ.state === 'stopped') { const k = Math.min(1, (t - circ.stopAt) / 0.9); swell = (rm ? 0.02 : 0.07 * Math.sin(Math.PI * Math.min(1, k * 1.6)) * (1 - k * 0.4)) + 0.025; }
+    // CPR: each push squeezes the stopped heart flat between the breastbone and the spine, then it refills.
+    if (pushing) {
+      const d = cpr.depth;
+      u.uVent.value = 0.85 * d; u.uTwist.value = 0.2 * d; u.uEject.value = d; u.uAmp.value = rm ? 0.5 : 1;
+      const since = t - cprPushAt - 0.03;
+      u.uSwell.value = since > 0 ? 0.7 * Math.exp(-since / 0.2) * Math.min(1, since / 0.04) : 0;
+      swell -= (rm ? 0.01 : 0.03) * d;
+    }
     // Apex tap: a 0.6° nod that brings the apex forward at the start of ejection.
     const sinceTap = t - ev.ejectAt;
     const tap = !cycle.stopped && sinceTap >= 0 ? THREE.MathUtils.degToRad(0.6) * amp * Math.exp(-sinceTap / 0.09) * Math.min(1, sinceTap / 0.02) : 0;
@@ -553,14 +603,14 @@ requestAnimationFrame(frame);
     const tu = threads.material.uniforms;
     tu.uTime.value = t; tu.uBeats.value.copy(beats); tu.uReduced.value = rm ? 1 : 0;
     tu.uFade.value = threadFade;
-    tu.uStrength.value = 1 + 0.8 * circ.strain;
+    tu.uStrength.value = pushing ? 0.55 : 1 + 0.8 * circ.strain;   // pushes by hand move blood, but weakly
     tu.uV.value = threads.speed * (1 + 0.5 * circ.strain);
     hover.maybeRefresh();
   }
   blockage.update(t, Math.max(0.35, threadFade));
   doHover();
 
-  const mode = circ.state === 'stopped' ? 'stopped' : circ.state === 'failing' ? 'failing' : circ.load > 0.02 ? 'strain' : t - lastLive < 10 ? 'live' : 'rest';
+  const mode = pushing ? 'cpr' : circ.state === 'stopped' ? 'stopped' : circ.state === 'failing' ? 'failing' : circ.load > 0.02 ? 'strain' : t - lastLive < 10 ? 'live' : 'rest';
   ui.update(dt, cycle.bpm, cycle.beats, mode, ecgAt(t));
   post.render(t);
   watchFps(t);
@@ -594,7 +644,7 @@ function watchFps(t) {
 // ?debug exposes the moving parts to the console for checking.
 if (params.has('debug')) {
   window.__lh = {
-    rig, cycle, circ, blockage, hover, projectPage, pick: (x, y) => picker?.pick(x, y, cutInfo()),
+    rig, cycle, circ, blockage, hover, cpr, projectPage, pick: (x, y) => picker?.pick(x, y, cutInfo()),
     get threads() { return threads; },
     trunkExits: () => threads.paths.filter((p) => p.trunk).map((p) => {
       const q = p.pts.find((v) => Math.abs(v[0]) > HEART_CLEAR.x + 0.08 || Math.abs(v[1]) > HEART_CLEAR.y + 0.08) || p.pts[p.pts.length - 1];

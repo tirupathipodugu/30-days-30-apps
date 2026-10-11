@@ -107,6 +107,13 @@ export class Blockage {
     if (this.paths) this.apply(notify);
   }
 
+  /** Clear every clot at once (flow returns now), with the clots shrinking away over `dur` seconds. */
+  dissolve(t, dur = 0.9) {
+    this.fading = (this.fading || []).concat(this.blocks.map((b) => ({ mesh: b.mesh, size: b.mesh.scale.x, t0: t, dur })));
+    this.blocks = [];
+    if (this.paths) this.apply(true);
+  }
+
   setClotSize(sizeWorld) { for (const b of this.blocks) b.mesh.scale.setScalar(sizeWorld); }
 
   /** Work out where flow stops on every path, write it to the shader, and recompute the load. */
@@ -144,5 +151,12 @@ export class Blockage {
   update(t, fade) {
     this.clotMat.uniforms.uTime.value = t;
     this.clotMat.uniforms.uOpacity.value = fade;
+    if (!this.fading?.length) return;
+    this.fading = this.fading.filter((f) => {
+      const k = (t - f.t0) / f.dur;
+      if (k >= 1) { this.scene.remove(f.mesh); return false; }
+      f.mesh.scale.setScalar(f.size * (1 - k) * (1 - k));
+      return true;
+    });
   }
 }

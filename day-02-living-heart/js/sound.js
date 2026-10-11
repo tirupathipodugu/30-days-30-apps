@@ -51,6 +51,65 @@ export class HeartSound {
     osc.onended = () => { if (this.flat?.osc === osc) this.flat = null; };
   }
 
+  get ready() { return this.on && this.ctx?.state === 'running'; }
+
+  // CPR practice: the metronome, a soft thud for each push, the AED's beeps, its charging whine and the shock.
+  tick() { this.tone(1320, 0.035, 0.09, 'triangle'); }
+  push() { this.thump(0.08, 55, 170, 0.06, 0.55); }
+  beep(freq = 980, dur = 0.12) { this.tone(freq, dur, 0.06, 'sine'); }
+
+  tone(freq, dur, gain, type) {
+    if (!this.ready) return;
+    const ctx = this.ctx, t = ctx.currentTime + 0.005;
+    const osc = ctx.createOscillator(), env = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(gain, t + 0.005);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(env).connect(this.master);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+
+  /** The rising whine of an AED charging; it holds quietly until shock() or chargeStop(). */
+  charge() {
+    this.chargeStop();
+    if (!this.ready) return;
+    const ctx = this.ctx, t = ctx.currentTime + 0.01;
+    const osc = ctx.createOscillator(), env = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(300, t);
+    osc.frequency.exponentialRampToValueAtTime(2400, t + 1.6);
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.03, t + 0.2);
+    osc.connect(env).connect(this.master);
+    osc.start(t);
+    this.charging = { osc, env };
+  }
+  chargeStop() {
+    if (!this.charging) return;
+    const { osc, env } = this.charging, t = this.ctx.currentTime;
+    env.gain.cancelScheduledValues(t);
+    env.gain.setTargetAtTime(0.0001, t, 0.03);
+    osc.stop(t + 0.2);
+    this.charging = null;
+  }
+  /** The shock: a sharp crack of noise over a deep thump. */
+  shock() {
+    this.chargeStop();
+    if (!this.ready) return;
+    const ctx = this.ctx, t = ctx.currentTime + 0.005;
+    const src = ctx.createBufferSource(), env = ctx.createGain(), hp = ctx.createBiquadFilter();
+    src.buffer = this.noise;
+    hp.type = 'highpass'; hp.frequency.value = 900;
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.5, t + 0.004);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    src.connect(hp).connect(env).connect(this.master);
+    src.start(t); src.stop(t + 0.2);
+    this.thump(0.18, 38, 120, 0.22, 1.4);
+  }
+
   lub(strength = 1) { this.thump(0.11, 45, 140, 0.09, Math.min(1.6, strength)); }
   dub() { this.thump(0.07, 65, 220, 0.055, 0.7); }
 

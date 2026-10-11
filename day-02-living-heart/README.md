@@ -29,6 +29,17 @@ The glass threads stand in for the arteries leaving the heart. Click a thread to
 
 As more of the circulation is blocked the heart compensates: the rate climbs (72 → about 110 → 150 → 180+), each beat is harder, the heart dilates as it fills and turns dusky, and the open threads carry faster, stronger pulses. When 85% of the flow along the six trunks is blocked, the heart beats frantically and irregularly for a few seconds, bulges once more and stops. The readout flatlines (with a quiet tone if sound is on), and **Restart heart** clears every clot and restarts it with one strong beat that eases back to the resting rate. This is a simplified picture, explained in the panel.
 
+### Give CPR
+
+When the heart is dying, a **Start CPR** prompt appears; once it has stopped, the arrest card offers **Give CPR** next to **Restart heart**. It teaches hands-only CPR as lay-rescuer guidance describes it, in four short steps:
+
+1. **Check:** tap the shoulders and shout. No response and not breathing normally (gasping is not normal breathing)? Act.
+2. **Call:** emergency services (112 / 911 / your local number), on speaker, and ask for an AED.
+3. **Push:** press the heart, the big **Push** button or `Space` / `Enter`, 30 at a time. A metronome ticks at 110 a minute (audible with sound on), a rate meter shows too slow / good (100–120) / too fast, and a depth bar fills to "push hard: 5–6 cm" while you hold, then cues "let the chest come all the way back up" on release. Each push squeezes the heart and sends a weak pulse into the threads; phones buzz on each push where supported. A pause brings a gentle "keep going, don't stop", never a fail.
+4. **AED:** after about two sets of good pushes (or about 80 s of steady pushing) the AED arrives: pads on a chest diagram, analysing, shock advised, stand clear, **Shock**. The clots dissolve and one strong beat restarts a normal rhythm that eases back to rest. With reduced motion the flash is a soft fade.
+
+A scorecard follows (average rate, share of pushes at 100–120, time from collapse to the first push) with an honest summary: CPR keeps blood moving to the brain until a defibrillator and paramedics arrive, but rarely restarts a heart by itself; the shock resets the rhythm; immediate bystander CPR can double or triple survival; in real life you resume pushing straight after a shock; and a certified course is the way to learn it properly. **Try again** runs it again. All of the CPR wording is in [js/cpr-facts.js](js/cpr-facts.js).
+
 ## Feeding it a live heart rate (WHOOP bridge)
 
 The page reads the resting heart rate from one function, `window.setHeartRate(bpm)`. It clamps to 30–220, returns the value it applied, and switches the readout to **LIVE** for 10 s after each call. A new rate starts from the next beat and eases in. Blocked threads still push the rate above it.
@@ -81,6 +92,17 @@ Values are typical resting adult values, rounded, from standard references:
 - StatPearls (NCBI Bookshelf): Anatomy, Thorax, Heart; Physiology, Cardiac Cycle; Tricuspid Valve; Mitral Valve; Sinoatrial Node; Atrioventricular Node. https://www.ncbi.nlm.nih.gov/books/
 - Bergmann, O. et al. "Evidence for cardiomyocyte renewal in humans", *Science* 324 (2009): heart muscle renewal of about 1% a year in young adults.
 - Haïssaguerre, M. et al. "Spontaneous initiation of atrial fibrillation by ectopic beats originating in the pulmonary veins", *NEJM* 339 (1998).
+
+### Sources for CPR
+
+The CPR practice follows current lay-rescuer guidance for adults: hands-only CPR for untrained bystanders, 100–120 compressions a minute, 5–6 cm deep, full recoil, minimal pauses, 30:2 for trained rescuers, and using an AED as soon as one arrives.
+
+- American Heart Association. *Guidelines for CPR and Emergency Cardiovascular Care* (2020, updated 2025): Adult Basic Life Support. https://cpr.heart.org/en/resuscitation-science/cpr-and-ecc-guidelines
+- American Heart Association. *Hands-Only CPR* and *CPR Facts and Stats* ("immediate CPR can double or triple the chances of survival after cardiac arrest"). https://cpr.heart.org/en/courses/hands-only-cpr and https://cpr.heart.org/en/resources/cpr-facts-and-stats
+- Olasveengen, T. M. et al. "European Resuscitation Council Guidelines 2021: Basic Life Support", *Resuscitation* 161 (2021): 98–114. https://www.cprguidelines.eu/
+- Resuscitation Council UK. *Adult Basic Life Support Guidelines* (2021) and *What to do if someone has a cardiac arrest*. https://www.resus.org.uk/
+
+It is practice for understanding, not training. Learn CPR properly on a certified course.
 
 ## Credits
 
