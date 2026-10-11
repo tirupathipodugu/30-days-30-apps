@@ -1,0 +1,232 @@
+<!doctype html>
+<!-- Skin Check: 30 Days, 30 Apps. A 10-second skin scan from your camera, and a routine that fits you. Nothing leaves your device. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' data: blob:; style-src 'self' 'unsafe-inline'">
+<title>Skin Check</title>
+<meta name="description" content="A 10-second skin scan from your camera. It tells you what it sees and builds a routine for your goals. Nothing leaves your phone.">
+<meta name="theme-color" content="#060507">
+<meta property="og:title" content="Skin Check">
+<meta property="og:description" content="A 10-second scan. A routine that fits you. Your camera never leaves this device.">
+<meta property="og:image" content="https://tirupathipodugu.github.io/ideas/skin-check/og.png">
+<meta property="og:url" content="https://tirupathipodugu.github.io/ideas/skin-check/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 fill=%22%23060507%22/%3E%3Cellipse cx=%2216%22 cy=%2216%22 rx=%228%22 ry=%2210%22 fill=%22none%22 stroke=%22%23f2f1f3%22 stroke-width=%221.2%22/%3E%3Cpath d=%22M6 16h20%22 stroke=%22%23ffb59a%22 stroke-width=%221.2%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+
+<header class="top" id="top">
+  <button class="mark home" id="home" type="button" aria-label="Skin Check, back to start">Skin Check</button>
+  <div class="topbar glass">
+    <button class="btn" id="sound" type="button" aria-pressed="true">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/><path class="mute" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+      <span id="soundLabel">Sound on</span>
+    </button>
+  </div>
+</header>
+
+<!-- 1. Landing -->
+<section class="view landing" id="landing">
+  <div class="hero">
+    <h1 class="title">Skin Check</h1>
+    <p class="tagline">A 10-second scan. A routine that fits you.</p>
+    <button class="btn primary cta" id="start" type="button">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3.5"/></svg>
+      <span id="startLabel">Start scan</span>
+    </button>
+    <ul class="promises">
+      <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>Your camera never leaves this device.</li>
+      <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></svg>A cosmetic check, not a medical diagnosis.</li>
+    </ul>
+    <div class="row links">
+      <a class="btn secondary" id="demoLink" href="?demo=1">No camera? Try the demo</a>
+      <button class="btn secondary" id="openProgress" type="button" hidden>Your progress</button>
+    </div>
+  </div>
+  <p class="credit"><a href="../gallery/">30 Days, 30 Apps</a> · <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a></p>
+</section>
+
+<!-- 2–3. Camera: light check, then the scan -->
+<section class="view stage" id="stage" hidden>
+  <div class="feed" id="feed">
+    <video id="video" playsinline muted autoplay disablepictureinpicture aria-hidden="true"></video>
+    <canvas id="overlay" aria-hidden="true"></canvas>
+  </div>
+  <p class="guide glass" id="guide" role="status" aria-live="polite">Finding your face…</p>
+
+  <div class="panel glass" id="lightPanel" aria-labelledby="lightTitle">
+    <h2 id="lightTitle">Light check</h2>
+    <ul class="ticks" id="ticks">
+      <li data-tick="face"><span class="dot" aria-hidden="true"></span><span class="tl">Face in view</span><span class="th" data-hint></span></li>
+      <li data-tick="bright"><span class="dot" aria-hidden="true"></span><span class="tl">Face a window or soft light</span><span class="th" data-hint></span></li>
+      <li data-tick="even"><span class="dot" aria-hidden="true"></span><span class="tl">Even light, no harsh shadows</span><span class="th" data-hint></span></li>
+      <li data-tick="distance"><span class="dot" aria-hidden="true"></span><span class="tl">Hold the phone at arm’s length</span><span class="th" data-hint></span></li>
+      <li data-tick="straight"><span class="dot" aria-hidden="true"></span><span class="tl">Look straight at the camera</span><span class="th" data-hint></span></li>
+    </ul>
+    <p class="tip"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="13" r="3.5"/><circle cx="17" cy="13" r="3.5"/><path d="M10.5 13h3M3.5 13 2 10M20.5 13 22 10"/></svg>Remove makeup and glasses if you can.</p>
+    <div class="row actions">
+      <button class="btn secondary" id="cancelLight" type="button">Cancel</button>
+      <button class="btn primary" id="scanNow" type="button" disabled><span id="scanNowLabel">Waiting for good light</span></button>
+    </div>
+  </div>
+
+  <div class="panel glass" id="scanPanel" hidden aria-labelledby="scanTitle">
+    <h2 id="scanTitle">Scanning</h2>
+    <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="scanBar"><span></span></div>
+    <p class="scanstep" id="scanStep">Measuring your forehead</p>
+    <div class="row actions">
+      <button class="btn secondary" id="cancelScan" type="button">Cancel scan</button>
+    </div>
+  </div>
+</section>
+
+<!-- Camera error -->
+<section class="view landing" id="error" hidden role="alert">
+  <div class="hero">
+    <h1 class="title small">Skin Check</h1>
+    <p class="tagline" id="errorText">The camera couldn’t start.</p>
+    <div class="row links">
+      <button class="btn primary" id="retry" type="button">Try again</button>
+      <a class="btn secondary" href="?demo=1">Try the demo</a>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Results -->
+<section class="view page" id="results" hidden aria-labelledby="resultsTitle">
+  <div class="wrap">
+    <p class="eyebrow" id="resultsDate"></p>
+    <h1 class="h1" id="resultsTitle" tabindex="-1">Your skin today</h1>
+    <p class="demo-note" id="demoNote" hidden>Demo clip: a volunteer’s video, shared on Wikimedia Commons as public domain (CC0).</p>
+    <div class="summary glass">
+      <p class="lead" id="summaryText"></p>
+      <p class="positive" id="summaryPositive"></p>
+    </div>
+    <div class="note escalate" id="escalate" hidden>
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3z"/><path d="M12 10v4M12 16.5h.01"/></svg>
+      <p>If this is new, painful or spreading, see a dermatologist.</p>
+    </div>
+    <div class="cards" id="cards"></div>
+    <p class="steady" id="steady"></p>
+    <div class="note">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></svg>
+      <p>Any mole that changes in size, shape or colour: see a doctor.</p>
+    </div>
+    <p class="fine">A cosmetic check, not a medical diagnosis. It doesn’t detect or name skin conditions.</p>
+    <div class="row actions wide">
+      <button class="btn secondary" id="saveScan" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h9l3 3v13H6z"/><path d="M9 4v5h6"/></svg><span id="saveLabel">Save this scan</span></button>
+      <button class="btn secondary" id="shareOpen" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v6h14v-6"/></svg><span>Share card</span></button>
+      <button class="btn secondary" id="again" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4v4h4"/></svg><span>Scan again</span></button>
+      <button class="btn primary" id="toGoals" type="button"><span>Build my routine</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<!-- 5. Goals and you -->
+<section class="view page" id="goals" hidden aria-labelledby="goalsTitle">
+  <div class="wrap">
+    <h1 class="h1" id="goalsTitle" tabindex="-1">Your goals and you</h1>
+    <fieldset class="chips-group">
+      <legend>Goals <span class="hint">(pick any)</span></legend>
+      <div class="chips" id="goalChips"></div>
+    </fieldset>
+    <fieldset class="chips-group">
+      <legend>Skin type <span class="hint" id="typeHint"></span></legend>
+      <div class="chips" id="typeChips"></div>
+    </fieldset>
+    <fieldset class="chips-group">
+      <legend>Age</legend>
+      <div class="chips" id="ageChips"></div>
+    </fieldset>
+    <fieldset class="chips-group">
+      <legend>Budget</legend>
+      <div class="chips" id="budgetChips"></div>
+    </fieldset>
+    <fieldset class="chips-group">
+      <legend>Pregnant or breastfeeding?</legend>
+      <div class="chips" id="pregChips"></div>
+    </fieldset>
+    <div class="row actions wide">
+      <button class="btn secondary" id="goalsBack" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg><span>Back to results</span></button>
+      <button class="btn primary" id="build" type="button"><span>Build my routine</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Routine -->
+<section class="view page" id="routine" hidden aria-labelledby="routineTitle">
+  <div class="wrap">
+    <h1 class="h1" id="routineTitle" tabindex="-1">Your routine</h1>
+    <p class="sub">Built from proven ingredients, not brands. Your budget changes the product type and texture, not the science.</p>
+    <h2 class="h2"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></svg>Morning</h2>
+    <ol class="steps" id="amSteps"></ol>
+    <h2 class="h2"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></svg>Night</h2>
+    <ol class="steps" id="pmSteps"></ol>
+    <div class="glass box" id="excludedBox" hidden>
+      <h3>Left out for you</h3>
+      <ul id="excluded"></ul>
+    </div>
+    <div class="glass box">
+      <h3>Starting out</h3>
+      <ul id="intro"></ul>
+      <ul id="routineNotes"></ul>
+    </div>
+    <div class="note warn">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3z"/><path d="M12 10v4M12 16.5h.01"/></svg>
+      <p>Skin-lightening creams sold online can contain mercury or steroids. Avoid them. Strong hydroquinone should only be used with a doctor.</p>
+    </div>
+    <details class="sources">
+      <summary>Where this comes from</summary>
+      <ul>
+        <li>American Academy of Dermatology: sunscreen, retinoids, dark spots and sensitive-skin guidance.</li>
+        <li>British Association of Dermatologists: warnings on skin-lightening products.</li>
+        <li>Bozzo et al., Can Fam Physician 2011: safety of skin care products in pregnancy.</li>
+        <li>Bissett et al. 2005; Hakozaki et al. 2002; Draelos et al. 2006: niacinamide.</li>
+        <li>Mukherjee et al. 2006; Kong et al. 2016: retinoids and retinol.</li>
+        <li>Schulte et al. 2015: azelaic acid.</li>
+        <li>Telang 2013; Pullar, Carr &amp; Vissers 2017: vitamin C.</li>
+        <li>Arif 2015: salicylic acid. Pavicic et al. 2011: hyaluronic acid. Hughes et al. 2013: daily sunscreen and skin ageing.</li>
+      </ul>
+    </details>
+    <p class="fine">General skincare information, not medical advice. If something burns, stings for long or worries you, stop and ask a pharmacist or doctor.</p>
+    <div class="row actions wide">
+      <button class="btn secondary" id="routineBack" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg><span>Change goals</span></button>
+      <button class="btn secondary" id="routineShare" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v6h14v-6"/></svg><span>Share card</span></button>
+      <button class="btn primary" id="routineResults" type="button"><span>Back to results</span></button>
+    </div>
+  </div>
+</section>
+
+<!-- 7. Progress -->
+<section class="view page" id="progress" hidden aria-labelledby="progressTitle">
+  <div class="wrap">
+    <h1 class="h1" id="progressTitle" tabindex="-1">Your progress</h1>
+    <p class="sub">Only the numbers are kept, on this device. Re-scan weekly, in the same light as last time.</p>
+    <div class="glass box" id="trendBox"></div>
+    <ol class="history" id="history"></ol>
+    <div class="row actions wide">
+      <button class="btn secondary danger" id="deleteData" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/></svg><span>Delete my data</span></button>
+      <button class="btn primary" id="progressScan" type="button"><span>New scan</span></button>
+    </div>
+  </div>
+</section>
+
+<!-- 8. Share card -->
+<dialog class="sheet glass" id="sheet" aria-labelledby="sheetTitle">
+  <h2 id="sheetTitle">My skin check</h2>
+  <canvas id="card" class="card-preview" aria-label="Your share card"></canvas>
+  <button class="btn secondary toggle" id="includePhoto" type="button" aria-pressed="false"><span class="box-ind" aria-hidden="true"></span><span>Include my photo</span></button>
+  <div class="row actions">
+    <button class="btn secondary" id="sheetClose" type="button">Close</button>
+    <button class="btn primary" id="shareGo" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v6h14v-6"/></svg><span>Share</span></button>
+  </div>
+</dialog>
+
+<p class="sr-only" id="live" aria-live="polite"></p>
+<canvas id="crop" hidden></canvas>
+</body>
+</html>
