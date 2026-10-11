@@ -224,6 +224,6 @@ export function summary(res) {
 /** Medical escalation: strong, widespread redness, or many dark spots. */
 export function escalation(res) {
   const strongRed = res.m.redness.score >= 70 && (res.raw.redness.area || 0) >= 0.35;
-  const manySpots = (res.raw.tone.spots || 0) >= 15 || (res.raw.blem?.count || 0) >= 18;
+  const manySpots = (res.raw.tone.spots || 0) >= 15;
   return strongRed || manySpots;
 }

@@ -249,8 +249,8 @@ function updateLight(r, meta) {
   const checks = {
     bright: L.clip > 0.05 ? 'Too bright: step out of direct sun or away from the lamp'
       : (L.eyeRef < 40 || L.faceL < 18) ? 'Too dark: face a window or a soft lamp' : '',
-    even: Math.abs(L.cheekA - L.cheekB) > 11 ? 'Light from one side: turn to face the light'
-      : Math.max(L.spreadA, L.spreadB) > 30 ? 'Harsh shadows: find softer, even light' : '',
+    even: Math.abs(L.cheekA - L.cheekB) > 16 ? 'Light from one side: turn to face the light'
+      : Math.max(L.spreadA, L.spreadB) > 38 ? 'Harsh shadows: find softer, even light' : '',
     distance: (faceFrac < 0.28 || meta.faceW < 170) ? 'Move a little closer' : faceFrac > 0.9 ? 'Move back a little' : '',
     straight: Math.abs(p.yaw) > 14 ? 'Turn to face the camera' : Math.abs(p.pitch) > 18 ? (p.pitch > 0 ? 'Lift your chin a little' : 'Lower your chin a little')
       : Math.abs(p.roll) > 12 ? 'Hold your head level' : '',
@@ -275,7 +275,10 @@ function tickModes(now) {
   }
   setTick('face', !!state.face, state.face ? '' : 'Bring your face into the oval');
   if (!state.face) state.lightHistory = [];
-  const ok = allOk() || (DEBUG && params.has('force') && !!state.face);
+  // Even light is a nice-to-have: if everything else is fine for 5 s, scan anyway rather than block.
+  const others = TICKS.filter((t) => t !== 'even').every((t) => state.ticks[t]);
+  if (others && !state.ticks.even) state.evenWait = state.evenWait || now; else state.evenWait = 0;
+  const ok = allOk() || (others && state.evenWait && now - state.evenWait > 5000) || (DEBUG && params.has('force') && !!state.face);
   if (ok) {
     if (!state.readySince) state.readySince = now;
     if (state.mode === 'light' && now - state.readySince > 800) {
