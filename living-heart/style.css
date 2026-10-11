@@ -198,6 +198,16 @@ body.over-part #scene { cursor: pointer; }
 /* The tour card */
 .tourtag { position: fixed; left: 0; top: 0; z-index: 4; pointer-events: none; padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; color: #2a0b0b; background: #ffd9c9; box-shadow: 0 0 0 4px rgba(255, 217, 201, .25), 0 6px 18px rgba(0, 0, 0, .45); white-space: nowrap; }
 .tourtag::after { content: ''; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; background: #ffd9c9; transform: translateX(-50%) rotate(45deg); }
+.blockpop {
+  position: fixed; z-index: 6; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(380px, calc(100vw - 32px)); padding: 18px 20px 16px; border-radius: 20px;
+  background: var(--glass-strong); box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+  animation: rise .35s cubic-bezier(.2, .8, .2, 1);
+}
+.blockpop h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+.blockpop p { margin: 0 0 14px; font-size: 15px; line-height: 1.5; }
+.blockpop-actions { display: grid; gap: 8px; }
+.blockpop-actions .btn { width: 100%; justify-content: center; min-height: 48px; }
 .tourcard {
   position: fixed; z-index: 4;
   left: 50%; transform: translateX(-50%);

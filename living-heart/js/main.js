@@ -289,7 +289,18 @@ function tour(cmd) {
   selected = stop.part;
   tourParts = new Set(stop.parts || [stop.part]);
   ui.showTour(tourAt, TOUR.length, stop);
-  flyToPart(stop.part, { wide: !!stop.lungs, outside: !!stop.outside });
+  if (stop.lungs) { setCutaway(false); flyToPart(stop.part, { wide: true }); } else rig.flyTo(tourView(stop));
+}
+// The tour stays outside with the whole heart in view, turned towards the part, which is lit up and named.
+// Parts inside (chambers, valves) are shown by opening the front of the heart rather than flying in.
+function tourView(stop) {
+  const id = stop.part, centre = V3(heart.partInfo[id].centre);
+  const internal = !stop.outside && (!!PARTS[id]?.inside || /valve/.test(id));
+  setCutaway(internal);
+  const target = heartGroup.position.clone().lerp(centre, 0.35);
+  const side = THREE.MathUtils.clamp(centre.x - heartGroup.position.x, -1, 1);
+  const yaw = internal ? side * 0.25 : side * 0.6;
+  return { target, yaw, pitch: (internal ? 6 : 0) * Math.PI / 180, dist: view.dist * (internal ? 0.68 : 0.75) };
 }
 function endTour() {
   if (tourAt < 0) return;
@@ -297,6 +308,7 @@ function endTour() {
   selected = null;
   tourParts = new Set();
   tourTag.hidden = true;
+  setCutaway(false);
   ui.hideTour();
 }
 
@@ -311,6 +323,7 @@ const threadsActive = () => threads && threadFade > 0.45 && circ.state !== 'stop
 const cutInfo = () => ({ plane: cut.k > 0.02 ? cutPlane : null, clipR: heart?.shared.uClipR.value || 0, camPos: heartCam.position });
 
 function onTap(x, y, type) {
+  if (!blockPop.hidden) hideBlockPop();
   if (!document.getElementById('arrest').hidden || cpr.active) return;
   const touch = type !== 'mouse';
   // A clot first: it is small and sits on top.
@@ -430,6 +443,32 @@ function beginCpr() {
   cpr.start(circ.stopAt);
 }
 document.getElementById('cprPromptGo').addEventListener('click', beginCpr);
+
+// ---- A popup a few seconds in that invites the visitor to block a thread ----
+const blockPop = document.getElementById('blockPop');
+let blockPopDone = false;
+function maybeShowBlockPop() {
+  if (blockPopDone || !heart || !threadsActive() || tourAt >= 0 || cpr.active || ui.panelOpen() || blockage.blocks.length) return false;
+  blockPopDone = true;
+  blockPop.hidden = false;
+  document.getElementById('blockPopGo').focus({ preventScroll: true });
+  return true;
+}
+function hideBlockPop() { blockPop.hidden = true; }
+document.getElementById('blockPopClose').addEventListener('click', hideBlockPop);
+document.getElementById('blockPopGo').addEventListener('click', () => {
+  hideBlockPop();
+  // A main trunk, part way along, where the clot is easy to see.
+  const trunks = threads.paths.map((p, i) => [p, i]).filter(([p]) => p.trunk);
+  const [p, id] = trunks[Math.floor(Math.random() * trunks.length)] || [];
+  if (!p) return;
+  const k = Math.floor(p.pts.length * 0.35);
+  const pos = new THREE.Vector3(...p.pts[k]);
+  const pt = projectPage(pos);
+  const t = hover.pick(pt.x, pt.y, 24, (i) => (i === id ? 0.01 : 1));
+  if (t) blockAt(t, pt.x, pt.y);
+});
+(function waitForBlockPop() { if (!maybeShowBlockPop() && !blockPopDone) setTimeout(waitForBlockPop, 4000); })();
 
 // Resizes: re-lay out at once, regrow the threads once the window settles.
 let resizeTimer = 0;
