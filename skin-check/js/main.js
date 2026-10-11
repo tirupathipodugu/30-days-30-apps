@@ -124,7 +124,7 @@ function closeCamera() {
 }
 
 $('cancelLight').addEventListener('click', () => { closeCamera(); renderLanding(); show('landing'); });
-$('cancelScan').addEventListener('click', () => { closeCamera(); renderLanding(); show('landing'); });
+$('cancelScan').addEventListener('click', () => { $('guide').classList.remove('turn'); closeCamera(); renderLanding(); show('landing'); });
 $('scanNow').addEventListener('click', () => { if (allOk()) beginScan(); });
 
 // ------------------------------------------------------------------ main loop
@@ -278,7 +278,8 @@ function tickModes(now) {
   }
   setTick('face', !!state.face, state.face ? '' : 'Bring your face into the oval');
   if (!state.face) state.lightHistory = [];
-  const ok = allOk() || (DEBUG && params.has('force') && !!state.face);
+  // The demo is fixed footage: it can't turn to the light, so it only needs the face found.
+  const ok = allOk() || (DEBUG && params.has('force') && !!state.face) || (DEMO && !!state.face);
   if (ok) {
     if (!state.readySince) state.readySince = now;
     if (state.mode === 'light' && now - state.readySince > 800) {
@@ -357,17 +358,18 @@ function tickScan(now) {
     if (sc.hold >= STRAIGHT_S) nextPhase(sc);
   } else if (sc.phase === 1) {
     if (face && Math.abs(yaw) >= TURN_DEG && Math.abs(yaw) <= 32) { sc.side = sc.side || Math.sign(yaw); if (Math.sign(yaw) === sc.side) sc.hold += dt; }
-    text = sc.hold > 0 ? 'Hold it there…' : Math.abs(yaw) > 5 ? '← A little more' : '← Turn slowly to your left';
-    if (sc.hold >= TURN_HOLD_S || sc.inPhase >= TURN_GIVE_UP_S) nextPhase(sc);
+    text = DEMO ? '← Turn slowly to your left' : sc.hold > 0 ? 'Hold it there…' : Math.abs(yaw) > 5 ? '← A little more' : '← Turn slowly to your left';
+    if (sc.hold >= TURN_HOLD_S || sc.inPhase >= (DEMO ? 2 : TURN_GIVE_UP_S)) nextPhase(sc);
   } else if (sc.phase === 2) {
     const want = -(sc.side || 1);
     if (face && Math.sign(yaw) === want && Math.abs(yaw) >= TURN_DEG && Math.abs(yaw) <= 32) sc.hold += dt;
-    text = sc.hold > 0 ? 'Hold it there…' : Math.sign(yaw) === want && Math.abs(yaw) > 5 ? 'A little more →' : 'Now the other side →';
-    if (sc.hold >= TURN_HOLD_S || sc.inPhase >= TURN_GIVE_UP_S) nextPhase(sc);
+    text = DEMO ? 'Now the other side →' : sc.hold > 0 ? 'Hold it there…' : Math.sign(yaw) === want && Math.abs(yaw) > 5 ? 'A little more →' : 'Now the other side →';
+    if (sc.hold >= TURN_HOLD_S || sc.inPhase >= (DEMO ? 2 : TURN_GIVE_UP_S)) nextPhase(sc);
   } else {
     text = 'Look straight at the camera';
   }
   $('guide').textContent = lost ? 'I’ve lost your face. Look back at the camera' : text;
+  $('guide').classList.toggle('turn', !lost && (sc.phase === 1 || sc.phase === 2));
   // Progress follows the poses; the region sweep runs along with it.
   const need = [STRAIGHT_S, TURN_HOLD_S, TURN_HOLD_S];
   let p = 0;
@@ -400,6 +402,7 @@ function addScanFrame(r, meta) {
 
 function finishScan() {
   const sc = state.scan;
+  $('guide').classList.remove('turn');
   state.mode = 'idle';
   sound.stopSweep();
   if (sc.frames.length < 8) {

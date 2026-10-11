@@ -150,6 +150,14 @@ body:not(.camera):not(.at-landing) .top { background: linear-gradient(var(--bg) 
   font-size: 16px; font-weight: 500; text-align: center;
   max-width: calc(100% - 2 * var(--gutter));
 }
+/* A turn is the one instruction people must not miss: big, centred on the face, gently nudging. */
+.guide.turn {
+  top: 42%; padding: 16px 24px; border-radius: 22px;
+  font-size: 24px; font-weight: 600; line-height: 1.25; width: max-content;
+  animation: nudge 1.4s ease-in-out infinite;
+}
+@keyframes nudge { 0%, 100% { transform: translateX(-50%); } 50% { transform: translateX(calc(-50% - 6px)); } }
+@media (prefers-reduced-motion: reduce) { .guide.turn { animation: none; } }
 
 .panel {
   position: absolute; z-index: 5;
