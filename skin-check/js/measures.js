@@ -16,7 +16,7 @@ export const NAMES = {
 };
 
 export const HOW = {
-  spots: 'We look for small, round-ish patches on your forehead, cheeks, nose and chin that are clearly redder (a*) or darker (L*) than the skin right around them. Red spots stand out more on lighter skin and darker marks on deeper skin, so both count. Hairs and stubble are long and thin, so they are left out. Each frame is counted separately and we keep the middle value, so a single shadow can’t add spots.',
+  spots: 'We look for small, round-ish patches on your forehead, cheeks and chin that are clearly redder (a*) than the skin right around them, or darker (L*) and bigger than a freckle. Flat brown freckles don’t count, and the nose is left out because its natural pinkness reads as spots. Hairs and stubble are long and thin, so they are left out. Each frame is counted separately and we keep the middle value, so a single shadow can’t add spots.',
   redness: 'We convert each pixel to CIELAB colour and compare a* (the red–green axis) on your cheeks, nose and chin with your own forehead in the same frame. Your forehead sets your skin’s own hue; we count only the shift toward red beyond it, so the camera’s colour and the brightness of the light cancel out. Redness is harder for any camera to see on deeper skin tones, so a low score there is less certain.',
   shine: 'We look for specular highlights: pixels that are much brighter and less colourful than the skin around them, in the T-zone (forehead and nose) and on the cheeks. The score combines how much area shines and how strongly.',
   tone: 'We compare each small patch of skin on your forehead and cheeks with its surroundings in L* (lightness), after removing the slow change in light across your face. Blotchiness is the spread of those differences; spots are compact patches clearly darker than their surroundings.',
@@ -115,7 +115,7 @@ export function aggregate(frames) {
   raw.shine.regions = regionMed('shine', ['forehead', 'nose', 'cheekA', 'cheekB', 'chin']);
   raw.tone.regions = regionMed('tone', ['forehead', 'cheekA', 'cheekB']);
   for (const reg of ['forehead', 'cheekA', 'cheekB']) raw.tone.spotRegions[reg] = med(frames.map((fr) => fr.tone.spotRegions?.[reg] || 0));
-  raw.blem.regions = regionMed('blem', ['forehead', 'cheekA', 'cheekB', 'nose', 'chin']);
+  raw.blem.regions = regionMed('blem', ['forehead', 'cheekA', 'cheekB', 'chin']);
   raw.dark.regions = regionMed('dark', ['underA', 'underB']);
   raw.lines.regions = regionMed('lines', ['forehead', 'crowA', 'crowB', 'nlA', 'nlB']);
   raw.texture.regions = regionMed('texture', ['cheekA', 'cheekB']);
@@ -165,7 +165,7 @@ export function sentence(k, res) {
       const nSpots = Math.round(raw.blem.count || 0);
       if (lv === 'low') return nSpots ? `Clear-looking skin: only ${nSpots === 1 ? 'one small spot' : `${nSpots} small spots`} stood out.` : 'Clear-looking skin, with no spots standing out.';
       const where = topRegions(raw.blem.regions, 1);
-      return `We counted about ${nSpots} small spots${where.length ? `, mostly on your ${listWords(where)}` : ''}. Gentle, steady care and not picking help them settle.`;
+      return `We may have seen about ${nSpots} small spots${where.length ? `, mostly on your ${listWords(where)}` : ''}. Gentle, steady care and not picking help them settle.`;
     }
     case 'redness': {
       const hot = topRegions(raw.redness.regions, 3);
@@ -224,6 +224,6 @@ export function summary(res) {
 /** Medical escalation: strong, widespread redness, or many dark spots. */
 export function escalation(res) {
   const strongRed = res.m.redness.score >= 70 && (res.raw.redness.area || 0) >= 0.35;
-  const manySpots = (res.raw.tone.spots || 0) >= 15;
+  const manySpots = (res.raw.tone.spots || 0) >= 25;   // freckles alone shouldn't trigger it
   return strongRed || manySpots;
 }

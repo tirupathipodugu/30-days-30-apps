@@ -422,6 +422,7 @@ function finishScan() {
   res.focus = sum.focus;
   state.results = res;
   window.__skin.lastRaw = res;
+  if (DEBUG) window.__skin.frames = sc.frames;
   closeCamera();
   renderResults();
   show('results');
@@ -537,7 +538,7 @@ function renderResults() {
     card.className = 'card glass';
     const howId = `how-${k}`;
     card.innerHTML = `
-      <h3>${NAMES[k]}${k === 'texture' ? ' <span class="rough">rough estimate</span>' : ''}
+      <h3>${NAMES[k]}${k === 'texture' || k === 'spots' ? ' <span class="rough">rough estimate</span>' : ''}
         <button class="info" type="button" aria-expanded="false" aria-controls="${howId}" aria-label="How ${NAMES[k].toLowerCase()} is measured">${INFO_ICON}</button></h3>
       <div class="lvl ${lv.id}"><b>${lv.id === 'na' ? lv.label : `${lv.label} ${WHAT[k]}`}</b></div>
       <div class="scale" aria-hidden="true">${['low', 'some', 'noticeable'].map((id) => `<i class="${id}${lv.id === id ? ' on' : ''}">${level({ low: 10, some: 50, noticeable: 90 }[id]).label}</i>`).join('')}</div>

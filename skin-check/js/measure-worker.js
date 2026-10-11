@@ -324,12 +324,14 @@ function analyse(msg) {
   // A breakout can show red on lighter skin and darker or brown on deeper skin, so both count.
   const blem = { count: NaN, regions: {} };
   {
-    const regs = ['forehead', 'cheekA', 'cheekB', 'nose', 'chin'].filter(ok);
+    // Not the nose: its natural pinkness and the shadows at the nostrils read as spots.
+    const regs = ['forehead', 'cheekA', 'cheekB', 'chin'].filter(ok);
     if (regs.length) {
       const mask = new Uint8Array(n);
       for (const r of regs) for (const i of idx[r]) if (b.skin[i] && !b.spec[i]) mask[i] = 1;
       const mA = maskedBox(A, mask, w, h, r1, new Float32Array(n));
       const mL = maskedBox(L, mask, w, h, r1, new Float32Array(n));
+      const mB = maskedBox(B, mask, w, h, r1, new Float32Array(n));
       const dA = [], dL = [];
       for (const r of regs) for (const i of idx[r]) if (mask[i]) { dA.push(A[i] - mA[i]); dL.push(L[i] - mL[i]); }
       const sdA = Math.max(0.6, mad(dA, median(dA))), sdL = Math.max(0.8, mad(dL, median(dL)));
@@ -337,16 +339,18 @@ function analyse(msg) {
       b.spot.fill(0, 0, n);
       for (const r of regs) for (const i of idx[r]) if (mask[i] && (A[i] - mA[i] > cutA || L[i] - mL[i] < cutL)) b.spot[i] = 1;
       const minA = Math.max(4, Math.round(0.0002 * ed * ed)), maxA = Math.round(0.03 * ed * ed);
+      const bigA = Math.max(minA * 3, Math.round(0.0009 * ed * ed));
       b.seen.fill(0, 0, n);
       let count = 0;
       const stack = [];
       for (let i = 0; i < n; i++) {
         if (!b.spot[i] || b.seen[i]) continue;
-        let size = 0, x0 = w, x1 = 0, y0 = h, y1 = 0;
+        let size = 0, x0 = w, x1 = 0, y0 = h, y1 = 0, red = 0, yel = 0;
         stack.push(i); b.seen[i] = 1;
         while (stack.length) {
           const j = stack.pop();
           size++;
+          red += A[j] - mA[j]; yel += B[j] - mB[j];
           const x = j % w, y = (j - x) / w;
           if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
           for (const k of [j - 1, j + 1, j - w, j + w]) {
@@ -354,8 +358,13 @@ function analyse(msg) {
           }
         }
         const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+        // Freckles are flat, brown and tiny; a breakout is redder than the skin around it, or a larger
+        // dark mark. So a spot counts if it's clearly red, or dark and bigger than a freckle.
+        // Red, not brown: the shift toward red must beat the shift toward yellow (brown = both).
+        const reddish = red / size > 1.5 && red > 1.3 * Math.max(0, yel);
+        const bigDark = size >= bigA;
         // Hairs, stubble and pore lines are long and thin; spots are round-ish.
-        if (size >= minA && size <= maxA && Math.max(bw, bh) / Math.min(bw, bh) < 2.6 && size / (bw * bh) > 0.35) {
+        if ((reddish || bigDark) && size >= minA && size <= maxA && Math.max(bw, bh) / Math.min(bw, bh) < 2.6 && size / (bw * bh) > 0.35) {
           count++;
           const reg = names[b.region[i]];
           blem.regions[reg] = (blem.regions[reg] || 0) + 1;
