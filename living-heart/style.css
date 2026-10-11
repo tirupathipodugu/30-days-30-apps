@@ -266,7 +266,7 @@ body.cpr-on .dock { display: none; }
 .cpr-intro .btn.cta { width: 100%; margin-top: 4px; }
 
 .cpr-how { color: var(--quiet); }
-.push-row { display: grid; grid-template-columns: 56px 1fr 72px; align-items: center; gap: 10px; margin: 6px 0 8px; }
+.push-row { display: grid; grid-template-columns: 72px 1fr 72px; align-items: center; gap: 10px; margin: 6px 0 8px; }
 .depth { display: grid; justify-items: center; gap: 4px; color: var(--quiet); }
 .depth-label, .depth-mark { white-space: nowrap; font-size: 14px; }
 .depth-track { position: relative; width: 18px; height: 112px; border-radius: 9px; background: rgba(255, 255, 255, .1); border: 1px solid var(--line); overflow: hidden; }
@@ -289,14 +289,21 @@ body.cpr-on .dock { display: none; }
 .count-n { font-size: 30px; font-weight: 700; }
 .count-n small { font-size: 15px; font-weight: 500; color: var(--quiet); }
 .count-label, .count-set { font-size: 14px; color: var(--quiet); }
-.cue { min-height: 1.5em; text-align: center; font-weight: 600; color: #ffd9d4; }
+.cue { min-height: 1.5em; margin: 4px 0 6px !important; text-align: center; font-size: 19px; font-weight: 700; color: #ffd9d4; }
+[data-zone="good"] .cue { color: #7be0a0; }
+[data-zone="slow"] .cue, [data-zone="fast"] .cue { color: #ffc46b; }
+.readout-rate { display: grid; justify-items: center; text-align: center; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.readout-rate strong { font-size: 30px; font-weight: 700; }
+.readout-rate span { font-size: 14px; color: var(--quiet); }
+[data-zone="good"] .readout-rate strong { color: #7be0a0; }
+[data-zone="slow"] .readout-rate strong, [data-zone="fast"] .readout-rate strong { color: #ffc46b; }
 .ratemeter { margin: 0 0 10px; }
 .rate-head { display: flex; align-items: baseline; gap: 10px; font-size: 14px; color: var(--quiet); }
 .rate-head strong { color: var(--text); font-size: 17px; font-variant-numeric: tabular-nums; }
 .rate-zone { margin-left: auto; font-weight: 600; }
 [data-zone="good"] .rate-zone { color: #7be0a0; }
 [data-zone="slow"] .rate-zone, [data-zone="fast"] .rate-zone { color: #ffc46b; }
-.rate-track { position: relative; height: 10px; margin: 8px 0 22px; border-radius: 5px; background: rgba(255, 255, 255, .1); }
+.rate-track { position: relative; height: 10px; margin: 6px 0 24px; border-radius: 5px; background: rgba(255, 255, 255, .1); }
 .rate-good { position: absolute; left: 40%; width: 20%; top: 0; bottom: 0; background: rgba(123, 224, 160, .5); }
 .rate-dot { position: absolute; top: 50%; left: 0; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(0, 0, 0, .4); transition: left .2s; }
 [data-zone="idle"] .rate-dot { opacity: .35; }
@@ -305,8 +312,8 @@ body.cpr-on .dock { display: none; }
 .t120 { left: 60%; }
 .nudge { padding: 10px 12px; border-radius: 12px; background: rgba(255, 196, 107, .14); border: 1px solid rgba(255, 196, 107, .4); color: #ffe2b5; font-weight: 600; text-align: center; }
 .explain { padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1); }
-.aedbar { display: grid; gap: 6px; margin: 0 0 10px; font-size: 14px; color: var(--quiet); }
-.aed-track { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+.aedbar { display: grid; gap: 6px; margin: 2px 0 10px; font-size: 14px; color: var(--quiet); }
+.aed-track { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .1); overflow: hidden; }
 .aed-track div { height: 100%; transform-origin: left; transform: scaleX(0); background: #7be0a0; transition: transform .3s; }
 .cprcard .note, .cprcard .hint { font-size: 14px; color: var(--quiet); }
 
@@ -414,8 +421,7 @@ body.cpr-on .dock { display: none; }
   }
   .cprcard h2 { font-size: 19px; }
   .cprcard[data-step="compress"] h2, .cprcard[data-step="compress"] .hint { display: none; }
-  .pushbtn { width: 128px; height: 128px; }
-  .depth-track { height: 100px; }
+  .pushbtn { width: 140px; height: 140px; }
   body.cpr-on .sub { display: none; }
   .push-row { margin-top: 0; }
 }

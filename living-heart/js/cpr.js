@@ -8,8 +8,8 @@ const BEAT = 60 / 110;          // the metronome: 110 a minute, the middle of th
 const FILL = 0.07;              // seconds of press to reach full depth on the cue (a quick tap gets there)
 const RECOIL = 0.14;            // seconds for the chest to come back up on the cue
 const SET = 30;
-const AED_GOOD = 60;            // about two sets of good pushes bring the AED...
-const AED_ACTIVE = 80;          // ...or about 80 s of steady pushing, so nobody gets stuck
+const AED_GOOD = 30;            // one set of good pushes brings the AED...
+const AED_ACTIVE = 30;          // ...or 30 s of steady pushing, so nobody gets stuck
 
 export class CprCoach {
   constructor({ sound, now, reduced, coarse, onCompress, onShock, onExit, onTryAgain, onDone }) {
@@ -33,14 +33,10 @@ export class CprCoach {
     set('cprExitLabel', CPR.exit);
     set('cprDisclaimer', CPR.disclaimer);
     set('cprHow', c.how);
-    set('depthLabel', c.depthLabel);
-    set('depthMark', c.depthMark);
     set('pushLabel', c.push);
     set('countLabel', c.count);
     set('rateLabel', c.rateLabel);
-    set('cprExplain', c.explain);
     set('aedLabel', c.aedLabel);
-    set('cprNote', c.note);
     set('padLabel1', a.padsLabel1);
     set('padLabel2', a.padsLabel2);
     set('padsOnLabel', a.padsButton);
@@ -54,7 +50,7 @@ export class CprCoach {
   }
 
   bind() {
-    $('cprNext').addEventListener('click', () => this.go(this.step === 'check' ? 'call' : 'compress'));
+    $('cprNext').addEventListener('click', () => this.go('compress'));
     $('cprExit').addEventListener('click', () => { this.close(); this.onExit(); });
     $('padsOn').addEventListener('click', () => this.analyse());
     $('shockBtn').addEventListener('click', () => this.shock());
@@ -127,7 +123,7 @@ export class CprCoach {
     this.step = step;
     clearTimeout(this.timer);
     const t = this.now();
-    $('cprIntro').hidden = !(step === 'check' || step === 'call');
+    $('cprIntro').hidden = step !== 'check';
     $('cprPushStep').hidden = step !== 'compress';
     $('cprAedStep').hidden = step !== 'aed';
     $('cprDone').hidden = step !== 'saved';
@@ -135,13 +131,11 @@ export class CprCoach {
     this.card.querySelector('.cpr-head').hidden = step === 'saved';
     this.pad.hidden = step !== 'compress';
     this.card.dataset.step = step;
-    const info = { check: CPR.check, call: CPR.call, compress: CPR.compress, aed: CPR.aed, saved: { step: '', title: CPR.saved.title } }[step];
+    const info = { check: CPR.check, compress: CPR.compress, aed: CPR.aed, saved: { step: '', title: CPR.saved.title } }[step];
     $('cprStep').textContent = info.step;
     $('cprStep').hidden = !info.step;
     $('cprTitle').textContent = info.title;
-    if (step === 'check' || step === 'call') {
-      $('artCheck').style.display = step === 'check' ? '' : 'none';
-      $('artCall').style.display = step === 'call' ? '' : 'none';
+    if (step === 'check') {
       $('cprText').textContent = info.text;
       $('cprNextLabel').textContent = info.button;
       $('cprNext').focus({ preventScroll: true });
@@ -229,7 +223,6 @@ export class CprCoach {
     this.inSet++;
     if (this.inSet > SET) { this.inSet = 1; this.setNo++; }
     this.drawCount();
-    this.setCue(CPR.compress.depthHold);
     this.sound.push();
     // A short buzz per push on phones (browsers only allow it once the page has been touched).
     try { if (navigator.userActivation?.hasBeenActive !== false) navigator.vibrate?.(28); } catch { /* not supported */ }
@@ -244,8 +237,7 @@ export class CprCoach {
     if (this.step !== 'compress') return;
     const held = this.now() - this.pressAt;
     if (this.inSet === SET) this.setCue(CPR.compress.setDone(this.setNo));
-    else if (held < FILL * 0.6) this.setCue(CPR.compress.depthShallow);
-    else this.setCue(CPR.compress.depthRelease);
+    else if (held > 0.8) this.setCue(CPR.compress.depthRelease);
   }
 
   setCue(text) {
@@ -274,7 +266,6 @@ export class CprCoach {
     if (beatNo !== this.lastTick) { this.lastTick = beatNo; this.sound.tick(); }
     const ph = (sinceStep % BEAT) / BEAT;
     $('pushRing').style.opacity = (Math.exp(-ph * 5) * 0.9).toFixed(3);
-    $('depthFill').style.transform = `scaleY(${this.depth.toFixed(3)})`;
 
     if (this.pressed && t - this.pressAt > 0.8) this.setCue(CPR.compress.depthLong);
 
@@ -284,11 +275,9 @@ export class CprCoach {
     if (zone !== this.zone || (live && Math.round(this.rate) !== this.shownRate)) {
       this.zone = zone;
       this.shownRate = live ? Math.round(this.rate) : -1;
-      $('rateValue').textContent = live ? `${this.shownRate}${CPR.compress.rateUnit}` : '—';
-      $('rateZone').textContent = live ? CPR.compress[zone] : CPR.compress.rateIdle;
+      $('rateValue').textContent = live ? String(this.shownRate) : '—';
+      if (this.inSet !== SET || !live) this.setCue(live ? CPR.compress[zone] : (this.presses.length ? CPR.compress.keepGoing : CPR.compress.beat));
       $('cprPushStep').dataset.zone = zone;
-      const x = live ? Math.min(1, Math.max(0, (this.rate - 60) / 100)) : 0;
-      $('rateDot').style.left = `${(x * 100).toFixed(1)}%`;
     }
 
     // Steady pushing brings the AED.

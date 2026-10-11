@@ -116,19 +116,15 @@
 
   <div class="cpr-intro" id="cprIntro">
     <svg class="cpr-art" id="artCheck" viewBox="0 0 120 64" aria-hidden="true"><circle cx="60" cy="40" r="11"/><path d="M30 64c2-10 14-14 30-14s28 4 30 14"/><path d="M38 47l-6-8M82 47l6-8"/><path d="M18 18q-6 6 0 12M10 14q-10 10 0 20M102 18q6 6 0 12M110 14q10 10 0 20"/><path d="M52 12h16l-4 6"/></svg>
-    <svg class="cpr-art" id="artCall" viewBox="0 0 120 64" aria-hidden="true"><rect x="46" y="6" width="28" height="52" rx="5"/><path d="M56 51h8"/><path d="M84 20q6 6 0 12M90 14q12 12 0 24"/><text x="60" y="30" text-anchor="middle">112</text><text x="60" y="42" text-anchor="middle">911</text></svg>
     <p id="cprText"></p>
     <button class="btn primary cta" id="cprNext" type="button"><span id="cprNextLabel"></span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
   </div>
 
   <div class="cpr-push" id="cprPushStep" hidden>
+    <div class="aedbar"><span id="aedLabel"></span><div class="aed-track"><div id="aedFill"></div></div></div>
     <p class="cpr-how" id="cprHow"></p>
     <div class="push-row">
-      <div class="depth" aria-hidden="true">
-        <span class="depth-label" id="depthLabel"></span>
-        <div class="depth-track"><div class="depth-band"></div><div class="depth-fill" id="depthFill"></div></div>
-        <span class="depth-mark" id="depthMark"></span>
-      </div>
+      <div class="readout-rate" aria-hidden="true"><strong id="rateValue">—</strong><span id="rateLabel"></span></div>
       <button class="pushbtn" id="pushBtn" type="button" aria-describedby="cprCue"><span class="ring" id="pushRing" aria-hidden="true"></span><span id="pushLabel"></span></button>
       <div class="count" aria-live="off">
         <span class="count-n"><span id="countN">0</span><small>/30</small></span>
@@ -137,14 +133,7 @@
       </div>
     </div>
     <p class="cue" id="cprCue" aria-live="polite"></p>
-    <div class="ratemeter">
-      <div class="rate-head"><span id="rateLabel"></span><strong id="rateValue"></strong><span class="rate-zone" id="rateZone"></span></div>
-      <div class="rate-track" aria-hidden="true"><div class="rate-good"></div><div class="rate-dot" id="rateDot"></div><span class="tick t100">100</span><span class="tick t120">120</span></div>
-    </div>
     <p class="nudge" id="cprNudge" hidden role="status"></p>
-    <p class="explain" id="cprExplain"></p>
-    <div class="aedbar"><span id="aedLabel"></span><div class="aed-track"><div id="aedFill"></div></div></div>
-    <p class="note" id="cprNote"></p>
     <p class="hint" id="cprInput"></p>
   </div>
 
