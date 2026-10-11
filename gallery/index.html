@@ -1,0 +1,82 @@
+<!doctype html>
+<!-- The gallery: one row per day. Only apps listed in ../apps.json are shown; the rest stay locked until their day is shared. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Ideas</title>
+<meta name="description" content="One new idea, built and shared every day for 30 days, by @tirupathipodugu.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 fill=%22%23050506%22/%3E%3Ctext x=%2216%22 y=%2221%22 font-family=%22sans-serif%22 font-size=%2213%22 fill=%22%23d8dce4%22 text-anchor=%22middle%22%3E30%3C/text%3E%3C/svg%3E">
+<style>
+:root { --bg: #050506; --text: rgba(255,255,255,.88); --quiet: rgba(255,255,255,.5); --faint: rgba(255,255,255,.28); --line: rgba(255,255,255,.1); color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 300 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: .01em; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 88px 16px 80px; }
+h1 { margin: 0 0 16px; font-size: 14px; font-weight: 400; text-transform: uppercase; letter-spacing: .3em; }
+.lead { margin: 0 0 56px; max-width: 52ch; color: var(--quiet); }
+.lead a { text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 4px; }
+.list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.list li { border-bottom: 1px solid var(--line); }
+.row { display: grid; grid-template-columns: 4.5em 1fr; gap: 4px 16px; padding: 20px 0; text-decoration: none; }
+a.row:focus-visible { outline: 2px solid rgba(255,255,255,.8); outline-offset: 4px; }
+.day { grid-row: span 2; font: 400 13px/1.9 ui-monospace, "SF Mono", Consolas, monospace; color: var(--quiet); }
+.name { font-size: 16px; font-weight: 400; transition: color .25s; }
+a.row:hover .name { color: #fff; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 6px; text-decoration-color: rgba(255,255,255,.4); }
+.hook { color: var(--quiet); font-size: 14px; }
+.locked .name, .locked .day { color: var(--faint); }
+.locked .hook { color: var(--faint); }
+.lock { display: inline-block; width: 11px; height: 11px; margin-right: 8px; vertical-align: -1px; border: 1.5px solid currentColor; border-radius: 2px; position: relative; }
+.lock::before { content: ""; position: absolute; left: 1px; right: 1px; top: -6px; height: 6px; border: 1.5px solid currentColor; border-bottom: 0; border-radius: 4px 4px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Ideas</h1>
+  <p class="lead">One new idea, built and shared every day for 30 days. Everything runs in your browser, and camera ideas never upload your video. Each one unlocks here on the day it's shared. Follow along at <a href="https://x.com/tirupathipodugu">@tirupathipodugu</a>.</p>
+  <ul class="list" id="list"></ul>
+</div>
+<script>
+const TOTAL = 30;
+const list = document.getElementById("list");
+
+function render(apps) {
+  const byDay = new Map(apps.map((app) => [app.day, app]));
+  const next = Math.max(0, ...apps.map((app) => app.day)) + 1;
+  const rows = [];
+  for (let day = 1; day <= TOTAL; day++) {
+    const app = byDay.get(day);
+    const li = document.createElement("li");
+    const row = document.createElement(app ? "a" : "div");
+    row.className = "row" + (app ? "" : " locked");
+    if (app) row.href = "../" + app.path;
+    const num = document.createElement("span");
+    num.className = "day";
+    num.textContent = String(day).padStart(2, "0") + " / " + TOTAL;
+    const name = document.createElement("span");
+    name.className = "name";
+    const hook = document.createElement("span");
+    hook.className = "hook";
+    if (app) {
+      name.textContent = app.name;
+      hook.textContent = app.hook;
+    } else {
+      const lock = document.createElement("span");
+      lock.className = "lock";
+      lock.setAttribute("aria-hidden", "true");
+      name.append(lock, "Locked");
+      hook.textContent = day === next ? "Unlocks when it's shared" : "Coming soon";
+    }
+    row.append(num, name, hook);
+    li.append(row);
+    rows.push(li);
+  }
+  list.replaceChildren(...rows);
+}
+
+render([]);
+fetch("../apps.json", { cache: "no-store" }).then((r) => r.json()).then(render).catch(() => {});
+</script>
+</body>
+</html>
