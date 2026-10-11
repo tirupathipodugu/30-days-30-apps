@@ -220,6 +220,8 @@ export function createTissueMaterial(kind, shared, { lowTier, clippingPlanes }) 
           outgoingLight += uRim * pow(1.0 - ndv, 3.0) * 0.25 * uSssAmt;
           float edge = pow(1.0 - ndv, 2.0);
           outgoingLight += uHiColor * (0.05 + 0.5 * edge) * uHi * (0.85 + 0.15 * sin(uTime * 3.0));
+          // Above 1 (the tour), the whole surface glows too, so the part reads clearly from any angle.
+          outgoingLight += uHiColor * 0.16 * max(uHi - 1.0, 0.0) * (0.7 + 0.3 * sin(uTime * 4.0));
           outgoingLight += uHiColor * 0.3 * edge * uHover;
           outgoingLight *= mix(1.0, 0.42, uDim);
           outgoingLight += uBase * uGlow * (0.18 + 0.7 * uAtriaGloss);

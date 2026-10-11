@@ -193,13 +193,13 @@ export const PARTS = {
 // Blood's path, one stop per click. `part` is framed and highlighted; `outside` keeps the camera outside the heart,
 // `lungs` pulls back for the trip through the lungs.
 export const TOUR = [
-  { part: 'superior-vena-cava', outside: true, title: 'Vena cavae', text: 'Oxygen-poor blood from the body returns through the superior and inferior vena cava.' },
+  { part: 'superior-vena-cava', parts: ['superior-vena-cava', 'inferior-vena-cava'], outside: true, title: 'Vena cavae', text: 'Oxygen-poor blood from the body returns through the superior and inferior vena cava.' },
   { part: 'right-atrium', title: 'Right atrium', text: 'It collects in the right atrium between beats.' },
   { part: 'tricuspid-valve', title: 'Tricuspid valve', text: 'The tricuspid valve opens and the blood falls into the right ventricle.' },
   { part: 'right-ventricle', title: 'Right ventricle', text: 'The right ventricle squeezes. The tricuspid valve snaps shut behind the blood.' },
   { part: 'pulmonary-valve', title: 'Pulmonary valve', text: 'The pulmonary valve opens to let it out.' },
   { part: 'pulmonary-trunk', outside: true, title: 'Pulmonary arteries', text: 'The pulmonary trunk splits into the arteries to each lung.' },
-  { part: 'pulmonary-trunk', title: 'The lungs', text: 'In the lungs, blood drops carbon dioxide and picks up oxygen. It turns bright red.', lungs: true },
+  { part: 'pulmonary-trunk', parts: ['pulmonary-trunk', 'pulmonary-veins'], title: 'The lungs', text: 'In the lungs, blood drops carbon dioxide and picks up oxygen. It turns bright red.', lungs: true },
   { part: 'pulmonary-veins', outside: true, title: 'Pulmonary veins', text: 'Four pulmonary veins bring the oxygen-rich blood back to the heart.' },
   { part: 'left-atrium', title: 'Left atrium', text: 'It collects in the left atrium.' },
   { part: 'mitral-valve', title: 'Mitral valve', text: 'The mitral valve opens and the blood fills the left ventricle.' },

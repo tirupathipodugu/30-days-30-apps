@@ -190,6 +190,8 @@ body.over-part #scene { cursor: pointer; }
 .disclaimer { margin: 0; font-size: 12px; color: var(--quiet); }
 
 /* The tour card */
+.tourtag { position: fixed; left: 0; top: 0; z-index: 4; pointer-events: none; padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; color: #2a0b0b; background: #ffd9c9; box-shadow: 0 0 0 4px rgba(255, 217, 201, .25), 0 6px 18px rgba(0, 0, 0, .45); white-space: nowrap; }
+.tourtag::after { content: ''; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; background: #ffd9c9; transform: translateX(-50%) rotate(45deg); }
 .tourcard {
   position: fixed; z-index: 4;
   left: 50%; transform: translateX(-50%);

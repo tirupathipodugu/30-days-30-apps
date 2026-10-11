@@ -184,6 +184,8 @@ for (const g of GESTURES) addEventListener(g, firstGesture, true);
 
 // ---- The interface ----
 let heart = null, picker = null, selected = null, hovered = null, tourAt = -1;
+const tourTag = document.getElementById('tourTag');
+let tourParts = new Set();                  // parts lit up by the current tour stop
 const ui = createUi({
   onRate: (b) => { restBpm = clampBpm(b); applyRate(); },
   onSound: async (on) => {
@@ -227,6 +229,7 @@ function select(id, { panel = true } = {}) {
   if (panel && PARTS[id]) ui.openPanel(PARTS[id]);
 }
 function highlightOf(partId) {
+  if (tourParts.size) return tourParts.has(partId) ? 2 : 0;
   if (!selected) return 0;
   if (selected === 'myocardium') return WALL_PARTS.has(partId) ? 1 : 0;
   return partId === selected ? 1 : 0;
@@ -282,6 +285,7 @@ function tour(cmd) {
   const stop = TOUR[tourAt];
   ui.closePanel();
   selected = stop.part;
+  tourParts = new Set(stop.parts || [stop.part]);
   ui.showTour(tourAt, TOUR.length, stop);
   flyToPart(stop.part, { wide: !!stop.lungs, outside: !!stop.outside });
 }
@@ -289,6 +293,8 @@ function endTour() {
   if (tourAt < 0) return;
   tourAt = -1;
   selected = null;
+  tourParts = new Set();
+  tourTag.hidden = true;
   ui.hideTour();
 }
 
@@ -514,13 +520,27 @@ requestAnimationFrame(frame);
     tmpM.multiplyMatrices(heartCam.matrixWorldInverse, heartGroup.matrixWorld);
     u.uNormalMat.value.getNormalMatrix(tmpM);
 
+    // Tour: a name tag pinned to the part being described.
+    if (tourAt >= 0 && heart.partInfo[TOUR[tourAt].part]) {
+      const pt = V3(heart.partInfo[TOUR[tourAt].part].centre).project(heartCam);
+      const onScreen = pt.z < 1 && Math.abs(pt.x) < 0.95 && Math.abs(pt.y) < 0.95;
+      tourTag.hidden = !onScreen;
+      if (onScreen) {
+        tourTag.textContent = TOUR[tourAt].title;
+        tourTag.style.transform = `translate(${(pt.x + 1) / 2 * innerWidth}px, ${(1 - pt.y) / 2 * innerHeight}px) translate(-50%, -130%)`;
+      }
+    }
+
     // Highlight the selected part and dim the rest; hover lifts a part a touch.
     const ek = Math.min(1, dt * 8);
     for (const p of heart.parts.values()) {
       const pu = p.material.userData.uniforms;
       const hi = highlightOf(p.id);
       // Inside a highlighted chamber, its glow would wash out the whole view: keep it to a hint.
-      pu.uHi.value += (hi * (heart.shared.uClipR.value > 0 ? 0.2 : 1) - pu.uHi.value) * ek;
+      // Inside the heart a normal highlight is kept to a hint; on the tour it stays clearly lit.
+      const inside = heart.shared.uClipR.value > 0;
+      const level = hi > 1 ? (inside ? 1.25 : hi) : hi * (inside ? 0.2 : 1);
+      pu.uHi.value += (level - pu.uHi.value) * ek;
       pu.uDim.value += ((selected && !hi ? 1 : 0) - pu.uDim.value) * ek;
       pu.uHover.value += ((hovered === p.id && !hi ? 1 : 0) - pu.uHover.value) * ek;
     }
