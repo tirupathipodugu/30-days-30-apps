@@ -351,7 +351,7 @@ function tickScan(now) {
   if (sc.phase === 0) {
     if (face && Math.abs(yaw) < 10) sc.hold += dt;
     text = 'Look straight at the camera';
-    if (sc.hold >= STRAIGHT_S) nextPhase(sc);
+    if (sc.hold >= STRAIGHT_S || sc.inPhase >= STRAIGHT_S + 2) nextPhase(sc);   // a phone held at an angle never reads perfectly straight
   } else if (sc.phase === 1) {
     if (face && Math.abs(yaw) >= TURN_DEG && Math.abs(yaw) <= 32) { sc.side = sc.side || Math.sign(yaw); if (Math.sign(yaw) === sc.side) sc.hold += dt; }
     text = sc.hold > 0 ? 'Hold it there…' : Math.abs(yaw) > 5 ? '← A little more' : '← Turn slowly to your left';
