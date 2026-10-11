@@ -2,7 +2,7 @@
 // It starts as one rectangle. Each impact (see fracture.js) cuts shards in two along crack paths.
 // Every shard keeps showing its own part of the reflection, slightly misaligned, as if tilted a hair
 // in its frame: a facet normal, a small shift and twist, and its own brightness and tint. A broken
-// piece can also fall out of the frame (see debris.js), leaving a hole that shows the ocean behind
+// piece can also fall out of the frame (see debris.js), leaving a hole that shows the scene behind
 // the mirror. This module is pure logic; every frame it writes each shard's look into a float array
 // for the GPU.
 
@@ -56,7 +56,7 @@ class Shard {
     this.to = to;
     this.settleAt = settleAt;
     this.area = Math.abs(signedArea(poly));
-    this.missing = false;              // chipped out at the impact, or fallen: the ocean behind shows
+    this.missing = false;              // chipped out at the impact, or fallen: the scene behind shows
     this.fallen = false;               // knocked out of the frame by a tap or a sweep
     this.frost = 0;                    // crushed glass right by the impact scatters light
     this.triangles = null;
@@ -78,6 +78,7 @@ export class Mirror {
     this.healAt = -Infinity;
     this.reduced = false;
     this.version = 0;                  // bumps whenever shards or cracks change
+    this.holeVersion = 0;              // bumps when a piece falls out (only the holes change)
     this.current = null;               // the impact being applied
     this.look = { dx: 0, dy: 0, rot: 0, nx: 0, ny: 0, light: 1, tint: 0 };
   }
@@ -96,7 +97,7 @@ export class Mirror {
     return n;
   }
 
-  /** True once any glass is gone, so the ocean behind can show. */
+  /** True once any glass is gone, so the scene behind can show. */
   get holes() {
     for (const s of this.shards) if (s.missing) return true;
     return false;
@@ -124,7 +125,7 @@ export class Mirror {
     shard.missing = true;
     shard.fallen = true;
     shard.fallenAt = now;
-    this.version++;
+    this.holeVersion++;
   }
 
   get whole() {

@@ -1,12 +1,12 @@
 // Mirror renderer: a few draw calls per frame.
-//   0. Ocean: once any glass is gone, the ocean video behind the mirror fills the screen.
+//   0. Scene: once any glass is gone, the video behind the mirror (a lake at dusk) fills the screen.
 //   1. Shards: every shard polygon, triangulated into one vertex buffer. Each pixel samples the
 //      camera at its own position, moved by its shard's misalignment, then gets the silvered-glass
 //      look: cool tint, vignette, Fresnel edges, dust, and a specular glint from the pointer light
 //      that each shard catches at its own angle.
 //   2. Cracks: a thin quad along every crack segment. It refracts the reflection across the crack
 //      with slight RGB separation, darkens the broken edge and draws a bright hairline. A stencil
-//      keeps cracks on the glass, so none float over the ocean where both sides have fallen.
+//      keeps cracks on the glass, so none float over the scene where both sides have fallen.
 //   3. Rims: a thin bevel inside every hole, where the cut edge of the glass catches the light.
 //   4. Debris: pieces falling out of the frame (see debris.js).
 
@@ -19,7 +19,7 @@ const MAX_LAG_S = 3;
 const LAG_STEP_S = 0.1;
 const CRACK_HALF_WIDTH = 2.6;        // px each side of a crack: the hairline, its fringe and its shadow
 const CRACK_FLOATS = 9;              // x, y, normal x, normal y, across, along, reach, born, seed
-const DEEP_SEA = [6, 28, 44, 255];   // shown through the holes until the ocean video has a frame
+const DUSK = [58, 62, 86, 255];       // shown through the holes until the scene video has a frame
 
 // The mirror image at a stage position: live camera or the time buffer, with a cool silver cast.
 const REFLECTION_GLSL = `
@@ -56,15 +56,15 @@ float hash(vec2 p) {
 }
 `;
 
-// What lies behind the mirror: the ocean, cover-fitted to the screen (not flipped: it isn't a reflection).
+// What lies behind the mirror: the scene video, cover-fitted to the screen (not flipped: it isn't a reflection).
 const BEHIND_GLSL = `
-uniform sampler2D uOcean;
-uniform vec4 uOceanCover;            // stage px -> ocean uv
+uniform sampler2D uScene;
+uniform vec4 uSceneCover;            // stage px -> scene uv
 uniform sampler2D uTag;
 uniform vec4 uTagRect;               // x0, y0, x1, y1 in stage px; zero size = hidden
 
-vec3 ocean(vec2 p) {
-  return texture(uOcean, p * uOceanCover.xy + uOceanCover.zw).rgb;
+vec3 scene(vec2 p) {
+  return texture(uScene, p * uSceneCover.xy + uSceneCover.zw).rgb;
 }
 
 vec3 withTag(vec3 color, vec2 p) {
@@ -76,14 +76,14 @@ vec3 withTag(vec3 color, vec2 p) {
 }
 `;
 
-const OCEAN_FRAGMENT = `#version 300 es
+const SCENE_FRAGMENT = `#version 300 es
 precision highp float;
 in vec2 vStage;
 out vec4 outColor;
 uniform vec2 uStage;
 ${BEHIND_GLSL}
 void main() {
-  outColor = vec4(withTag(ocean(vStage), vStage), 1.0);
+  outColor = vec4(withTag(scene(vStage), vStage), 1.0);
 }`;
 
 const SHARD_VERTEX = `#version 300 es
@@ -118,7 +118,7 @@ uniform float uGlint;                // 0..1 sweep after a restore
 void main() {
   vec2 p = vStage;
   vec4 extra = texelFetch(uShards, ivec2(vShard, 2), 0);
-  // A hole: the ocean pass already drew what is behind, and no stencil is written, so no cracks.
+  // A hole: the scene pass already drew what is behind, and no stencil is written, so no cracks.
   if (extra.z < 0.003) discard;
   vec4 look = texelFetch(uShards, ivec2(vShard, 0), 0);
   vec4 facet = texelFetch(uShards, ivec2(vShard, 1), 0);
@@ -166,8 +166,8 @@ void main() {
   float dust = step(0.9993, hash(floor(p))) * 0.10 + (hash(floor(p / 9.0)) - 0.5) * 0.012;
   color += dust + (hash(p + fract(uTime) * 61.0) - 0.5) * 0.022;
 
-  // Gone (chipped out or fallen, and fading back in on a restore): the ocean behind shows through.
-  color = mix(ocean(p), color, extra.z);
+  // Gone (chipped out or fallen, and fading back in on a restore): the scene behind shows through.
+  color = mix(scene(p), color, extra.z);
 
   if (uGlint > 0.0 && uGlint < 1.0) {
     float along = (p.x + p.y) / (uStage.x + uStage.y);
@@ -340,13 +340,14 @@ export class MirrorRenderer {
     this.canvas = canvas;
     this.shardProgram = createProgram(gl, SHARD_VERTEX, SHARD_FRAGMENT);
     this.crackProgram = createProgram(gl, CRACK_VERTEX, CRACK_FRAGMENT);
-    this.oceanProgram = createProgram(gl, FULLSCREEN_VERTEX, OCEAN_FRAGMENT);
+    this.sceneProgram = createProgram(gl, FULLSCREEN_VERTEX, SCENE_FRAGMENT);
     this.rimProgram = createProgram(gl, RIM_VERTEX, RIM_FRAGMENT);
     this.debrisProgram = createProgram(gl, DEBRIS_VERTEX, DEBRIS_FRAGMENT);
 
     this.shardData = new Float32Array(MAX_SHARDS * GPU_ROWS * 4);
     this.shardTexture = createTexture(gl, { width: MAX_SHARDS, height: GPU_ROWS, internalFormat: gl.RGBA32F });
     this.meshVersion = -1;
+    this.holeVersion = -1;
     this.shardVertices = 0;
     this.crackVertices = 0;
     this.shardMesh = this.createMesh(this.shardProgram.program, [['aPosition', 2], ['aShard', 1]]);
@@ -366,13 +367,13 @@ export class MirrorRenderer {
     this.sourceWidth = 0;
     this.sourceHeight = 0;
 
-    this.oceanTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, this.oceanTexture);
+    this.sceneTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.sceneTexture);
     setSampling(gl, gl.TEXTURE_2D, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(DEEP_SEA));
-    this.oceanCover = new Float32Array([0, 0, 0.5, 0.5]);
-    this.oceanWidth = 0;
-    this.oceanHeight = 0;
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(DUSK));
+    this.sceneCover = new Float32Array([0, 0, 0.5, 0.5]);
+    this.sceneWidth = 0;
+    this.sceneHeight = 0;
 
     this.tagTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.tagTexture);
@@ -432,14 +433,14 @@ export class MirrorRenderer {
     }
   }
 
-  /** Upload the newest frame of the ocean video behind the mirror. */
-  uploadOcean(video) {
+  /** Upload the newest frame of the scene video behind the mirror. */
+  uploadScene(source, width, height) {
     const gl = this.gl;
-    gl.bindTexture(gl.TEXTURE_2D, this.oceanTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
-    if (video.videoWidth !== this.oceanWidth || video.videoHeight !== this.oceanHeight) {
-      this.oceanWidth = video.videoWidth;
-      this.oceanHeight = video.videoHeight;
+    gl.bindTexture(gl.TEXTURE_2D, this.sceneTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    if (width !== this.sceneWidth || height !== this.sceneHeight) {
+      this.sceneWidth = width;
+      this.sceneHeight = height;
       this.updateCover();
     }
   }
@@ -455,13 +456,13 @@ export class MirrorRenderer {
     this.cover[1] = 1 / (h * scale);
     this.cover[2] = 1 + offsetX / (w * scale);
     this.cover[3] = -offsetY / (h * scale);
-    if (this.oceanWidth) {
-      const ow = this.oceanWidth, oh = this.oceanHeight;
+    if (this.sceneWidth) {
+      const ow = this.sceneWidth, oh = this.sceneHeight;
       const k = Math.max(this.stageWidth / ow, this.stageHeight / oh);
-      this.oceanCover[0] = 1 / (ow * k);
-      this.oceanCover[1] = 1 / (oh * k);
-      this.oceanCover[2] = -((this.stageWidth - ow * k) / 2) / (ow * k);
-      this.oceanCover[3] = -((this.stageHeight - oh * k) / 2) / (oh * k);
+      this.sceneCover[0] = 1 / (ow * k);
+      this.sceneCover[1] = 1 / (oh * k);
+      this.sceneCover[2] = -((this.stageWidth - ow * k) / 2) / (ow * k);
+      this.sceneCover[3] = -((this.stageHeight - oh * k) / 2) / (oh * k);
     }
   }
 
@@ -528,12 +529,18 @@ export class MirrorRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.crackMesh.buffer);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
     this.crackVertices = segments * 6;
+    this.meshVersion = mirror.version;
+    this.rebuildRims(mirror);
+  }
 
+  /** The bevels around holes. Pieces falling only change these, not the glass or crack meshes. */
+  rebuildRims(mirror) {
+    const gl = this.gl;
     const rims = mirror.buildRims();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.rimMesh.buffer);
     gl.bufferData(gl.ARRAY_BUFFER, rims, gl.STATIC_DRAW);
     this.rimVertices = rims.length / RIM_FLOATS;
-    this.meshVersion = mirror.version;
+    this.holeVersion = mirror.holeVersion;
   }
 
   /** Point a program at the shared reflection inputs (camera, time buffer). */
@@ -555,11 +562,11 @@ export class MirrorRenderer {
     gl.uniform3fv(u.uLight, state.light);
   }
 
-  /** Point a program at what lies behind the glass (ocean, recording tag). */
+  /** Point a program at what lies behind the glass (scene, recording tag). */
   bindBehind(u, state) {
     const gl = this.gl;
-    bindTexture(gl, 5, gl.TEXTURE_2D, this.oceanTexture, u.uOcean);
-    gl.uniform4fv(u.uOceanCover, this.oceanCover);
+    bindTexture(gl, 5, gl.TEXTURE_2D, this.sceneTexture, u.uScene);
+    gl.uniform4fv(u.uSceneCover, this.sceneCover);
     bindTexture(gl, 4, gl.TEXTURE_2D, this.tagTexture, u.uTag);
     if (state.tagOn && this.tagWidth) {
       const x1 = this.stageWidth - 14;
@@ -578,6 +585,7 @@ export class MirrorRenderer {
     const { mirror, now, ripple, timeBuffer } = state;
     const gl = this.gl;
     if (mirror.version !== this.meshVersion) this.rebuildMeshes(mirror);
+    else if (mirror.holeVersion !== this.holeVersion) this.rebuildRims(mirror);
 
     mirror.writeGpuData(now, this.shardData);
     gl.bindTexture(gl.TEXTURE_2D, this.shardTexture);
@@ -594,10 +602,10 @@ export class MirrorRenderer {
     gl.clearStencil(0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
 
-    // 0. The ocean behind, wherever glass is gone
+    // 0. The scene behind, wherever glass is gone
     let program, u;
     if (mirror.holes) {
-      ({ program, u } = this.oceanProgram);
+      ({ program, u } = this.sceneProgram);
       gl.useProgram(program);
       gl.uniform2f(u.uStage, this.stageWidth, this.stageHeight);
       this.bindBehind(u, state);

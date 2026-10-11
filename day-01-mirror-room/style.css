@@ -106,30 +106,16 @@ button { font: inherit; letter-spacing: inherit; color: inherit; }
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 #glass { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .stage.idle, .stage.idle #glass { cursor: none; }
 
-/* Keyboard aiming: an invisible target over the glass, with a thin reticle when focused */
-.aim {
-  position: absolute; inset: 0;
-  margin: 0; padding: 0; border: 0;
-  background: none;
-  pointer-events: none;
-}
-.aim:focus-visible { outline: none; }
-.reticle {
-  position: absolute; left: 0; top: 0;
-  width: 30px; height: 30px; margin: -15px 0 0 -15px;
-  border: 1px solid rgba(255, 255, 255, .75);
-  border-radius: 50%;
-  opacity: 0;
-  transition: opacity .2s;
-}
-.aim:focus-visible .reticle { opacity: 1; }
+/* The shooter, drawn over the glass */
+#actors { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
 
 .hint {
-  position: absolute; left: 0; right: 0; bottom: 150px;
+  position: absolute; left: var(--gutter); right: var(--gutter); top: 22%;
   margin: 0;
   text-align: center;
   font-size: 11px; text-transform: uppercase; letter-spacing: .3em;
@@ -139,10 +125,15 @@ button { font: inherit; letter-spacing: inherit; color: inherit; }
   animation: breathe 3.2s ease-in-out infinite;
 }
 .hint.gone { opacity: 0; animation: none; }
+.hint .for-touch { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .hint .for-keys { display: none; }
+  .hint .for-touch { display: inline; }
+}
 @keyframes breathe { 50% { opacity: .35; } }
 
 /* Controls: always visible, on frosted pills dark enough to read over any camera image or the
-   ocean (white on the darkest-case blend stays above 4.5:1). Idle only dims them slightly. */
+   scene behind (white on the darkest-case blend stays above 4.5:1). Idle only dims them slightly. */
 .chrome { transition: opacity .6s ease; }
 .stage.idle .chrome { opacity: .82; }
 /* The bars span the screen; only their pills take taps, so the glass around them stays reachable. */
@@ -167,7 +158,11 @@ button { font: inherit; letter-spacing: inherit; color: inherit; }
   display: inline-flex; align-items: center;
   min-height: 44px; padding: 0 16px;
   font-size: 12px; color: rgba(255, 255, 255, .92);
+  white-space: nowrap;
   cursor: default;
+}
+@media (max-width: 380px) {
+  .top .mark { padding: 0 12px; letter-spacing: .18em; }
 }
 
 .bar { display: flex; align-items: center; gap: 2px; padding: 3px; }
@@ -203,11 +198,15 @@ button { font: inherit; letter-spacing: inherit; color: inherit; }
 .bottom {
   position: absolute; left: 0; right: 0; bottom: 0;
   display: grid; gap: 10px; justify-items: center;
-  padding: 12px var(--gutter) max(12px, env(safe-area-inset-bottom));
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas: "left right" "controls controls" "meta meta";
+  padding: 12px max(var(--gutter), env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
 }
-.controls { justify-content: center; }
+.controls { grid-area: controls; justify-content: center; }
+.top { padding-left: max(var(--gutter), env(safe-area-inset-left)); padding-right: max(var(--gutter), env(safe-area-inset-right)); }
 
 .meta {
+  grid-area: meta;
   justify-self: stretch;
   display: flex; justify-content: space-between; align-items: baseline;
   text-shadow: 0 1px 6px rgba(0, 0, 0, .8);
@@ -219,6 +218,27 @@ button { font: inherit; letter-spacing: inherit; color: inherit; }
   letter-spacing: .06em;
 }
 
+/* The shooter's pad, on touch screens only (keyboards use the arrows and space): walking under the
+   left thumb, aiming and firing under the right. */
+.pad { display: contents; }
+.pad > .bar { display: none; }
+.pad-left { grid-area: left; justify-self: start; }
+.pad-right { grid-area: right; justify-self: end; }
+.pad .control { min-width: 52px; min-height: 52px; padding: 0 12px; }
+.pad .control.held { background: rgba(255, 255, 255, .24); }
+.pad .fire { gap: 6px; padding: 0 16px; color: #fff; }
+.pad .fire .icon { color: #ffb0a4; }
+@media (hover: none) and (pointer: coarse) {
+  .pad > .bar { display: flex; }
+}
+/* Phones on their side: pad either side of the controls, on one row */
+@media (orientation: landscape) and (max-height: 520px) {
+  .bottom { grid-template-columns: 1fr auto 1fr; grid-template-areas: "left controls right" "meta meta meta"; gap: 6px 12px; padding-top: 6px; }
+  .top { padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: 8px; }
+  .hint { top: 30%; }
+}
+.stage.broken .pad { visibility: hidden; }
+
 /* Phones: icon above the label, so all four controls fit in one row */
 @media (max-width: 480px) {
   .controls .control { flex-direction: column; gap: 3px; min-height: 56px; min-width: 70px; padding: 6px 8px; border-radius: 22px; }
@@ -227,7 +247,7 @@ button { font: inherit; letter-spacing: inherit; color: inherit; }
   .top #sound span { display: inline; }
 }
 
-/* The ending: the whole mirror is gone, the ocean fills the screen */
+/* The ending: the whole mirror is gone, the lake fills the screen */
 .ending {
   position: absolute; inset: 0;
   display: grid; place-items: center;

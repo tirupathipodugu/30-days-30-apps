@@ -1,5 +1,5 @@
 // Mirror Room entry point: opens the camera (or the demo feed), runs the frame loop and connects
-// taps, keys and the quiet controls to the glass. The interesting parts live in the modules below.
+// taps, the shooter's keys and buttons, and the controls to the glass. The interesting parts live in the modules below.
 
 import { Mirror } from './shards.js';
 import { Debris } from './debris.js';
@@ -11,7 +11,7 @@ import { createDemoFeed } from './demo-feed.js';
 import { Sound } from './sound.js';
 import { clipFormat, recordCanvas, showClip } from './recorder.js';
 import { playEncore } from './encore.js';
-import { Aim } from './aim.js';
+import { Shooter } from './shooter.js';
 import { prefersReducedMotion } from './motion.js';
 
 const $ = (id) => document.getElementById(id);
@@ -19,13 +19,20 @@ const canvas = $('glass');
 const stage = $('stage');
 const counter = $('counter');
 const hint = $('hint');
-const ocean = $('ocean');
+const scene = $('scene');              // the video behind the mirror
+const actors = $('actors');            // the shooter's 2D canvas, over the glass
 
 const RECORD_MS = 6000;
 const IDLE_MS = 3000;
 const LIGHT_HEIGHT = 900;              // px: how high above the glass the pointer light hangs
 const TAG = 'Mirror Room · Day 1 / 30 · @tirupathipodugu';
-const ENCORE_KEYS = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown'];
+const COLLAPSE_STRIKES = 11;           // shatter: strikes spread over the whole mirror
+const COLLAPSE_HOLD_MS = 700;          // a held beat between the last crack and the first piece falling
+const COLLAPSE_MS = 6800;              // then every piece falls within this
+const AMBIENCE_FLOOR = 0.12;           // the world behind is faintly audible even through whole glass
+const AMBIENCE_EVERY_MS = 250;          // how often the ambience follows how much glass is left
+const KEY_MOVES = { ArrowLeft: ['move', -1], ArrowRight: ['move', 1], ArrowUp: ['raise', -1], ArrowDown: ['raise', 1] };
+const SHOT_REACH = 40;                 // px: a shot into a hole clips the nearest piece within this
 const SWEEP_STEP = 6;                  // px between the points a sweep tests for pieces
 const SWEEP_SIDES = [0, -9, 9];        // px either side of the path a sweep also reaches
 const BROKEN_AT = 0.03;                // once less glass than this is left, the rest falls on its own
@@ -50,11 +57,18 @@ let cancelEncore = null;
 let volley = [];                       // timers for a "shatter" volley
 let idleTimer = 0;
 let titleTaps = [];
-let recentKeys = [];
-let broken = false;                    // the ending: all the glass is gone and only the ocean is left
+let shooter = null;
+let collapse = null;                   // shatter's collapse in progress: { start, order, next }
+let ambienceAt = 0;
+let broken = false;                    // the ending: all the glass is gone and only the scene is left
 let sweeping = false;
-let lastSound = { loose: -Infinity, land: -Infinity };
-let oceanTime = -1;
+let lastSound = { loose: -Infinity, land: -Infinity, shell: -Infinity };
+let sceneTime = -1;                    // -1 nothing shown yet, -2 the poster, else the video's time
+// Recordings and photos are composed from the glass and the shooter on one canvas.
+const poster = new Image();
+poster.src = scene.getAttribute('poster');
+const surface = document.createElement('canvas');
+const surfaceCtx = surface.getContext('2d');
 
 const effects = { glintAt: -Infinity };
 const pointer = { x: 0, y: 0, down: null, movedAt: -Infinity };
@@ -84,7 +98,17 @@ function setUpGraphics() {
   ripple = new Ripple(renderer.gl);
   timeBuffer = new TimeBuffer(renderer.gl);
   renderer.setTag(TAG);
-  new Aim($('aim'), $('reticle'), strike);
+  shooter = new Shooter(actors, {
+    onHit: shotAt,
+    onFire: () => sound.shot(),
+    onShellLand: (size) => {
+      const now = performance.now();
+      if (now - lastSound.shell > SOUND_GAP_MS) {
+        lastSound.shell = now;
+        sound.shell(size);
+      }
+    },
+  });
   frame.ripple = ripple;
   frame.timeBuffer = timeBuffer;
   new ResizeObserver(() => { if (running) resize(); }).observe(stage);
@@ -103,7 +127,7 @@ async function start(kind) {
   $('error').hidden = true;
   stage.hidden = false;
   setSoundLabel();
-  ocean.play().catch(() => {});        // muted and inline, so it may start without a gesture
+  scene.play().catch(() => {});        // muted and inline, so it may start without a gesture
   mirror.reset(stage.clientWidth, stage.clientHeight);
   debris.clear();
   resize();
@@ -148,6 +172,9 @@ function resize() {
     mirror.resize(width, height);
     debris.clear();
   }
+  // The shooter stands just above the bottom controls.
+  const footer = stage.querySelector('.bottom').getBoundingClientRect();
+  shooter.resize(width, height, footer.top - stage.getBoundingClientRect().top - 4);
 }
 
 // ---------------------------------------------------------------- the frame loop
@@ -156,13 +183,24 @@ function tick(now) {
   if (!running) return;
   frameId = requestAnimationFrame(tick);
   if (source.width && source.takeFrame()) renderer.uploadFrame(source.element, source.width, source.height);
-  // The ocean only needs uploading once something has opened a view onto it.
-  if (mirror.holes && ocean.readyState >= 2 && ocean.currentTime !== oceanTime) {
-    oceanTime = ocean.currentTime;
-    renderer.uploadOcean(ocean);
+  // The scene only needs uploading once something has opened a view onto it.
+  if (mirror.holes) {
+    if (scene.readyState >= 2 && scene.currentTime !== sceneTime) {
+      sceneTime = scene.currentTime;
+      renderer.uploadScene(scene, scene.videoWidth, scene.videoHeight);
+    } else if (sceneTime < 0 && poster.complete && poster.naturalWidth) {
+      sceneTime = -2;                  // the still frame, until the video has one of its own
+      renderer.uploadScene(poster, poster.naturalWidth, poster.naturalHeight);
+    }
   }
 
   mirror.reduced = prefersReducedMotion();
+  shooter.update(now, mirror.reduced);
+  collapseStep(now);
+  if (now - ambienceAt > AMBIENCE_EVERY_MS) {
+    ambienceAt = now;
+    updateAmbience(now);
+  }
   if (mirror.update(now)) onRestored(now);
   debris.update(now, mirror.height);
   if (debris.landings.length && now - lastSound.land > SOUND_GAP_MS) {
@@ -178,12 +216,32 @@ function tick(now) {
   frame.tagOn = recording || photoPending;
   frame.glint = (now - effects.glintAt) / 1400;
   renderer.render(frame);
+  shooter.draw(now);
 
-  // A photo must be read in the same frame it was drawn.
+  // The recording surface, like a photo, must be drawn in the same frame as the glass.
+  if (recording || photoPending) compose();
   if (photoPending) {
     photoPending = false;
-    canvas.toBlob((blob) => blob && showClip(blob, 'png'), 'image/png');
+    surface.toBlob((blob) => blob && showClip(blob, 'png'), 'image/png');
   }
+}
+
+/** Glass and shooter, together on one canvas, for recordings and photos. */
+function compose() {
+  if (surface.width !== canvas.width || surface.height !== canvas.height) {
+    surface.width = canvas.width;
+    surface.height = canvas.height;
+  }
+  surfaceCtx.drawImage(canvas, 0, 0);
+  surfaceCtx.drawImage(actors, 0, 0, surface.width, surface.height);
+}
+
+/** The ambience fades up as more of the scene behind the glass is revealed. Full at the ending. */
+function updateAmbience(now) {
+  let level = AMBIENCE_FLOOR;
+  if (broken) level = 1;
+  else if (!mirror.whole && !mirror.isHealing(now)) level = AMBIENCE_FLOOR + (1 - AMBIENCE_FLOOR) * Math.pow(1 - mirror.glassLeft(), 0.8);
+  if (Math.abs(level - sound.ambienceLevel) > 0.01 || (level && !sound.ambienceGain)) sound.ambience(level);
 }
 
 /**
@@ -232,7 +290,30 @@ function strike(x, y, force = 1, mayFall = true) {
   }
 }
 
-/** Take one piece out of the frame: it falls, and the ocean shows where it was. */
+/**
+ * A shot lands like a tap. If it lands in a hole, it clips the nearest small piece at the hole's edge
+ * instead, so holding fire on one spot keeps eating into the glass.
+ */
+function shotAt(x, y) {
+  const now = performance.now();
+  const hit = mirror.shardAt(x, y);
+  if (hit?.missing && !broken) {
+    let best = null, bestD = SHOT_REACH;
+    for (const s of mirror.shards) {
+      if (!mirror.canFall(s, now) || !mirror.isLoose(s)) continue;
+      const d = Math.hypot(s.center.x - x, s.center.y - y) - Math.sqrt(s.area) / 2;
+      if (d < bestD) {
+        best = s;
+        bestD = d;
+      }
+    }
+    if (best) knockOut(best, x, y, now);
+    return;
+  }
+  strike(x, y);
+}
+
+/** Take one piece out of the frame: it falls, and the scene behind shows where it was. */
 function knockOut(shard, x, y, now) {
   const look = mirror.lookAt(shard, now);
   debris.drop(shard, look, shard.frost, x, y, now, prefersReducedMotion());
@@ -265,9 +346,10 @@ function sweep(x0, y0, x1, y1) {
   }
 }
 
-/** The ending: the last slivers drop on their own, the ocean fills the screen, and a message fades in. */
+/** The ending: the last slivers drop on their own, the scene behind fills the screen, and a message fades in. */
 function breakDown(now) {
   broken = true;
+  collapse = null;
   stopVolley();
   cancelEncore?.();
   stage.classList.add('broken');
@@ -282,9 +364,9 @@ function breakDown(now) {
       updateCounter();
     }, Math.min(900, i * 35));
   });
+  shooter.calm = true;
   setTimeout(() => {
     if (!running) return;
-    sound.surf();
     const ending = $('ending');
     ending.hidden = false;
     requestAnimationFrame(() => ending.classList.add('shown'));
@@ -293,36 +375,64 @@ function breakDown(now) {
   }, Math.min(900, rest.length * 35) + ENDING_DELAY_MS);
 }
 
-/** A few small pieces fall out after a shatter, for drama. Most of the glass stays. */
-function dropSome() {
-  if (broken || !running) return;
-  const now = performance.now();
-  const loose = mirror.shards.filter((s) => mirror.canFall(s, now) && mirror.isLoose(s) && s.area > 150);
-  for (let n = 2 + Math.floor(Math.random() * 2); n > 0 && loose.length; n--) {
-    const s = loose.splice(Math.floor(Math.random() * loose.length), 1)[0];
-    knockOut(s, s.center.x + (Math.random() - 0.5) * 10, s.center.y - 6, now);
+/**
+ * Shatter: the whole mirror comes down, slowly. First a spread of strikes cracks it all over, then
+ * the pieces start to drop a few at a time, top first, faster and faster, until the glass is gone and
+ * the ending plays. The drops run from the frame loop (see collapseStep); restore stops them.
+ */
+function shatter() {
+  if (!running || volley.length || collapse || broken) return;
+  const reduced = prefersReducedMotion();
+  const n = COLLAPSE_STRIKES;
+  const cols = Math.max(2, Math.round(Math.sqrt((n * mirror.width) / mirror.height)));
+  const rows = Math.ceil(n / cols);
+  const points = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols && points.length < n; c++) {
+      points.push([
+        mirror.width * ((c + 0.2 + Math.random() * 0.6) / cols),
+        mirror.height * ((r + 0.2 + Math.random() * 0.6) / rows),
+      ]);
+    }
   }
+  points.sort(() => Math.random() - 0.5);
+  let t = 0;
+  points.forEach(([x, y], i) => {
+    volley.push(setTimeout(() => strike(x, y, 1 - i * 0.05, false), t));
+    t += (reduced ? 260 : 150) + Math.random() * 90;
+  });
+  volley.push(setTimeout(() => {
+    volley = [];
+    startCollapse();
+  }, t + COLLAPSE_HOLD_MS));
 }
 
-/** Shatter: a volley of 5–7 strikes at random points, a few hundred ms apart, then a few pieces fall. */
-function shatter() {
-  if (!running || volley.length || broken) return;
-  const strikes = 5 + Math.floor(Math.random() * 3);
-  let t = 0;
-  for (let i = 0; i < strikes; i++) {
-    const x = mirror.width * (0.1 + Math.random() * 0.8);
-    const y = mirror.height * (0.1 + Math.random() * 0.8);
-    volley.push(setTimeout(() => {
-      strike(x, y, 1 - i * 0.08, false);
-      if (i === strikes - 1) {
-        volley = [setTimeout(() => {
-          volley = [];
-          dropSome();
-        }, 420)];
-      }
-    }, t));
-    t += 140 + Math.random() * 160;
+/** Every piece left, in the order it will fall: from the top down, loosely. */
+function startCollapse() {
+  if (broken || !running) return;
+  const now = performance.now();
+  const order = mirror.shards
+    .filter((s) => !s.missing)
+    .map((s) => ({ s, key: s.center.y + (Math.random() - 0.5) * mirror.height * 0.35 }))
+    .sort((p, q) => p.key - q.key)
+    .map((p) => p.s);
+  collapse = { start: now, order, next: 0 };
+}
+
+/** Drop the pieces that are due: slow at first, then accelerating, like a building coming down. */
+function collapseStep(now) {
+  if (!collapse) return;
+  if (broken || mirror.isHealing(now)) {
+    collapse = null;
+    return;
   }
+  const progress = Math.min(1, (now - collapse.start) / COLLAPSE_MS);
+  const due = Math.ceil(collapse.order.length * Math.pow(progress, 1.9));
+  while (collapse && collapse.next < due && !broken) {
+    const s = collapse.order[collapse.next++];
+    if (mirror.canFall(s, now)) knockOut(s, s.center.x + (Math.random() - 0.5) * 20, s.center.y - 12, now);
+  }
+  if (collapse && collapse.next >= collapse.order.length) collapse = null;
 }
 
 function stopVolley() {
@@ -333,6 +443,7 @@ function stopVolley() {
 function restore() {
   if (broken) return;                  // past the ending, the only way back is to restart
   stopVolley();
+  collapse = null;
   const now = performance.now();
   if (!mirror.heal(now)) return;
   debris.vanish(now);
@@ -380,7 +491,8 @@ function encore() {
 
 async function record() {
   if (recording || !running) return;
-  const format = clipFormat(canvas);
+  compose();
+  const format = clipFormat(surface);
   if (!format) {
     photoPending = true;
     return;
@@ -393,7 +505,7 @@ async function record() {
   label.textContent = `Recording ${left}`;
   const countdown = setInterval(() => { label.textContent = `Recording ${--left}`; }, 1000);
   try {
-    const blob = await recordCanvas(canvas, format, RECORD_MS);
+    const blob = await recordCanvas(surface, format, RECORD_MS);
     showClip(blob, format.extension);
   } catch (error) {
     console.error(error);
@@ -407,8 +519,6 @@ async function record() {
 }
 
 function setSoundLabel() {
-  if (!sound.enabled) sound.stopSurf();
-  else if (broken) sound.surf();
   $('sound').setAttribute('aria-pressed', String(sound.enabled));
   $('sound-label').textContent = sound.enabled ? 'Sound on' : 'Sound off';
 }
@@ -429,11 +539,39 @@ function stagePoint(event) {
   return [event.clientX - box.left, event.clientY - box.top];
 }
 
+/**
+ * Browsers only allow audio after a gesture, so the first tap, click or key press unlocks it (sound is
+ * on by default) and starts the ambience. It is also a chance to start the scene video if autoplay was
+ * blocked, as it can be in iOS low-power mode.
+ */
+function onGesture() {
+  sound.unlock();
+  if (running) updateAmbience(performance.now());
+  if (scene.paused && running && !document.hidden) scene.play().catch(() => {});
+}
+// Touch only counts as a gesture when the finger lifts, so listen for the end of a press too.
+for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) {
+  document.addEventListener(type, onGesture, { capture: true });
+}
+
+// Hidden tab: pause the video and the audio.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    scene.pause();
+    sound.suspend();
+    releaseAll();
+  } else if (running) {
+    scene.play().catch(() => {});
+    sound.resume();
+  }
+});
+
 stage.addEventListener('pointermove', wake);
 stage.addEventListener('pointerdown', wake);
 
 canvas.addEventListener('pointerdown', (event) => {
   const [x, y] = stagePoint(event);
+  shooter?.aimAt(x, y);               // the gun follows the last spot you touched
   pointer.down = { x, y, t: event.timeStamp };
   sweeping = false;
   pointer.x = x;
@@ -446,6 +584,7 @@ canvas.addEventListener('pointermove', (event) => {
   const [x, y] = stagePoint(event);
   // Press and drag: once the finger has moved off its starting point, it sweeps pieces out.
   if (pointer.down && running && !cancelEncore) {
+    shooter.aimAt(x, y);
     if (!sweeping && Math.hypot(x - pointer.down.x, y - pointer.down.y) >= 10) {
       sweeping = true;
       sweep(pointer.down.x, pointer.down.y, x, y);
@@ -480,15 +619,25 @@ $('stage-title').addEventListener('pointerdown', (event) => {
   }
 });
 
+// The shooter: arrows walk and aim, Space or Enter fires (hold for semi-auto).
+const isFireKey = (event) => event.key === ' ' || event.key === 'Enter';
+const onControl = (event) => event.target.closest?.('button, a, input, dialog');
+
 document.addEventListener('keydown', (event) => {
   if (!running || event.metaKey || event.ctrlKey || event.altKey || $('sheet').open) return;
   wake();
-  if (event.key.startsWith('Arrow')) {
-    recentKeys = [...recentKeys, event.key].slice(-ENCORE_KEYS.length);
-    if (recentKeys.join() === ENCORE_KEYS.join()) {
-      recentKeys = [];
-      encore();
-    }
+  const held = KEY_MOVES[event.key];
+  if (held) {
+    event.preventDefault();
+    shooter[held[0]] = held[1];
+    hint.classList.add('gone');
+    return;
+  }
+  if (isFireKey(event) && !onControl(event)) {
+    event.preventDefault();
+    if (!event.repeat) shooter.fire(performance.now());
+    shooter.trigger = true;
+    hint.classList.add('gone');
     return;
   }
   const actions = { b: shatter, 0: restore, t: () => setTime(!timeOn), r: record };
@@ -498,6 +647,51 @@ document.addEventListener('keydown', (event) => {
     action();
   }
 });
+
+document.addEventListener('keyup', (event) => {
+  if (!shooter) return;
+  const held = KEY_MOVES[event.key];
+  if (held && shooter[held[0]] === held[1]) shooter[held[0]] = 0;
+  if (isFireKey(event)) shooter.trigger = false;
+});
+
+/** Let go of everything held, e.g. when the window loses focus mid-press. */
+function releaseAll() {
+  if (!shooter) return;
+  shooter.move = 0;
+  shooter.raise = 0;
+  shooter.trigger = false;
+}
+window.addEventListener('blur', releaseAll);
+
+// On-screen pad (shown on touch screens): press and hold to walk, aim or fire.
+for (const button of document.querySelectorAll('#pad [data-hold]')) {
+  const [key, value] = button.dataset.hold.split(':');
+  const press = (event) => {
+    event.preventDefault();
+    if (!running) return;
+    button.setPointerCapture?.(event.pointerId);
+    button.classList.add('held');
+    hint.classList.add('gone');
+    if (key === 'trigger') {
+      shooter.fire(performance.now());
+      shooter.trigger = true;
+    } else {
+      shooter[key] = Number(value);
+    }
+  };
+  const release = () => {
+    button.classList.remove('held');
+    if (!shooter) return;
+    if (key === 'trigger') shooter.trigger = false;
+    else if (shooter[key] === Number(value)) shooter[key] = 0;
+  };
+  button.addEventListener('pointerdown', press);
+  button.addEventListener('pointerup', release);
+  button.addEventListener('pointercancel', release);
+  button.addEventListener('lostpointercapture', release);
+  button.addEventListener('contextmenu', (event) => event.preventDefault());
+}
 
 $('shatter').addEventListener('click', shatter);
 $('restore').addEventListener('click', restore);
