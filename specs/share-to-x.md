@@ -22,6 +22,8 @@
 | Mirror Room | the ending card | "I broke the mirror into N pieces. 🪞" | Save image: a still of the ending (the existing photo sheet) |
 | Living Heart | the CPR "saved" card | "I brought him back with CPR. X% of my pushes were on the beat. ❤️" | none |
 | Skin Check | the share card view | "My 10-second skin scan: <the summary>" | the existing Share button (the card image) |
+| Macro Mirror | the "Your future" result dialog | "My plate: about +N kcal/day over what I burn. Saw my face 5 years from now. 😬" | Save image / Share (the 3-panel card) |
+| Get Ready With Me | the photo/clip sheet | "Tried it on with my camera before buying. 👗" | Save / Share (the photo or clip) |
 
 ## Rules
 

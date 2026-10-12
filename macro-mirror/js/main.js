@@ -6,6 +6,7 @@ import { Renderer } from './renderer.js';
 import { buildRig, landmarksToCanvas } from './face-rig.js';
 import { Sound } from './sound.js';
 import { composeCard, showResult, clipFormat, recordCanvas } from './share.js';
+import { postOnX } from '../../shared/share-x.js';
 import {
   FOODS, DEFAULT_PLATE, ACTIVITY, AGE_BANDS, SEXES, STOPS,
   daysAt, kgAfter, maintenance, intake, betterPlate, faceParams, captionFor, formatKg,
@@ -355,6 +356,9 @@ function snapshot(fp, crop) {
   return c;
 }
 
+let postText = 'Saw my face 5 years from now. 😬';
+$('postX').addEventListener('click', () => postOnX({ path: 'macro-mirror/', text: postText }));
+
 function makeCard() {
   if (!lastP) {
     flashStatus('Face the camera, then try again');
@@ -375,6 +379,7 @@ function makeCard() {
   ];
   const v = Math.round(Math.abs(n.surplus) / 10) * 10;
   const header = v < 30 ? 'My plate: about even with what I burn' : `My plate: about ${n.surplus > 0 ? '+' : '−'}${v} kcal/day ${n.surplus > 0 ? 'over' : 'under'} what I burn`;
+  postText = `${header}. Saw my face 5 years from now. 😬`;
   const card = composeCard(panels, header, 'An illustration from a simple energy-balance model, not a prediction or medical advice.');
   lastCard = card;
   card.toBlob((blob) => { if (blob) showResult(blob, 'png', 'Your future'); }, 'image/png');

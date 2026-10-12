@@ -8,6 +8,7 @@ import { CATALOG, FILTERS } from './catalog.js';
 import { loadImage, makeCutout } from './cutout.js';
 import { Stage } from './tryon.js';
 import { Sound } from './sound.js';
+import { postOnX } from '../../shared/share-x.js';
 
 const $ = (id) => document.getElementById(id);
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
@@ -373,6 +374,7 @@ function initCamera() {
 }
 
 // ---------- snap, record, share ----------
+$('postX').addEventListener('click', () => postOnX({ path: 'get-ready-with-me/', text: 'Tried it on with my camera before buying. 👗' }));
 const CLIP_TYPES = [['video/mp4;codecs=avc1.42E01E', 'mp4'], ['video/mp4', 'mp4'], ['video/webm;codecs=vp9', 'webm'], ['video/webm', 'webm']];
 
 function readyToCapture() {
