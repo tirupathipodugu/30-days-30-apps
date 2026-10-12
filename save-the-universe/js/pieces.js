@@ -143,6 +143,14 @@ export class Pieces {
       if (p.twinkle !== undefined) g.globalAlpha = 0.75 + 0.25 * Math.sin(time * 2.3 + p.twinkle);
       g.drawImage(p.img, -p.w / 2, -p.h / 2, p.w, p.h);
       g.restore();
+      // Small name under named things while they're still in place.
+      if (p.label && (p.state === 'home' || p.state === 'wobble')) {
+        g.font = '500 10px system-ui, sans-serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'top';
+        g.fillStyle = 'rgba(255,255,255,.62)';
+        g.fillText(p.label, x, Math.min(this.h - 12, y + Math.min(p.h, 60) / 2 + 2));
+      }
     }
   }
 }

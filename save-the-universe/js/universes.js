@@ -12,6 +12,7 @@ export const UNIVERSES = [
 ];
 
 export function buildUniverse(id, w, h) {
+  starIndex = 0;
   const make = { solar, galaxy, nebula, deep }[id] || solar;
   return make(w, h, rng(id.length * 7919 + 17));
 }
@@ -70,9 +71,13 @@ function addStars(list, r, count, area, opts = {}) {
     const tint = opts.tints ? opts.tints[Math.floor(r() * opts.tints.length)] : STAR_TINTS[Math.floor(r() * STAR_TINTS.length)];
     const x = opts.at ? opts.at(r)[0] : x0 + r() * aw;
     const y = opts.at ? opts.at.last : y0 + r() * ah;
-    list.push({ hx: x, hy: y, w: size, h: size, img: starImg(size, tint, big), twinkle: r() * 6.28 });
+    list.push({ hx: x, hy: y, w: size, h: size, img: starImg(size, tint, big), twinkle: r() * 6.28, label: big ? starName() : undefined });
   }
 }
+
+const STAR_NAMES = ['Sirius', 'Vega', 'Rigel', 'Betelgeuse', 'Polaris', 'Antares', 'Arcturus', 'Capella', 'Aldebaran', 'Altair', 'Deneb', 'Spica', 'Procyon', 'Canopus', 'Regulus', 'Mira', 'Bellatrix', 'Castor', 'Pollux', 'Fomalhaut'];
+let starIndex = 0;
+function starName() { return STAR_NAMES[starIndex++ % STAR_NAMES.length]; }
 
 /** The sky behind everything, in big sheets. */
 function sky(list, w, h, paintSky) {
@@ -241,7 +246,7 @@ function solar(w, h, r) {
     g.arc(c, c, sunR, 0, Math.PI * 2);
     g.fill();
   });
-  list.push({ hx: sun[0], hy: sun[1], w: sunR * 2.6, h: sunR * 2.6, img: sunImg });
+  list.push({ hx: sun[0], hy: sun[1], w: sunR * 2.6, h: sunR * 2.6, img: sunImg, label: 'Sun' });
 
   // Planets on arcs around the sun.
   const planets = [
@@ -249,6 +254,7 @@ function solar(w, h, r) {
     [0.72, 0.026, '#ffb08a', '#a8432a'], [0.92, 0.07, '#ffe2b8', '#b7793f', { bands: true }],
     [1.12, 0.058, '#fff0c8', '#c9a060', { ring: 'rgba(230,210,170,.75)' }], [1.3, 0.042, '#c8fbff', '#3aa7c0'], [1.46, 0.04, '#a8c4ff', '#2b4fb8'],
   ];
+  const NAMES = ['Mercury', 'Venus', 'Earth', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune'];
   planets.forEach(([orbit, rad, c1, c2, opts], i) => {
     const a = (tall ? -Math.PI / 2 : Math.PI) + (r() - 0.5) * 1.6;
     const d = orbit * L;
@@ -256,13 +262,14 @@ function solar(w, h, r) {
     if (x < -40 || x > w + 40 || y < -40 || y > h + 40) return;
     const pr = rad * L;
     const img = planet(pr, c1, c2, opts);
-    list.push({ hx: x, hy: y, w: img.width / 2, h: img.height / 2, img });
+    list.push({ hx: x, hy: y, w: img.width / 2, h: img.height / 2, img, label: NAMES[i] });
     // a moon or two
     const moons = i === 2 ? 1 : i >= 4 ? 2 : 0;
     for (let m = 0; m < moons; m++) {
       const mr = pr * 0.25, ma = r() * Math.PI * 2, md = pr * (1.9 + m * 0.7);
       const mi = planet(mr, '#eeeeee', '#777777');
-      list.push({ hx: x + Math.cos(ma) * md, hy: y + Math.sin(ma) * md, w: mi.width / 2, h: mi.height / 2, img: mi });
+      const moonName = i === 2 ? 'Moon' : i === 4 ? ['Io', 'Europa'][m] : ['Titan', 'Enceladus'][m];
+      list.push({ hx: x + Math.cos(ma) * md, hy: y + Math.sin(ma) * md, w: mi.width / 2, h: mi.height / 2, img: mi, label: moonName });
     }
   });
   // Asteroid belt between the 4th and 5th planets.
@@ -288,7 +295,7 @@ function solar(w, h, r) {
     g.arc(pw - ph / 2, ph / 2, ph * 0.3, 0, Math.PI * 2);
     g.fill();
   });
-  list.push({ hx: w * 0.75, hy: h * 0.32, w: L * 0.22, h: L * 0.05, img: comet });
+  list.push({ hx: w * 0.75, hy: h * 0.32, w: L * 0.22, h: L * 0.05, img: comet, label: "Halley's Comet" });
   return list;
 }
 
@@ -336,7 +343,7 @@ function galaxy(w, h, r) {
   }
   // The bright core
   const coreS = L * 0.34;
-  list.push({ hx: cx, hy: cy, w: coreS, h: coreS, img: paint(coreS, coreS, (g, s) => {
+  list.push({ hx: cx, hy: cy, w: coreS, h: coreS, label: 'Galactic core', img: paint(coreS, coreS, (g, s) => {
     const c = s / 2;
     const core = g.createRadialGradient(c, c, 0, c, c, c);
     core.addColorStop(0, 'rgba(255,250,235,1)');
@@ -350,6 +357,8 @@ function galaxy(w, h, r) {
 }
 
 // ---------- 3. Nebula Nursery ----------
+
+const NEBULAE = ['Orion Nebula', 'Eagle Nebula', 'Lagoon Nebula', 'Carina Nebula', 'Crab Nebula', 'Rosette Nebula', 'Trifid Nebula', 'Horsehead', 'Helix Nebula', 'Ring Nebula', "Cat's Eye", 'Tarantula'];
 
 function nebula(w, h, r) {
   const list = [];
@@ -376,7 +385,7 @@ function nebula(w, h, r) {
         cloud(g, cx, cy, rad, col, 0.12 + r() * 0.1);
       }
     });
-    list.push({ hx: r() * w, hy: r() * h, w: s, h: s, img });
+    list.push({ hx: r() * w, hy: r() * h, w: s, h: s, img, label: i < NEBULAE.length && s > L * 0.25 ? NEBULAE[i] : undefined });
   }
   // Dark dust lanes
   for (let i = 0; i < 6; i++) {
@@ -415,13 +424,15 @@ function deep(w, h, r) {
       g.fillRect(r() * pw, r() * ph, 1.2, 1.2);
     }
   });
+  const GALAXIES = ['Andromeda', 'Whirlpool', 'Sombrero', 'Pinwheel', 'Triangulum', 'Black Eye', 'Cartwheel', 'Sunflower', 'Cigar Galaxy', "Bode's Galaxy"];
+  let named = 0;
   const kinds = ['spiral', 'spiral', 'elliptical', 'edge'];
   const count = Math.round((w * h) / 4500);
   for (let i = 0; i < count; i++) {
     const near = r() < 0.12;
     const s = near ? L * (0.12 + r() * 0.1) : L * (0.025 + r() * 0.05);
     const hue = r() < 0.5 ? 30 + r() * 30 : 200 + r() * 60;
-    list.push({ hx: r() * w, hy: r() * h, w: s, h: s, img: galaxyImg(r, s, kinds[Math.floor(r() * kinds.length)], hue) });
+    list.push({ hx: r() * w, hy: r() * h, w: s, h: s, img: galaxyImg(r, s, kinds[Math.floor(r() * kinds.length)], hue), label: near ? GALAXIES[named++ % GALAXIES.length] : undefined });
   }
   addStars(list, r, Math.round((w * h) / 9000), [0, 0, w, h], { bigShare: 0.3 });
   return list;
