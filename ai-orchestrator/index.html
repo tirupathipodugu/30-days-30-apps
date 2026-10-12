@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- AI Orchestrator: one chat box for all your free AI accounts. It picks the best free model for
+     each question and moves to the next when one runs out. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://generativelanguage.googleapis.com https://api.groq.com https://openrouter.ai https://api.cerebras.ai https://api.mistral.ai">
+<title>AI Orchestrator</title>
+<meta name="description" content="One chat box for all your free AI. It picks the best free model for every question and switches when one runs out.">
+<meta name="theme-color" content="#0b0c10">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%230b0c10%22/%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%224%22 fill=%22%237cf5ff%22/%3E%3Cg stroke=%22%237cf5ff%22 stroke-width=%222%22%3E%3Cpath d=%22M16 4v6M16 22v6M4 16h6M22 16h6%22/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><span class="dot"></span>AI Orchestrator</div>
+  <button class="ghost" id="open-keys" type="button">Your AIs <span id="key-count">0</span></button>
+</header>
+
+<main class="chat" id="chat" aria-live="polite">
+  <section class="welcome" id="welcome">
+    <h1>All your free AI in one box.</h1>
+    <p>Ask anything. The orchestrator decides what kind of question it is, sends it to the best free model you have, and switches to another one if that runs out.</p>
+    <ol class="steps">
+      <li><b>Connect a free AI or two.</b> About a minute, once. Keys stay in this browser.</li>
+      <li><b>Ask.</b> Each answer says which model replied and why.</li>
+    </ol>
+    <button class="primary" id="start-connect" type="button">Connect your free AIs</button>
+    <div class="examples" id="examples">
+      <button type="button">Why does my Python loop print the last value 3 times?</button>
+      <button type="button">Write a short, friendly email asking for a deadline extension.</button>
+      <button type="button">What's the capital of Australia?</button>
+      <button type="button">Compare SQLite and Postgres for a small side project.</button>
+    </div>
+  </section>
+</main>
+
+<form class="composer" id="composer">
+  <textarea id="input" rows="1" placeholder="Ask anything…" aria-label="Your question"></textarea>
+  <button class="send" id="send" type="submit" aria-label="Send">↑</button>
+</form>
+
+<dialog class="sheet" id="keys">
+  <div class="sheet-head">
+    <h2>Your free AIs</h2>
+    <button class="ghost" id="close-keys" type="button" aria-label="Close">✕</button>
+  </div>
+  <p class="muted">Paste any key here. It figures out which service it belongs to and tests it.</p>
+  <div class="paste">
+    <input id="paste" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a key (AIza…, gsk_…, sk-or-…, csk-…)">
+    <button class="primary" id="add-key" type="button">Add</button>
+  </div>
+  <p class="status" id="paste-status" role="status"></p>
+  <div class="providers" id="providers"></div>
+  <p class="muted small">Keys are saved only in this browser and sent only to their own service. Nothing goes to us. Free limits are set by each service and can change.</p>
+  <p class="muted small"><a href="../">30 Days, 30 Apps</a> by <a href="https://x.com/tirupathipodugu" target="_blank" rel="noopener">@tirupathipodugu</a></p>
+</dialog>
+
+</body>
+</html>
