@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- Save the Universe: a black hole is swallowing your screen. Escape it, then press the button. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:">
+<title>Save the Universe</title>
+<meta name="description" content="A black hole is swallowing your screen, and you with it. Build up speed, escape, and save the universe.">
+<meta name="theme-color" content="#030305">
+<meta property="og:title" content="Save the Universe">
+<meta property="og:description" content="A black hole is swallowing your screen. Escape it.">
+<meta property="og:url" content="https://tirupathipodugu.github.io/ideas/save-the-universe/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 fill=%22%23030305%22/%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2211%22 fill=%22none%22 stroke=%22%23ffb35c%22 stroke-width=%222%22/%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%227%22 fill=%22%23000%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+
+<section class="screen" id="landing">
+  <h1 class="title">Save the Universe</h1>
+  <p class="lede">A black hole is swallowing your screen, and you with it.<br>Build up speed, break free, and hit the button.</p>
+  <div class="choices">
+    <button class="choice primary" id="use-camera" type="button">Use my camera</button>
+    <button class="choice" id="use-tab" type="button" hidden>Suck in a browser tab</button>
+    <label class="choice" id="use-photo-label">Use a photo<input id="use-photo" type="file" accept="image/*" hidden></label>
+    <button class="choice quiet" id="use-stars" type="button">Just play with stars</button>
+  </div>
+  <p class="note">Everything runs in your browser. Your camera never leaves your device.</p>
+  <p class="credit"><a href="../">30 Days, 30 Apps</a> by <a href="https://x.com/tirupathipodugu" target="_blank" rel="noopener">@tirupathipodugu</a></p>
+  <p class="error" id="error" role="alert" hidden></p>
+</section>
+
+<main class="stage" id="stage" hidden>
+  <canvas id="space" aria-label="The black hole and everything it is pulling in"></canvas>
+
+  <header class="hud">
+    <span class="pill timer" id="timer" aria-live="off">0.0 s</span>
+    <span class="pill speed" id="speed"><span class="speed-bar"><span id="speed-fill"></span></span><span class="speed-text">speed</span></span>
+    <div class="hud-right">
+      <button class="pill control" id="sound" type="button" aria-pressed="true">Sound on</button>
+      <button class="pill control" id="close" type="button" aria-label="Back to the start">✕</button>
+    </div>
+  </header>
+
+  <button class="goal" id="goal" type="button">Save the universe</button>
+  <p class="hint" id="hint"><span class="for-touch">Hold your finger where you want to fly.</span><span class="for-keys">Fly with the arrow keys or WASD, or hold the mouse where you want to go.</span><br>Too close to fly straight out. Swing around the hole to build speed.</p>
+  <p class="toast" id="toast" role="status" hidden></p>
+
+  <div class="card" id="card" hidden>
+    <p class="card-kicker" id="card-kicker"></p>
+    <h2 class="card-title" id="card-title"></h2>
+    <p class="card-sub" id="card-sub"></p>
+    <div class="card-actions">
+      <button class="choice primary" id="again" type="button">Play again</button>
+      <button class="choice" id="postX" type="button">Post on X</button>
+      <button class="choice" id="saveShot" type="button">Save image</button>
+    </div>
+  </div>
+</main>
+
+<video id="video" playsinline muted hidden></video>
+</body>
+</html>
