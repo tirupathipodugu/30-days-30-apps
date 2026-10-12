@@ -72,6 +72,50 @@ export class Sound {
     this.thrustGain.gain.setTargetAtTime(0, t, 0.05);
   }
 
+  /** A short click for every tap. */
+  tap() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(880, t);
+    o.frequency.exponentialRampToValueAtTime(1400, t + 0.05);
+    g.gain.setValueAtTime(0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + 0.09);
+  }
+
+  /** A thud when a falling piece hits you. */
+  bump() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'square';
+    o.frequency.setValueAtTime(140, t);
+    o.frequency.exponentialRampToValueAtTime(50, t + 0.18);
+    g.gain.setValueAtTime(0.22, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + 0.24);
+  }
+
+  /** Countdown beep: lower for 3 and 2, higher for 1. */
+  tick(n) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.value = n === 1 ? 880 : 440;
+    g.gain.setValueAtTime(0.15, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + 0.26);
+  }
+
   win() {
     if (!this.ctx) return;
     const ctx = this.ctx, t = ctx.currentTime;

@@ -21,3 +21,30 @@
 - **Rendering:**
   - one full-screen WebGL2 shader: gravitational lensing (r - E²/r), redshift, a tilted spinning gas disk with a Doppler-bright side, and a photon ring
   - no libraries, nothing uploaded
+
+**Follow-ups from the founder after playing it (12 Oct):**
+
+> it is too quick. app opened and game ended atleast give them tutotrial that they have to tap faster first eime. and space vehicle seems pretty big and hard to undersatnd
+>
+> its not realistic, i mean the pulling insdie part. its not that much fun. hole is too big
+>
+> pulling has to brealistic like if its a website it has to pull elements one by one.
+>
+> if tis a universe it has to pull starts
+>
+> and ifvehile is touch them, those object should darg vehicle down and only way for the vehicle is to take a differetndireciton
+>
+> even with camera it has to first drag the identified objects.
+
+**What changed:**
+
+- **Tapping:** each tap pushes you toward where you tap, so tapping fast is how you escape. Four taps a second is enough, three barely is.
+- **A gentler start:** a 3-step tutorial the first time, a 3-2-1 countdown every game, and a small bubble labelled YOU.
+- **A smaller hole,** and the pull ramps up over 3.5 s.
+- **The hole tears the screen apart piece by piece,** nearest first:
+  - **Pictures:** objects found by MediaPipe EfficientDet-Lite0 (person, cup, laptop…) go first, then tiles.
+  - **The universe:** every star and planet, then the sky.
+  - **A website:** its menu, headline, buttons and cards, then the page.
+
+  Each piece wobbles loose, spirals in, stretches toward the hole and is gone. Winning brings every piece back.
+- **Falling pieces that hit you drag you toward the hole,** so you have to steer around them.

@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' data: blob:; worker-src 'self' blob:">
 <title>Save the Universe</title>
 <meta name="description" content="A black hole is swallowing your screen, and you with it. Build up speed, escape, and save the universe.">
 <meta name="theme-color" content="#030305">
@@ -19,12 +19,13 @@
 
 <section class="screen" id="landing">
   <h1 class="title">Save the Universe</h1>
-  <p class="lede">A black hole is swallowing your screen, and you with it.<br>Build up speed, break free, and hit the button.</p>
+  <p class="lede">A black hole is pulling your world apart, piece by piece, and you with it.<br>Tap fast, dodge what falls in, and hit the button.</p>
   <div class="choices">
     <button class="choice primary" id="use-camera" type="button">Use my camera</button>
     <button class="choice" id="use-tab" type="button" hidden>Suck in a browser tab</button>
     <label class="choice" id="use-photo-label">Use a photo<input id="use-photo" type="file" accept="image/*" hidden></label>
-    <button class="choice quiet" id="use-stars" type="button">Just play with stars</button>
+    <button class="choice" id="use-stars" type="button">The universe (stars and planets)</button>
+    <button class="choice" id="use-website" type="button">A website</button>
   </div>
   <p class="note">Everything runs in your browser. Your camera never leaves your device.</p>
   <p class="credit"><a href="../">30 Days, 30 Apps</a> by <a href="https://x.com/tirupathipodugu" target="_blank" rel="noopener">@tirupathipodugu</a></p>
@@ -36,7 +37,7 @@
 
   <header class="hud">
     <span class="pill timer" id="timer" aria-live="off">0.0 s</span>
-    <span class="pill speed" id="speed"><span class="speed-bar"><span id="speed-fill"></span></span><span class="speed-text">speed</span></span>
+    <span class="pill speed" id="speed"><span class="speed-text">tap speed</span><span class="speed-bar"><span id="speed-fill"></span></span></span>
     <div class="hud-right">
       <button class="pill control" id="sound" type="button" aria-pressed="true">Sound on</button>
       <button class="pill control" id="close" type="button" aria-label="Back to the start">✕</button>
@@ -44,7 +45,25 @@
   </header>
 
   <button class="goal" id="goal" type="button">Save the universe</button>
-  <p class="hint" id="hint"><span class="for-touch">Hold your finger where you want to fly.</span><span class="for-keys">Fly with the arrow keys or WASD, or hold the mouse where you want to go.</span><br>Too close to fly straight out. Swing around the hole to build speed.</p>
+  <p class="you" id="you" aria-hidden="true">YOU</p>
+  <p class="hint gone" id="hint">Tap fast toward the button!</p>
+
+  <div class="card intro" id="intro">
+    <div id="tutorial">
+      <p class="card-kicker">How to play</p>
+      <h2 class="card-title">Escape the black hole</h2>
+      <ol class="steps">
+        <li><b>The black hole is pulling you in.</b> You are the small glowing bubble next to it.</li>
+        <li><b><span class="for-touch">Tap</span><span class="for-keys">Click or press Space</span> as fast as you can.</b> Every tap pushes you toward where you tap. Slow tapping is not enough: aim for 4 taps a second.</li>
+        <li><b>Dodge the pieces falling in.</b> If one hits you, it drags you toward the hole. Steer around it.</li>
+        <li><b>Reach the "Save the universe" button</b> on the other side to win.</li>
+      </ol>
+    </div>
+    <p class="found" id="finding" hidden>Looking for objects in the picture…</p>
+    <p class="found" id="found" hidden></p>
+    <p class="countdown" id="countdown" hidden></p>
+    <button class="choice primary" id="start" type="button">Start</button>
+  </div>
   <p class="toast" id="toast" role="status" hidden></p>
 
   <div class="card" id="card" hidden>
