@@ -11,16 +11,16 @@ export const STEP = 1 / 120;
 // The pull falls off as 1/r rather than 1/r², so it stays a fight all the way to the button instead
 // of being impossible near the hole and nothing a little way out. Each level pulls 12% harder.
 const TUNING = {
-  holeRadius: 0.035,  // event horizon, in L
-  startDistance: 10, // in hole radii
+  holeRadius: 0.015,  // event horizon at the start, in L: it starts small and grows
+  startDistance: 23, // in starting hole radii
   pullAtStart: 0.30,  // L per s² at the start distance
   tap: 0.055,         // speed added per tap, L per s
   hold: 0.048,         // steady push while holding, L per s²
   damping: 0.6,       // per second: you lose speed quickly, so you have to keep tapping
   ramp: 2.5,          // seconds for the pull to reach full strength
-  growRate: 0.01,
+  growRate: 0.07,     // the hole grows 7% of its starting size per second...
   hungerRate: 0.03,
-  maxGrow: 1.7,
+  maxGrow: 3.5,       // ...up to 3.5x
   maxHunger: 2.4,
   maxSpeed: 1.6,      // L per s
   bounce: 0.4,

@@ -58,3 +58,15 @@
 - **Balance:** the pull now falls off as 1/r instead of 1/r², so it's a fight all the way to the button. Level 1 needs about 4 taps a second. Each win moves you up a level that pulls 12% harder, with a link option `?level=N`.
 - **End card:** every background option is shown again.
 - **Moving button:** from level 2 the button slides back and forth along its edge, wider and faster each level.
+
+> remove camera instead just put universe with rich starts and effryhign lets the black hole be small and increase gardujalty till some size. and universe has to be rich. ask them to select a universe and start eh game.
+
+- **Backgrounds removed:** camera, photo, tab and website, along with object detection.
+- **The start screen asks you to choose a universe,** with a live preview of each:
+  - Solar System: sun, planets with rings and moons, asteroid belt, comet
+  - Spiral Galaxy: hundreds of stars in two arms around a bright core
+  - Nebula Nursery: coloured gas clouds, dust lanes, young blue stars, clusters
+  - Deep Field: dozens of spiral, elliptical and edge-on galaxies
+
+  Every object is its own piece the hole tears off. Stars twinkle.
+- **The hole starts tiny** (1.5% of the short side) and grows 7% of that size per second, up to 3.5x.

@@ -1,15 +1,15 @@
 <!doctype html>
-<!-- Save the Universe: a black hole is swallowing your screen. Escape it, then press the button. -->
+<!-- Save the Universe: a black hole is tearing a universe apart, piece by piece. Escape it, then press the button. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' data: blob:; worker-src 'self' blob:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'">
 <title>Save the Universe</title>
-<meta name="description" content="A black hole is swallowing your screen, and you with it. Build up speed, escape, and save the universe.">
+<meta name="description" content="Choose a universe. A black hole tears it apart star by star, and you with it. Tap fast, dodge what falls in, and save it.">
 <meta name="theme-color" content="#030305">
 <meta property="og:title" content="Save the Universe">
-<meta property="og:description" content="A black hole is swallowing your screen. Escape it.">
+<meta property="og:description" content="A black hole tears a universe apart, star by star. Escape it.">
 <meta property="og:url" content="https://tirupathipodugu.github.io/ideas/save-the-universe/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 fill=%22%23030305%22/%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2211%22 fill=%22none%22 stroke=%22%23ffb35c%22 stroke-width=%222%22/%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%227%22 fill=%22%23000%22/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
@@ -19,15 +19,9 @@
 
 <section class="screen" id="landing">
   <h1 class="title">Save the Universe</h1>
-  <p class="lede">A black hole is pulling your world apart, piece by piece, and you with it.<br>Tap fast, dodge what falls in, and hit the button.</p>
-  <div class="choices">
-    <button class="choice primary" id="use-camera" type="button">Use my camera</button>
-    <button class="choice" id="use-tab" type="button" hidden>Suck in a browser tab</button>
-    <label class="choice" id="use-photo-label">Use a photo<input id="use-photo" type="file" accept="image/*" hidden></label>
-    <button class="choice" id="use-stars" type="button">The universe (stars and planets)</button>
-    <button class="choice" id="use-website" type="button">A website</button>
-  </div>
-  <p class="note">Everything runs in your browser. Your camera never leaves your device.</p>
+  <p class="lede">A tiny black hole is tearing a universe apart, star by star, and you with it.<br>Choose a universe, then tap fast, dodge what falls in, and hit the button.</p>
+  <div class="universes" id="universes" role="radiogroup" aria-label="Choose a universe"></div>
+  <button class="choice primary go" id="play" type="button">Start</button>
   <p class="credit"><a href="../">30 Days, 30 Apps</a> by <a href="https://x.com/tirupathipodugu" target="_blank" rel="noopener">@tirupathipodugu</a></p>
   <p class="error" id="error" role="alert" hidden></p>
 </section>
@@ -60,8 +54,6 @@
         <li><b>Reach the "Save the universe" button</b> on the other side to win.</li>
       </ol>
     </div>
-    <p class="found" id="finding" hidden>Looking for objects in the picture…</p>
-    <p class="found" id="found" hidden></p>
     <p class="countdown" id="countdown" hidden></p>
     <button class="choice primary" id="start" type="button">Start</button>
   </div>
@@ -76,17 +68,10 @@
       <button class="choice" id="postX" type="button">Post on X</button>
       <button class="choice" id="saveShot" type="button">Save image</button>
     </div>
-    <p class="switch-title">Or pull in something else</p>
-    <div class="switch">
-      <button class="chip" data-src="use-camera" type="button">Camera</button>
-      <button class="chip" data-src="use-tab" type="button" hidden>A tab</button>
-      <button class="chip" data-src="use-photo" type="button">Photo</button>
-      <button class="chip" data-src="use-stars" type="button">Universe</button>
-      <button class="chip" data-src="use-website" type="button">Website</button>
-    </div>
+    <p class="switch-title">Or choose another universe</p>
+    <div class="switch" id="switch"></div>
   </div>
 </main>
 
-<video id="video" playsinline muted hidden></video>
 </body>
 </html>

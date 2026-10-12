@@ -1,23 +1,21 @@
-// Save the Universe: the start screen, the backgrounds (camera, a browser tab, a photo, the universe
-// or a website), the tutorial, input, the game loop and the end card.
+// Save the Universe: choose a universe, then escape the black hole that tears it apart. This file
+// has the start screen, the tutorial, input, the game loop and the end card.
 
 import { STEP, createWorld, resizeWorld, step, tap, touches } from './physics.js';
 import { Warp } from './warp.js';
 import { Pieces } from './pieces.js';
-import { loadDetector, detect } from './detect.js';
+import { UNIVERSES, buildUniverse } from './universes.js';
 import { Sound } from './audio.js';
 import { postOnX, saveImage } from '../../shared/share-x.js';
 
 const $ = (id) => document.getElementById(id);
-const video = $('video');
 const canvas = $('space');
 const sound = new Sound();
 
 let warp = null;
 let world = null;
 let pieces = null;
-let source = null;      // { kind: 'camera' | 'tab' | 'photo' | 'stars' | 'website', el, live, mirror }
-let stream = null;
+let universe = 'solar';
 let raf = 0;
 let last = 0;
 let acc = 0;
@@ -33,76 +31,69 @@ let bump = 0;           // a short shake when a piece hits you
 const taps = [];        // recent tap times, for the tap-speed meter
 const pointer = { down: false, x: 0, y: 0 };
 const keys = new Set();
-const PICTURES = ['camera', 'tab', 'photo'];
-const SOURCE_BUTTON = { camera: 'use-camera', tab: 'use-tab', photo: 'use-photo', stars: 'use-stars', website: 'use-website' };
 let level = 1;
 try { level = Math.max(1, Math.min(20, Number(localStorage.getItem('stu-level')) || 1)); } catch {}
 // ?level=5 starts at that level (handy for testing, or for daring a friend).
 const askedLevel = Number(new URLSearchParams(location.search).get('level'));
 if (askedLevel >= 1 && askedLevel <= 20) level = Math.floor(askedLevel);
+try { universe = localStorage.getItem('stu-universe') || universe; } catch {}
+if (!UNIVERSES.some((u) => u.id === universe)) universe = 'solar';
 
-// ---------- start screen ----------
+// ---------- start screen: choose a universe ----------
 
-if (navigator.mediaDevices?.getDisplayMedia && matchMedia('(hover: hover) and (pointer: fine)').matches) {
-  $('use-tab').hidden = false;
-  document.querySelector('[data-src="use-tab"]').hidden = false;
+/** A small preview of a universe, drawn from the same pieces the game uses. */
+function preview(id, cv) {
+  const w = 320, h = 240;
+  cv.width = w * 2;
+  cv.height = h * 2;
+  const g = cv.getContext('2d');
+  g.scale(2, 2);
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, w, h);
+  const list = buildUniverse(id, w, h).sort((a, b) => (b.sheet ? 1 : 0) - (a.sheet ? 1 : 0));
+  for (const p of list) g.drawImage(p.img, p.hx - p.w / 2, p.hy - p.h / 2, p.w, p.h);
 }
 
-// The end card offers every background again. Picking one replaces the current one.
-for (const chip of document.querySelectorAll('[data-src]')) {
-  chip.addEventListener('click', () => $(chip.dataset.src).click());
+function pick(id) {
+  universe = id;
+  try { localStorage.setItem('stu-universe', id); } catch {}
+  for (const b of document.querySelectorAll('.universe')) b.setAttribute('aria-checked', String(b.dataset.id === id));
+  for (const b of document.querySelectorAll('[data-universe]')) b.classList.toggle('current', b.dataset.universe === id);
 }
 
-$('use-camera').addEventListener('click', () => begin(async () => {
-  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-  await playVideo(stream);
-  return { kind: 'camera', el: video, live: true, mirror: true };
-}));
+for (const u of UNIVERSES) {
+  const b = document.createElement('button');
+  b.className = 'universe';
+  b.type = 'button';
+  b.setAttribute('role', 'radio');
+  b.dataset.id = u.id;
+  const cv = document.createElement('canvas');
+  b.append(cv);
+  b.insertAdjacentHTML('beforeend', `<b>${u.name}</b><span>${u.blurb}</span>`);
+  b.addEventListener('click', () => pick(u.id));
+  b.addEventListener('dblclick', () => { pick(u.id); begin(); });
+  $('universes').append(b);
+  preview(u.id, cv);
 
-$('use-tab').addEventListener('click', () => begin(async () => {
-  stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
-  await playVideo(stream);
-  return { kind: 'tab', el: video, live: true, mirror: false };
-}));
-
-$('use-photo').addEventListener('change', (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  begin(() => new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve({ kind: 'photo', el: img, live: false, mirror: false });
-    img.onerror = () => reject(new Error('photo'));
-    img.src = URL.createObjectURL(file);
-  }));
-  e.target.value = '';
-});
-
-$('use-stars').addEventListener('click', () => begin(async () => ({ kind: 'stars', el: null, live: false, mirror: false })));
-$('use-website').addEventListener('click', () => begin(async () => ({ kind: 'website', el: null, live: false, mirror: false })));
-
-async function playVideo(s) {
-  video.srcObject = s;
-  await video.play();
-  if (!video.videoWidth) await new Promise((r) => video.addEventListener('loadedmetadata', r, { once: true }));
+  // The same choices on the end card: picking one starts a new game there at once.
+  const chip = document.createElement('button');
+  chip.className = 'chip';
+  chip.type = 'button';
+  chip.dataset.universe = u.id;
+  chip.textContent = u.name;
+  chip.addEventListener('click', () => { pick(u.id); newGame(); });
+  $('switch').append(chip);
 }
+pick(universe);
+$('play').addEventListener('click', () => begin());
 
-async function begin(getSource) {
+function begin() {
   sound.start();
-  stopStream();
   $('error').hidden = true;
   try {
     if (!warp) warp = new Warp(canvas);
   } catch {
     return showError('This game needs WebGL2, which this browser does not have. Try a recent Chrome, Safari or Firefox.');
-  }
-  try {
-    source = await getSource();
-  } catch (err) {
-    stopStream();
-    const name = err?.name || '';
-    if (name === 'NotAllowedError') return showError('Permission was blocked. Allow it in the address bar and try again, or pick the universe or the website.');
-    if (name === 'NotFoundError') return showError('No camera found. Try a photo, the universe or the website.');
-    return showError('That did not work. Try another option.');
   }
   $('landing').hidden = true;
   $('stage').hidden = false;
@@ -114,11 +105,6 @@ function showError(msg) {
   $('error').hidden = false;
 }
 
-function stopStream() {
-  stream?.getTracks().forEach((t) => t.stop());
-  stream = null;
-}
-
 // ---------- game ----------
 
 function size() {
@@ -128,23 +114,7 @@ function size() {
   return { w, h, dpr };
 }
 
-async function buildPieces(w, h) {
-  let objects = [];
-  if (PICTURES.includes(source.kind)) {
-    // Find the objects in the picture so the hole can take them first.
-    $('finding').hidden = false;
-    $('start').disabled = true;
-    if (await loadDetector()) objects = detect(source.el);
-    $('finding').hidden = true;
-    $('start').disabled = false;
-  }
-  pieces = new Pieces(source, w, h, Math.min(devicePixelRatio || 1, 1.5), objects);
-  const found = [...new Set(objects.map((o) => o.label))];
-  $('found').textContent = found.length ? `The hole has spotted: ${found.join(', ')}. It takes those first.` : '';
-  $('found').hidden = !found.length;
-}
-
-async function newGame() {
+function newGame() {
   const { w, h } = size();
   world = createWorld(w, h, level);
   ending = null;
@@ -157,7 +127,7 @@ async function newGame() {
   $('hint').classList.add('gone');
   $('you').classList.remove('gone');
   $('level').textContent = `Level ${level}`;
-  for (const chip of document.querySelectorAll('[data-src]')) chip.classList.toggle('current', chip.dataset.src === SOURCE_BUTTON[source.kind]);
+  pieces = new Pieces(universe, w, h, Math.min(devicePixelRatio || 1, 1.5));
   let seen = false;
   try { seen = localStorage.getItem('stu-seen') === '1'; } catch {}
   $('tutorial').hidden = seen;
@@ -169,7 +139,6 @@ async function newGame() {
   acc = 0;
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(frame);
-  await buildPieces(w, h);
   $('start').focus();
 }
 
@@ -316,15 +285,14 @@ function frame(now) {
   bump = Math.max(0, bump - dt * 4);
   const shake = bump * 4;
   if (pieces) {
-    pieces.draw(world, now / 1000, !started || world.t < 2.5);
+    pieces.draw(world, now / 1000);
     warp.upload(pieces.canvas);
   }
-  if (source.kind === 'camera') warp.uploadFace(video);
   warp.draw({
     hole: world.hole, rs: world.rs, suck, wind, time: now / 1000,
     x: world.x + (Math.random() - 0.5) * shake, y: world.y + (Math.random() - 0.5) * shake,
     radius: world.radius, bubbleScale,
-    face: source.kind === 'camera',
+    face: false,
     stretch, thrust: { x: 0, y: 0 }, flash,
   });
 }
@@ -355,13 +323,15 @@ function endGame(kind) {
   const total = pieces?.total || 0;
   if (kind === 'won') {
     world.vx = world.vy = 0;
+    const taken = pieces ? pieces.list.filter((p) => p.state !== 'home').length : 0;
     pieces?.restore(world);
     const t = world.t;
     lastScore = t.toFixed(1);
     lastLevel = level;
     $('card-kicker').textContent = `Level ${level} cleared`;
     $('card-title').textContent = 'You saved the universe';
-    $('card-sub').textContent = `in ${lastScore} seconds. ${pieces.eaten} of ${total} pieces came back. Level ${level + 1} pulls harder.`;
+    const back = taken ? `${taken} of its ${total} pieces flew back home.` : 'Nothing was lost.';
+    $('card-sub').textContent = `in ${lastScore} seconds. ${back} Level ${level + 1} pulls harder.`;
     level = Math.min(20, level + 1);
     try { localStorage.setItem('stu-level', String(level)); } catch {}
     $('again').textContent = `Play level ${level}`;
@@ -424,8 +394,6 @@ $('sound').addEventListener('click', () => {
 $('close').addEventListener('click', () => {
   cancelAnimationFrame(raf);
   sound.silence();
-  stopStream();
-  source = null;
   world = null;
   pieces = null;
   $('stage').hidden = true;
