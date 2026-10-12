@@ -6,18 +6,20 @@ export const STEP = 1 / 120;
 
 // You start at rest just outside the hole, and it pulls you in. Every tap gives your bubble a push
 // toward where you tapped, so tapping fast is how you build enough speed to break free. Holding a
-// finger down (or an arrow key) gives a weaker steady push. The pull ramps up over the first two
+// finger down (or an arrow key) gives a weaker steady push. The pull ramps up over the first
 // seconds, then the hole gets hungrier every second.
+// The pull falls off as 1/r rather than 1/r², so it stays a fight all the way to the button instead
+// of being impossible near the hole and nothing a little way out. Each level pulls 12% harder.
 const TUNING = {
   holeRadius: 0.035,  // event horizon, in L
   startDistance: 10, // in hole radii
-  pullAtStart: 0.42,  // L per s² at the start distance
-  tap: 0.062,          // speed added per tap, L per s
+  pullAtStart: 0.30,  // L per s² at the start distance
+  tap: 0.055,         // speed added per tap, L per s
   hold: 0.048,         // steady push while holding, L per s²
-  damping: 0.24,      // per second: space vehicles here slowly lose speed, so you keep tapping
-  ramp: 3.5,            // seconds for the pull to reach full strength
+  damping: 0.6,       // per second: you lose speed quickly, so you have to keep tapping
+  ramp: 2.5,          // seconds for the pull to reach full strength
   growRate: 0.01,
-  hungerRate: 0.05,
+  hungerRate: 0.03,
   maxGrow: 1.7,
   maxHunger: 2.4,
   maxSpeed: 1.6,      // L per s
@@ -32,7 +34,8 @@ export function layout(w, h) {
   return { w, h, L, tall, hole };
 }
 
-export function createWorld(w, h) {
+export function createWorld(w, h, level = 1) {
+  const hard = 1 + 0.12 * (level - 1);
   const lay = layout(w, h);
   const rs = TUNING.holeRadius * lay.L;
   const r0 = TUNING.startDistance * rs;
@@ -42,7 +45,8 @@ export function createWorld(w, h) {
     ...lay,
     rs0: rs,
     rs,
-    G0: TUNING.pullAtStart * lay.L * r0 * r0,
+    G0: TUNING.pullAtStart * hard * lay.L * r0,
+    hard,
     G: 0,
     x: lay.hole.x + out.x * r0,
     y: lay.hole.y + out.y * r0,
@@ -60,7 +64,7 @@ export function resizeWorld(world, w, h) {
   const lay = layout(w, h);
   const rel = { x: (world.x - world.hole.x) * k, y: (world.y - world.hole.y) * k };
   Object.assign(world, lay, {
-    rs0: world.rs0 * k, rs: world.rs * k, G0: world.G0 * k * k * k,
+    rs0: world.rs0 * k, rs: world.rs * k, G0: world.G0 * k * k,
     x: lay.hole.x + rel.x, y: lay.hole.y + rel.y, vx: world.vx * k, vy: world.vy * k,
     radius: Math.max(9, 0.022 * lay.L),
   });
@@ -80,7 +84,7 @@ export function step(world, hold) {
   const w = world;
   w.t += STEP;
   const grow = Math.min(TUNING.maxGrow, 1 + TUNING.growRate * w.t);
-  const hunger = Math.min(TUNING.maxHunger, 1 + TUNING.hungerRate * w.t);
+  const hunger = Math.min(TUNING.maxHunger, 1 + TUNING.hungerRate * w.hard * w.t);
   w.rs = w.rs0 * grow;
   w.G = w.G0 * hunger * Math.min(1, w.t / TUNING.ramp);
 
@@ -88,7 +92,7 @@ export function step(world, hold) {
   const dy = w.hole.y - w.y;
   const r = Math.hypot(dx, dy);
   const rr = Math.max(r, w.rs * 0.5);
-  const pull = w.G / (rr * rr);
+  const pull = w.G / rr;
   let ax = (dx / r) * pull - w.vx * TUNING.damping;
   let ay = (dy / r) * pull - w.vy * TUNING.damping;
 
@@ -120,7 +124,7 @@ export function step(world, hold) {
 /** How hard the hole is pulling you right now, as a share of what fast tapping (5 a second) beats. */
 export function danger(world) {
   const r = Math.max(world.rs, Math.hypot(world.hole.x - world.x, world.hole.y - world.y));
-  return Math.min(1, world.G / (r * r) / (5 * TUNING.tap * world.L));
+  return Math.min(1, world.G / r / (5 * TUNING.tap * world.L));
 }
 
 /** True when the bubble overlaps the goal rectangle {x, y, w, h}. */

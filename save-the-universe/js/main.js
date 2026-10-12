@@ -26,16 +26,32 @@ let suck = 0;           // how much of everything the hole has swallowed at the 
 let wind = 0;           // how far space near the hole has been dragged round
 let flash = 0;
 let lastScore = '';
+let lastLevel = 1;
+let goalClock = 0;      // drives the moving goal
 let started = false;    // false while the tutorial or countdown is showing
 let bump = 0;           // a short shake when a piece hits you
 const taps = [];        // recent tap times, for the tap-speed meter
 const pointer = { down: false, x: 0, y: 0 };
 const keys = new Set();
 const PICTURES = ['camera', 'tab', 'photo'];
+const SOURCE_BUTTON = { camera: 'use-camera', tab: 'use-tab', photo: 'use-photo', stars: 'use-stars', website: 'use-website' };
+let level = 1;
+try { level = Math.max(1, Math.min(20, Number(localStorage.getItem('stu-level')) || 1)); } catch {}
+// ?level=5 starts at that level (handy for testing, or for daring a friend).
+const askedLevel = Number(new URLSearchParams(location.search).get('level'));
+if (askedLevel >= 1 && askedLevel <= 20) level = Math.floor(askedLevel);
 
 // ---------- start screen ----------
 
-if (navigator.mediaDevices?.getDisplayMedia && matchMedia('(hover: hover) and (pointer: fine)').matches) $('use-tab').hidden = false;
+if (navigator.mediaDevices?.getDisplayMedia && matchMedia('(hover: hover) and (pointer: fine)').matches) {
+  $('use-tab').hidden = false;
+  document.querySelector('[data-src="use-tab"]').hidden = false;
+}
+
+// The end card offers every background again. Picking one replaces the current one.
+for (const chip of document.querySelectorAll('[data-src]')) {
+  chip.addEventListener('click', () => $(chip.dataset.src).click());
+}
 
 $('use-camera').addEventListener('click', () => begin(async () => {
   stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
@@ -72,6 +88,7 @@ async function playVideo(s) {
 
 async function begin(getSource) {
   sound.start();
+  stopStream();
   $('error').hidden = true;
   try {
     if (!warp) warp = new Warp(canvas);
@@ -129,7 +146,7 @@ async function buildPieces(w, h) {
 
 async function newGame() {
   const { w, h } = size();
-  world = createWorld(w, h);
+  world = createWorld(w, h, level);
   ending = null;
   started = false;
   suck = 0;
@@ -139,6 +156,8 @@ async function newGame() {
   $('card').hidden = true;
   $('hint').classList.add('gone');
   $('you').classList.remove('gone');
+  $('level').textContent = `Level ${level}`;
+  for (const chip of document.querySelectorAll('[data-src]')) chip.classList.toggle('current', chip.dataset.src === SOURCE_BUTTON[source.kind]);
   let seen = false;
   try { seen = localStorage.getItem('stu-seen') === '1'; } catch {}
   $('tutorial').hidden = seen;
@@ -250,7 +269,7 @@ function frame(now) {
     // The hole reaches further every second and takes pieces faster.
     const mode = ending?.kind || (started ? 'playing' : 'waiting');
     const reach = world.rs * 3 + (started ? world.t * 0.075 * world.L : 0) + (mode === 'lost' ? 9 * world.L : 0);
-    const rate = mode === 'waiting' ? 0 : mode === 'lost' ? 45 : 2.5 + world.t * 0.18;
+    const rate = mode === 'waiting' ? 0 : mode === 'lost' ? 45 : (2.5 + world.t * 0.18) * world.hard;
     pieces.update(dt, world, reach, rate, mode);
     if (started && !ending) collide();
   }
@@ -293,6 +312,7 @@ function frame(now) {
   you.style.left = `${world.x}px`;
   you.style.top = `${world.y + world.radius + 8}px`;
 
+  moveGoal(now);
   bump = Math.max(0, bump - dt * 4);
   const shake = bump * 4;
   if (pieces) {
@@ -309,6 +329,23 @@ function frame(now) {
   });
 }
 
+/** From level 2 the goal slides back and forth along its edge, wider and faster each level. */
+function moveGoal(now) {
+  const g = $('goal');
+  const tall = innerHeight > innerWidth;
+  if (level < 2 || !started) {
+    g.style.transform = '';
+    goalClock = 0;
+    return;
+  }
+  if (!ending) goalClock += Math.min(0.1, (now - (moveGoal.last || now)) / 1000);
+  moveGoal.last = now;
+  const span = tall ? (innerWidth - g.offsetWidth) / 2 - 16 : (innerHeight - g.offsetHeight) / 2 - 70;
+  const amp = Math.max(0, span) * Math.min(1, 0.35 + 0.15 * (level - 2));
+  const d = amp * Math.sin(goalClock * (0.7 + 0.12 * level));
+  g.style.transform = tall ? `translateX(calc(-50% + ${d}px))` : `translateY(calc(-50% + ${d}px))`;
+}
+
 function endGame(kind) {
   ending = { kind, t0: performance.now() };
   world.state = kind;
@@ -320,18 +357,18 @@ function endGame(kind) {
     world.vx = world.vy = 0;
     pieces?.restore(world);
     const t = world.t;
-    let best = null;
-    try {
-      best = Number(localStorage.getItem('stu-best')) || null;
-      if (!best || t < best) localStorage.setItem('stu-best', String(t));
-    } catch {}
     lastScore = t.toFixed(1);
-    $('card-kicker').textContent = best && t >= best ? `Your best: ${best.toFixed(1)} s` : 'New best';
+    lastLevel = level;
+    $('card-kicker').textContent = `Level ${level} cleared`;
     $('card-title').textContent = 'You saved the universe';
-    $('card-sub').textContent = `in ${lastScore} seconds. ${pieces.eaten} of ${total} pieces came back.`;
+    $('card-sub').textContent = `in ${lastScore} seconds. ${pieces.eaten} of ${total} pieces came back. Level ${level + 1} pulls harder.`;
+    level = Math.min(20, level + 1);
+    try { localStorage.setItem('stu-level', String(level)); } catch {}
+    $('again').textContent = `Play level ${level}`;
   } else {
     lastScore = '';
-    $('card-kicker').textContent = 'Event horizon crossed';
+    $('again').textContent = 'Try again';
+    $('card-kicker').textContent = `Level ${level} · event horizon crossed`;
     $('card-title').textContent = 'The universe is gone';
     $('card-sub').textContent = 'Tap faster (4 a second or more), and dodge the pieces falling in: they drag you down.';
   }
@@ -411,7 +448,7 @@ document.addEventListener('visibilitychange', () => {
 
 $('postX').addEventListener('click', () => postOnX({
   path: 'save-the-universe/',
-  text: lastScore ? `I saved the universe in ${lastScore} seconds. 🌌 Can you beat it?` : 'A black hole ate my whole screen, piece by piece. 🕳️',
+  text: lastScore ? `I saved the universe on level ${lastLevel} in ${lastScore} seconds. 🌌 Can you beat it?` : `A black hole ate my whole screen, piece by piece, on level ${level}. 🕳️`,
 }));
 
 $('saveShot').addEventListener('click', () => {
@@ -426,7 +463,7 @@ $('saveShot').addEventListener('click', () => {
   g.fillStyle = '#fff';
   g.font = `700 ${22 * k}px system-ui, sans-serif`;
   g.textAlign = 'center';
-  g.fillText(lastScore ? `Saved the universe in ${lastScore} s` : 'The universe is gone', out.width / 2, out.height - 52 * k);
+  g.fillText(lastScore ? `Saved the universe · level ${lastLevel} · ${lastScore} s` : 'The universe is gone', out.width / 2, out.height - 52 * k);
   g.font = `400 ${13 * k}px system-ui, sans-serif`;
   g.fillStyle = 'rgba(255,255,255,.75)';
   g.fillText('Save the Universe · 30 Days, 30 Apps by @tirupathipodugu', out.width / 2, out.height - 26 * k);

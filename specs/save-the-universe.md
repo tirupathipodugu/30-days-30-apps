@@ -48,3 +48,13 @@
 
   Each piece wobbles loose, spirals in, stretches toward the hole and is gone. Winning brings every piece back.
 - **Falling pieces that hit you drag you toward the hole,** so you have to steer around them.
+
+> game is in two extreme. either easy or hard
+>
+> show all option again after end of the game
+>
+> what if we make save universe also move
+
+- **Balance:** the pull now falls off as 1/r instead of 1/r², so it's a fight all the way to the button. Level 1 needs about 4 taps a second. Each win moves you up a level that pulls 12% harder, with a link option `?level=N`.
+- **End card:** every background option is shown again.
+- **Moving button:** from level 2 the button slides back and forth along its edge, wider and faster each level.

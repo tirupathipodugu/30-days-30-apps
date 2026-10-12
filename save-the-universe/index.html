@@ -36,6 +36,7 @@
   <canvas id="space" aria-label="The black hole and everything it is pulling in"></canvas>
 
   <header class="hud">
+    <span class="pill" id="level">Level 1</span>
     <span class="pill timer" id="timer" aria-live="off">0.0 s</span>
     <span class="pill speed" id="speed"><span class="speed-text">tap speed</span><span class="speed-bar"><span id="speed-fill"></span></span></span>
     <div class="hud-right">
@@ -74,6 +75,14 @@
       <button class="choice primary" id="again" type="button">Play again</button>
       <button class="choice" id="postX" type="button">Post on X</button>
       <button class="choice" id="saveShot" type="button">Save image</button>
+    </div>
+    <p class="switch-title">Or pull in something else</p>
+    <div class="switch">
+      <button class="chip" data-src="use-camera" type="button">Camera</button>
+      <button class="chip" data-src="use-tab" type="button" hidden>A tab</button>
+      <button class="chip" data-src="use-photo" type="button">Photo</button>
+      <button class="chip" data-src="use-stars" type="button">Universe</button>
+      <button class="chip" data-src="use-website" type="button">Website</button>
     </div>
   </div>
 </main>

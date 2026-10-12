@@ -64,7 +64,8 @@ export class Pieces {
       if (!ready.length) this.releaseClock = Math.min(this.releaseClock, 1);
     }
 
-    const G = world.G0 * 3.2 * (mode === 'lost' ? 3 : 1);
+    // The same 1/r pull as yours, stronger, so pieces visibly fall in.
+    const G = world.G0 * 4 * (mode === 'lost' ? 3 : 1);
     for (const p of this.list) {
       if (p.state === 'wobble') {
         p.timer -= dt;
@@ -72,13 +73,13 @@ export class Pieces {
           p.state = 'flying';
           // A little sideways speed so it spirals in instead of dropping straight.
           const dx = p.x - hole.x, dy = p.y - hole.y, r = Math.hypot(dx, dy) || 1;
-          const v = Math.sqrt(G / r) * 0.55 * p.spin;
+          const v = Math.sqrt(G) * 0.5 * p.spin;
           p.vx = (-dy / r) * v;
           p.vy = (dx / r) * v;
         }
       } else if (p.state === 'flying') {
         const dx = hole.x - p.x, dy = hole.y - p.y, r = Math.hypot(dx, dy) || 1;
-        const a = G / Math.max(r * r, world.rs * world.rs);
+        const a = G / Math.max(r, world.rs);
         p.vx += (dx / r) * a * dt;
         p.vy += (dy / r) * a * dt;
         p.x += p.vx * dt;
