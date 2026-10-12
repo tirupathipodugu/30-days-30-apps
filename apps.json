@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "day": 1,
+    "name": "Mirror Room",
+    "hook": "One mirror. Tap it and it breaks. Keep tapping.",
+    "path": "mirror-room/",
+    "tweet": "2109494501954002951"
+  }
+]
