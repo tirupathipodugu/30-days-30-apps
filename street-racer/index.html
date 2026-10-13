@@ -1,0 +1,69 @@
+<!doctype html>
+<!-- Street Racer (preview): drive a little car through your own neighbourhood, built from real OpenStreetMap roads. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gh7NRJ7MEWdYUGMcXx0SUMJY93gUi2UqlztG1amlvwA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://tiles.openfreemap.org https://nominatim.openstreetmap.org https://photon.komoot.io">
+<title>Street Racer · Drive your own street</title>
+<meta name="description" content="Type any address and race a tiny car through its real streets.">
+<meta name="theme-color" content="#cfe6f2">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23353a44%22/%3E%3Cpath d=%22M16 2v28%22 stroke=%22%23ffd23f%22 stroke-width=%222%22 stroke-dasharray=%224 4%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<canvas id="scene" aria-label="A small car on the real streets of the chosen place. Use the arrow keys or the buttons to drive."></canvas>
+
+<header class="top">
+  <div class="brand"><span class="logo" aria-hidden="true"></span><span>Street Racer</span></div>
+  <form id="where" class="where" autocomplete="off">
+    <label for="place" class="sr">Place to race</label>
+    <input id="place" name="place" type="text" placeholder="Type an address or area" enterkeyhint="go">
+    <button type="submit" class="go">Race here</button>
+    <button type="button" id="locate" class="ghost" title="Use my location">My location</button>
+  </form>
+</header>
+
+<section class="hud" aria-live="polite">
+  <div class="street" id="street">Finding the streets…</div>
+  <div class="stats">
+    <span><b id="speed">0</b> km/h</span>
+    <span>Checkpoints <b id="cps">0/0</b></span>
+    <span><b id="time">0:00.0</b></span>
+  </div>
+  <div class="arrow" id="arrow" aria-hidden="true"></div>
+</section>
+
+<div class="pads" aria-hidden="true">
+  <div class="steer">
+    <button class="pad" data-key="left">◀</button>
+    <button class="pad" data-key="right">▶</button>
+  </div>
+  <div class="pedals">
+    <button class="pad brake" data-key="down">Brake</button>
+    <button class="pad gas" data-key="up">Gas</button>
+  </div>
+</div>
+
+<div class="card" id="loading">
+  <p class="big" id="loadText">Fetching the real streets…</p>
+  <p class="small">From OpenStreetMap. Nothing about you is saved.</p>
+</div>
+
+<div class="card" id="done" hidden>
+  <p class="eyebrow">Lap complete</p>
+  <p class="big"><span id="doneTime">0:00.0</span></p>
+  <p class="small" id="donePlace"></p>
+  <div class="row">
+    <button type="button" id="again" class="go">Race again</button>
+    <button type="button" id="copy" class="ghost">Copy my time</button>
+  </div>
+</div>
+
+<button type="button" id="sound" class="sound ghost">Sound on</button>
+<p class="credit">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · Preview</p>
+</body>
+</html>
