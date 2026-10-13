@@ -12,10 +12,12 @@ working step. Never let a work session run past :20 so the X rounds (:23/:38/:51
 5. [x] Ambient occlusion: darken block corners/edges where blocks meet (the classic block-game depth look).
 6. [x] Ground: extend the floor/grass a little beyond the photo edge; outdoor scenes get a grass + dirt ground plane.
 7. [x] Footstep, jump, break and place sounds (synthesised, per material: wood, stone, glass, grass, wool).
-8. [ ] Test set: download 6+ CC0 photos (Wikimedia Commons) and 2 CC0 videos (indoor, outdoor); check each gives a sensible world; fix the worst cases.
+8. [~] Test set (kitchen, park done; street, bedroom, office, portrait next): download 6+ CC0 photos (Wikimedia Commons) and 2 CC0 videos (indoor, outdoor); check each gives a sensible world; fix the worst cases.
 9. [ ] Live camera: same new look; check it stays smooth.
 10. [ ] Polish: pixel font UI, title card, "Save picture" from walk mode, phone layout check.
 
 ## Done log
 - 04:35 Walk mode, collisions (every block checked), outline, break particles, hand swing, head bob, hotbar with 3D icons, per-material break/place sounds. Windows now flat in their wall and one pane thick (depth AI saw through them).
 - 05:10 Sky gradient dome, square sun, drifting cloud slabs, leaves sway (shader), water ripples, glow flicker; corner shading (covered blocks darker); every world stands on a grass + dirt island. Sounds per material were done in session 1.
+- 05:15 Test set: 6 CC0 photos in testimages/ (not committed). Kitchen: painted wood now keeps its paint per block (was all brown); near-grey colours only match whites/greys/black (no pink speckles). Park: path between hedges on grass, fine; TODO trees need trunks (log blocks under leaves), outdoor sky from photo can be white (overcast) which looks flat: blend toward blue.
+- Testing tip: python http.server lets Chrome cache modules; use scratchpad/nocache_server.py and fetch(file,{cache:'reload'}) before reload.

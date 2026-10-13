@@ -18,8 +18,13 @@ export const PALETTE = [
 export function nearestDye([r, g, b], { people = false, lift = 1 } = {}) {
   // Indoor photos are a little dark, so colours are lifted before matching (a white wall stays white).
   r = Math.min(1, r * lift); g = Math.min(1, g * lift); b = Math.min(1, b * lift);
-  let best = PALETTE[0], bd = 1e9;
-  for (const p of people ? PALETTE : PALETTE.slice(0, 16)) {
+  // Nearly grey colours (white walls, off-white cabinets) only match whites, greys and black, so they
+  // don't turn into pink or beige speckles.
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  const sat = mx > 0 ? (mx - mn) / mx : 0;
+  const pool = sat < 0.16 ? PALETTE.slice(0, 4) : people ? PALETTE : PALETTE.slice(0, 16);
+  let best = pool[0], bd = 1e9;
+  for (const p of pool) {
     const dr = r - p[0], dg = g - p[1], db = b - p[2];
     const d = 2 * dr * dr + 4 * dg * dg + 3 * db * db;
     if (d < bd) { bd = d; best = p; }
@@ -187,7 +192,13 @@ export function voxelize({ colors, depth, labels, names, gw, gh, across = 48, so
     let color;
     if (type === 'plain') color = nearestDye(avg, { people: true, lift: 1.1 });   // people and unknown things: per block
     else if (spec.dye) color = objectDye.get(c.lab) || nearestDye(avg, { lift: 1.25 }); // walls, fabric: one colour per object
-    else color = spec.tint;                                              // wood, stone, leaves…: the material's own colour
+    else if (type === 'planks') {
+      // Wood keeps its own colour unless the object is clearly painted (a blue or white cabinet).
+      const dye = nearestDye(avg, { lift: 1.2 });
+      const woodish = [4, 6, 7].includes(PALETTE.indexOf(dye));
+      color = woodish ? spec.tint : dye;
+    }
+    else color = spec.tint;                                              // stone, leaves…: the material's own colour
     add(c.x, c.y, c.z, type, color, c.group);
     if (!solid) continue;
     const depthFill = type === 'glass' ? 0 : spec.fixed ? (type === 'floor' || type === 'grass' ? 0 : 1) : 2;

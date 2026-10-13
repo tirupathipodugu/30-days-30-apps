@@ -639,4 +639,4 @@ $('sound').addEventListener('click', () => {
 });
 
 if (new URLSearchParams(location.search).has('sample')) $('sample').click();
-if (location.search.includes('test')) window.__bw = { walk, life, finishRise: () => { rising = false; }, get world() { return world; }, get live() { return live; }, startLive, liveTick, writeAll, renderer, scene, camera, orbit, placeCamera, fitCamera, pool };
+if (location.search.includes('test')) window.__bw = { fromImage, walk, life, finishRise: () => { rising = false; }, get world() { return world; }, get live() { return live; }, startLive, liveTick, writeAll, renderer, scene, camera, orbit, placeCamera, fitCamera, pool };
