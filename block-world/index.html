@@ -1,0 +1,68 @@
+<!doctype html>
+<!-- Block World (preview): one photo becomes a world of blocks you can explore, rebuild and rearrange. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gh7NRJ7MEWdYUGMcXx0SUMJY93gUi2UqlztG1amlvwA=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' data: blob: https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; worker-src 'self' blob:">
+<title>Block World</title>
+<meta name="description" content="Take a photo of any room or street and turn every object in it into blocks.">
+<meta name="theme-color" content="#2b2f3a">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 fill=%22%232b2f3a%22/%3E%3Crect x=%226%22 y=%226%22 width=%2210%22 height=%2210%22 fill=%22%237cc35a%22/%3E%3Crect x=%2216%22 y=%2216%22 width=%2210%22 height=%2210%22 fill=%22%23b07b46%22/%3E%3Crect x=%226%22 y=%2216%22 width=%2210%22 height=%2210%22 fill=%22%238d8d8d%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<canvas id="scene" aria-label="Your photo rebuilt as a world of blocks. Drag to look around."></canvas>
+
+<header class="top">
+  <h1>Block World</h1>
+  <p class="count" id="count"></p>
+</header>
+<p class="found" id="found"></p>
+<p class="picked" id="picked" aria-live="polite"></p>
+
+<section class="start" id="start">
+  <div class="startcard">
+    <p class="kicker">Preview</p>
+    <h2>Turn any photo into blocks.</h2>
+    <p>Walls, floor, sofa, plants, you. Every object becomes blocks you can explore, break and move. It all runs on your phone. Nothing is uploaded.</p>
+    <label class="primary" for="photo">Take or pick a photo</label>
+    <input id="photo" type="file" accept="image/*" hidden>
+    <button type="button" id="sample" class="link">Try the sample room</button>
+    <p class="status" id="status"></p>
+  </div>
+</section>
+
+<div class="busy" id="busy" hidden>
+  <div class="spinner" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+  <p id="busyText">Working…</p>
+</div>
+
+<nav class="tools" id="tools" hidden aria-label="Tools">
+  <div class="seg">
+    <button type="button" data-tool="look" aria-pressed="true">Look</button>
+    <button type="button" data-tool="move" aria-pressed="false">Move</button>
+    <button type="button" data-tool="break" aria-pressed="false">Break</button>
+    <button type="button" data-tool="place" aria-pressed="false">Place</button>
+  </div>
+  <div class="row">
+    <label class="sr" for="blockType">Block to place</label>
+    <select id="blockType">
+      <option value="planks">Planks</option><option value="stone">Stone</option><option value="brick">Brick</option>
+      <option value="glass">Glass</option><option value="leaves">Leaves</option><option value="wool">Wool</option>
+      <option value="glow">Glow</option><option value="water">Water</option><option value="sand">Sand</option>
+    </select>
+    <button type="button" id="front">Front view</button>
+    <button type="button" id="save">Save picture</button>
+    <button type="button" id="again">New photo</button>
+  </div>
+  <p class="hint" id="hint">Drag to look around. Pinch or scroll to zoom.</p>
+</nav>
+
+<button type="button" id="sound" class="sound">Sound on</button>
+<p class="credit">Preview · AI runs on your device (Depth Anything V2, SegFormer) · sample photo CC0, Wikimedia Commons</p>
+</body>
+</html>
