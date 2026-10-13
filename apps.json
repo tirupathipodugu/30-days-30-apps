@@ -5,5 +5,12 @@
     "hook": "One mirror. Tap it and it breaks. Keep tapping.",
     "path": "mirror-room/",
     "tweet": "2109494501954002951"
+  },
+  {
+    "day": 2,
+    "name": "Living Heart",
+    "hook": "A heart that beats on your screen. Block an artery and try to save it.",
+    "path": "living-heart/",
+    "tweet": "2109857383128461454"
   }
 ]
