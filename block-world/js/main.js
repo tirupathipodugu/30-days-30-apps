@@ -331,7 +331,7 @@ $('sample').addEventListener('click', async () => {
   startSound();
   try { const res = await fetch(new URL('../assets/sample-room.jpg', import.meta.url)); fromImage(await res.blob()).catch(failed); } catch (err) { failed(err); }
 });
-$('again').addEventListener('click', () => { $('tools').hidden = true; $('start').hidden = false; $('status').textContent = ''; });
+$('again').addEventListener('click', () => { stopLive(); $('tools').hidden = true; $('start').hidden = false; $('status').textContent = ''; });
 $('front').addEventListener('click', () => { orbit.yaw = 0; orbit.pitch = 0.05; orbit.idle = 0; placeCamera(); });
 $('save').addEventListener('click', () => {
   renderer.render(scene, camera);
@@ -341,19 +341,207 @@ $('save').addEventListener('click', () => {
   }, 'image/png');
 });
 
+// ---------- live camera ----------
+// Depth runs on every frame the AI can manage; the object AI refreshes every 1.5 s in the background.
+// Each cell is drawn as a short stack of 3 blocks, which glide toward the newest depth.
+
+const LGW = 72;
+let live = null, liveFacing = 'environment';
+
+function clearWorld() {
+  if (world) for (const m of Object.values(world.meshes)) { scene.remove(m); m.geometry.dispose(); }
+  world = null;
+  $('found').textContent = ''; $('count').textContent = '';
+}
+
+function onProgress(data) {
+  if (data.type === 'progress') showBusy(`Getting the ${data.what} AI ready… ${Math.round(data.loaded / data.total * 100)}%`);
+}
+
+async function startLive(src) {
+  startSound();
+  showBusy('Starting the camera…');
+  const video = document.createElement('video');
+  video.playsInline = true; video.muted = true;
+  let stream = null, mirror = false;
+  try {
+    if (src) { video.src = src; video.loop = true; }
+    else {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: liveFacing }, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+      video.srcObject = stream;
+      mirror = liveFacing === 'user';
+    }
+    try { await video.play(); } catch { await new Promise((r) => (video.readyState >= 2 ? r() : video.addEventListener('loadeddata', r, { once: true }))); }
+  } catch {
+    failed(new Error('the camera didn\'t start. Allow it in your browser, or use a photo'));
+    return;
+  }
+  const ai = await import('./ai.js');
+  try {
+    showBusy('Getting the AI ready. It downloads once (about 50 MB), then it\'s saved on your phone…');
+    await ai.loadDepth(onProgress);
+  } catch (err) { if (stream) stream.getTracks().forEach((t) => t.stop()); failed(err); return; }
+  ai.loadSeg().catch(() => {});
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const gw = LGW, gh = Math.round(LGW * vh / vw);
+  clearWorld();
+  const meshes = {};
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  for (const type of Object.keys(TYPES)) {
+    const mesh = new THREE.InstancedMesh(geo, materialFor(type), gw * gh * 3);
+    mesh.count = 0;
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(gw * gh * 3 * 3), 3);
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+    meshes[type] = mesh;
+  }
+  live = {
+    ai, video, stream, mirror, gw, gh, meshes,
+    colorsCv: new OffscreenCanvas(gw, gh), aiCv: new OffscreenCanvas(256, Math.max(64, Math.round(256 * vh / vw))),
+    target: new Float32Array(gw * gh), z: new Float32Array(gw * gh), lastDepth: new Float32Array(gw * gh),
+    labels: new Int16Array(gw * gh).fill(-1), names: [], colors: new Uint8Array(gw * gh * 3),
+    busyD: false, busyS: false, lastSeg: 0, have: false, updates: 0, statT: performance.now(), lists: null,
+  };
+  assignLists();
+  fitCamera(gw, gh);
+  hideBusy();
+  $('tools').hidden = true; $('livebar').hidden = false; $('start').hidden = true;
+}
+
+function fitCamera(gw, gh) {
+  const fov = camera.fov * Math.PI / 180;
+  orbit.target.set(0, 0, 0);
+  orbit.dist = Math.max(gh / 2 / Math.tan(fov / 2), gw / 2 / Math.tan(fov / 2) / camera.aspect) + ZR / 2 + 6;
+  orbit.yaw = 0; orbit.pitch = 0.05; orbit.idle = 0;
+  placeCamera();
+}
+
+function assignLists() {
+  const L = live, lists = {};
+  for (const t of Object.keys(TYPES)) lists[t] = [];
+  for (let i = 0; i < L.gw * L.gh; i++) {
+    const type = L.labels[i] < 0 ? 'plain' : typeFor(L.names[L.labels[i]]);
+    if (type) lists[type].push(i);
+  }
+  L.lists = lists;
+  const seen = new Set();
+  for (const x of L.labels) {
+    if (x < 0) continue;
+    const t = typeFor(L.names[x]);
+    if (t && !TYPES[t].fixed) seen.add(nice(L.names[x]));
+  }
+  const objs = [...seen];
+  $('found').textContent = objs.length ? `Seeing ${objs.slice(0, 6).join(', ')}` : '';
+}
+
+function liveTick(now) {
+  const L = live, v = L.video;
+  if (v.readyState < 2) return;
+  const cg = L.colorsCv.getContext('2d', { willReadFrequently: true });
+  cg.drawImage(v, 0, 0, L.gw, L.gh);
+  const px = cg.getImageData(0, 0, L.gw, L.gh).data;
+  for (let i = 0; i < L.gw * L.gh; i++) { L.colors[i * 3] = px[i * 4]; L.colors[i * 3 + 1] = px[i * 4 + 1]; L.colors[i * 3 + 2] = px[i * 4 + 2]; }
+
+  const grab = () => { const g = L.aiCv.getContext('2d', { willReadFrequently: true }); g.drawImage(v, 0, 0, L.aiCv.width, L.aiCv.height); return L.ai.fromCanvas(L.aiCv); };
+  if (!L.busyD) {
+    L.busyD = true;
+    L.ai.depthGrid(grab(), L.gw, L.gh, true).then((d) => {
+      if (live !== L) return;
+      let lo = 1, hi = 0;
+      for (const x of d) { lo = Math.min(lo, x); hi = Math.max(hi, x); }
+      for (let i = 0; i < d.length; i++) { L.lastDepth[i] = d[i]; L.target[i] = (1 - (d[i] - lo) / ((hi - lo) || 1)) * ZR; }
+      if (!L.have) { L.z.set(L.target); L.have = true; }
+      L.updates++;
+    }).catch(() => {}).finally(() => { L.busyD = false; });
+  }
+  if (L.ai.segReady() && !L.busyS && now - L.lastSeg > 1500) {
+    L.busyS = true; L.lastSeg = now;
+    L.ai.labelGrid(grab(), L.gw, L.gh).then(({ labels, names }) => {
+      if (live !== L) return;
+      L.labels = labels; L.names = names; assignLists();
+    }).catch(() => {}).finally(() => { L.busyS = false; });
+  }
+  if (now - L.statT > 1000) {
+    $('liveStat').textContent = `Live · ${L.updates} depth updates a second · ${L.ai.depthDevice === 'webgpu' ? 'fast mode' : 'standard mode'}`;
+    L.updates = 0; L.statT = now;
+  }
+  if (!L.have) return;
+  for (let i = 0; i < L.z.length; i++) L.z[i] += (L.target[i] - L.z[i]) * 0.35;
+  writeLive();
+}
+
+function writeLive() {
+  const L = live, cx = L.gw / 2, cy = L.gh / 2, cz = ZR / 2;
+  for (const [type, cells] of Object.entries(L.lists)) {
+    const mesh = L.meshes[type], ma = mesh.instanceMatrix.array, ca = mesh.instanceColor.array;
+    const { tint, keep } = TYPES[type];
+    let k = 0;
+    for (const i of cells) {
+      const c = i % L.gw, r = (i - c) / L.gw;
+      const x = (L.mirror ? L.gw - 1 - c : c) - cx, y = L.gh - 1 - r - cy, z0 = Math.round(L.z[i]);
+      const rgb = [L.colors[i * 3] / 255, L.colors[i * 3 + 1] / 255, L.colors[i * 3 + 2] / 255];
+      const base = rgb.map((v, j) => v * keep + tint[j] * (1 - keep) * (0.6 + 0.48 * v));
+      for (let d = 0; d < 3; d++) {
+        const o = k * 16;
+        ma[o] = 1; ma[o + 1] = 0; ma[o + 2] = 0; ma[o + 3] = 0;
+        ma[o + 4] = 0; ma[o + 5] = 1; ma[o + 6] = 0; ma[o + 7] = 0;
+        ma[o + 8] = 0; ma[o + 9] = 0; ma[o + 10] = 1; ma[o + 11] = 0;
+        ma[o + 12] = x; ma[o + 13] = y; ma[o + 14] = cz - (z0 + d); ma[o + 15] = 1;
+        const sh = d ? 0.8 : 1;
+        // sRGB to linear, roughly, since the renderer works in linear light.
+        ca[k * 3] = (base[0] * sh) ** 2.2; ca[k * 3 + 1] = (base[1] * sh) ** 2.2; ca[k * 3 + 2] = (base[2] * sh) ** 2.2;
+        k++;
+      }
+    }
+    mesh.count = k;
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor.needsUpdate = true;
+  }
+}
+
+function stopLive() {
+  if (!live) return;
+  if (live.stream) live.stream.getTracks().forEach((t) => t.stop());
+  live.video.pause();
+  for (const m of Object.values(live.meshes)) { scene.remove(m); m.dispose(); }
+  live = null;
+  $('livebar').hidden = true;
+}
+
+$('live').addEventListener('click', () => startLive().catch(failed));
+$('stopLive').addEventListener('click', () => { stopLive(); clearWorld(); $('start').hidden = false; });
+$('flip').addEventListener('click', () => { liveFacing = liveFacing === 'user' ? 'environment' : 'user'; stopLive(); startLive().catch(failed); });
+$('freeze').addEventListener('click', () => {
+  if (!live || !live.have) return;
+  const L = live;
+  // Freeze what the camera sees right now into the full world you can edit.
+  let colors = L.colors.slice(), depth = L.lastDepth.slice(), labels = L.labels.slice();
+  if (L.mirror) {
+    const flip = (arr, ch) => { const out = arr.slice(); for (let r = 0; r < L.gh; r++) for (let c = 0; c < L.gw; c++) for (let j = 0; j < ch; j++) out[(r * L.gw + c) * ch + j] = arr[(r * L.gw + (L.gw - 1 - c)) * ch + j]; return out; };
+    colors = flip(colors, 3); depth = flip(depth, 1); labels = flip(labels, 1);
+  }
+  const names = L.names.slice(), gw = L.gw, gh = L.gh;
+  stopLive();
+  buildWorld(colors, depth, labels, names, gw, gh);
+  $('tools').hidden = false;
+  rising = true; riseStart = performance.now();
+  thud();
+});
+
 // ---------- loop ----------
 
 let rising = false, riseStart = 0, last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (live) liveTick(now);
   if (world && rising) {
     const t = (now - riseStart) / 1600;
     writeAll(Math.min(1, t));
     if (t >= 1) rising = false;
   }
   // When nobody touches it, it sways gently so you can see it's 3D.
-  if (world && orbit.idle >= 0) { orbit.idle += dt; orbit.yaw = Math.sin(orbit.idle * 0.35) * 0.45; placeCamera(); }
+  if ((world || live) && orbit.idle >= 0) { orbit.idle += dt; orbit.yaw = Math.sin(orbit.idle * 0.35) * 0.45; placeCamera(); }
   renderer.render(scene, camera);
 }
 function resize() {
@@ -390,4 +578,4 @@ $('sound').addEventListener('click', () => {
 });
 
 if (new URLSearchParams(location.search).has('sample')) $('sample').click();
-if (location.search.includes('test')) window.__bw = { get world() { return world; }, writeAll, renderer, scene, camera, orbit, placeCamera };
+if (location.search.includes('test')) window.__bw = { get world() { return world; }, get live() { return live; }, startLive, liveTick, writeAll, renderer, scene, camera, orbit, placeCamera };

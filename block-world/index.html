@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gh7NRJ7MEWdYUGMcXx0SUMJY93gUi2UqlztG1amlvwA=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' data: blob: https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; worker-src 'self' blob:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gh7NRJ7MEWdYUGMcXx0SUMJY93gUi2UqlztG1amlvwA=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' data: blob: https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; worker-src 'self' blob:; media-src 'self' blob: mediastream:">
 <title>Block World</title>
 <meta name="description" content="Take a photo of any room or street and turn every object in it into blocks.">
 <meta name="theme-color" content="#2b2f3a">
@@ -27,9 +27,10 @@
 <section class="start" id="start">
   <div class="startcard">
     <p class="kicker">Preview</p>
-    <h2>Turn any photo into blocks.</h2>
-    <p>Walls, floor, sofa, plants, you. Every object becomes blocks you can explore, break and move. It all runs on your phone. Nothing is uploaded.</p>
-    <label class="primary" for="photo">Take or pick a photo</label>
+    <h2>Turn the world into blocks.</h2>
+    <p>Point your camera and walls, floor, sofa, plants and you become blocks, live. Freeze it to explore, break and move things. It all runs on your phone. Nothing is uploaded.</p>
+    <button type="button" id="live" class="primary">Live camera</button>
+    <label class="secondary" for="photo">Take or pick a photo</label>
     <input id="photo" type="file" accept="image/*" hidden>
     <button type="button" id="sample" class="link">Try the sample room</button>
     <p class="status" id="status"></p>
@@ -39,6 +40,15 @@
 <div class="busy" id="busy" hidden>
   <div class="spinner" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
   <p id="busyText">Working…</p>
+</div>
+
+<div class="livebar" id="livebar" hidden>
+  <span class="livestat" id="liveStat">Live</span>
+  <div class="row">
+    <button type="button" id="freeze" class="go">Freeze</button>
+    <button type="button" id="flip">Flip camera</button>
+    <button type="button" id="stopLive">Stop</button>
+  </div>
 </div>
 
 <nav class="tools" id="tools" hidden aria-label="Tools">
