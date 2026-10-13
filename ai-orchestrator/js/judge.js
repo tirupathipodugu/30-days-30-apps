@@ -1,6 +1,6 @@
 // The judge: decides what kind of question this is, then which connected model should answer it.
 // 1. Kind of question: keyword rules first (instant, free). If they aren't sure and a fast model is
-//    connected, that model is asked for one word. (Jev can take this step later.)
+//    connected, that model is asked for one word. When OpenRouter is connected, Jev decides first.
 // 2. Who answers: for each kind, providers and models are ranked; anything resting after a limit
 //    is skipped, and the next one is tried if a call fails.
 
@@ -86,12 +86,61 @@ export async function candidates(kind) {
   return { list, skipped };
 }
 
+// Jev (TypeSafe's decision model) through OpenRouter's Decisions API. It doesn't write text; it picks
+// one option and says how sure it is, which is exactly the judge's job.
+const JEV_URL = 'https://openrouter.ai/api/alpha/decisions';
+const JEV_MODEL = 'typesafe/jev-1.13';
+const JEV_CRITERIA = {
+  coding: 'Writing, fixing, explaining or reviewing code, errors, scripts, APIs or software tools.',
+  quick: 'A short factual question or a simple lookup with a one-line answer.',
+  writing: 'Writing or rewriting text: emails, posts, stories, summaries, translations, tone changes.',
+  math: 'Calculations, equations, probability, proofs or anything that needs exact numbers.',
+  deep: 'Open questions that need reasoning, planning, comparing options or explaining why.',
+};
+
+/** Ask Jev which kind this is. Returns { kind, confidence, cost } or throws. */
+export async function askJev(text, key, timeoutMs = 4000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(JEV_URL, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': location.origin, 'X-Title': 'AI Orchestrator' },
+      body: JSON.stringify({
+        model: JEV_MODEL,
+        state: { request: text.slice(0, 4000) },
+        questions: { kind: { type: 'choice', instructions: 'What kind of request is this?', criteria: JEV_CRITERIA } },
+      }),
+    });
+    if (!res.ok) throw Object.assign(new Error('jev'), { status: res.status });
+    const data = await res.json();
+    const answer = data?.answers?.kind;
+    if (!answer || !KINDS[answer.choice]) throw new Error('jev: no choice');
+    return { kind: answer.choice, confidence: answer.confidence ?? answer.probabilities?.[answer.choice] ?? null, cost: data?.usage?.cost ?? null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
- * Decide the kind. Uses the rules; if they aren't sure, asks the fastest connected model for one
- * word (with a 4 s timeout), and falls back to the rules' guess.
+ * Decide the kind. Jev goes first whenever OpenRouter is connected. If Jev can't answer (no credits,
+ * slow, blocked), the keyword rules decide, and when they aren't sure the fastest connected model is
+ * asked for one word (4 s timeout). The rules' guess is the last resort.
  */
-export async function decideKind(text, askFast) {
-  const guess = ruleKind(text);
+export async function decideKind(text, askFast, jevKey) {
+  let jevNote = null;
+  if (jevKey) {
+    try {
+      const j = await askJev(text, jevKey);
+      return { kind: j.kind, sure: true, by: 'jev', confidence: j.confidence };
+    } catch (err) {
+      jevNote = err.status === 402 ? 'Jev needs OpenRouter credits, using rules'
+        : err.status === 401 || err.status === 403 ? 'Jev rejected the key, using rules'
+        : 'Jev didn\'t answer in time, using rules';
+    }
+  }
+  const guess = { ...ruleKind(text), jevNote };
   if (guess.sure || !askFast) return { ...guess, by: 'rules' };
   try {
     const word = await Promise.race([
@@ -99,7 +148,7 @@ export async function decideKind(text, askFast) {
       new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 4000)),
     ]);
     const kind = Object.keys(KINDS).find((k) => word.toLowerCase().includes(k));
-    if (kind) return { kind, sure: true, by: 'model' };
+    if (kind) return { kind, sure: true, by: 'model', jevNote };
   } catch {}
   return { ...guess, by: 'rules' };
 }

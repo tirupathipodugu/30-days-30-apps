@@ -85,13 +85,17 @@ async function ask(text) {
   const ai = addMessage('ai');
   const bubble = ai.querySelector('.bubble');
 
-  const decision = await decideKind(text, connected().some((p) => ['groq', 'cerebras', 'gemini'].includes(p.id)) ? askFast : null);
+  ai.querySelector('.bubble').innerHTML = `<span class="thinking">${getKey('openrouter') ? 'Jev is deciding who should answer' : 'Deciding who should answer'}</span>`;
+  const decision = await decideKind(text, connected().some((p) => ['groq', 'cerebras', 'gemini'].includes(p.id)) ? askFast : null, getKey('openrouter'));
   const { list, skipped } = await candidates(decision.kind);
-  const notes = [...skipped];
+  const notes = [...(decision.jevNote ? [decision.jevNote] : []), ...skipped];
+  const judgeTag = decision.by === 'jev'
+    ? `Jev: ${KINDS[decision.kind]}${decision.confidence != null ? ` · ${Math.round(decision.confidence * 100)}% sure` : ''}`
+    : KINDS[decision.kind];
   let answered = false;
 
   for (const { provider, model } of list) {
-    setWhy(ai, [{ text: KINDS[decision.kind] }, { text: `→ ${provider.name.replace(/ \(.*\)/, '')} · ${model}` }, ...notes.map((n) => ({ text: n, note: true }))]);
+    setWhy(ai, [{ text: judgeTag }, { text: `→ ${provider.name.replace(/ \(.*\)/, '')} · ${model}` }, ...notes.map((n) => ({ text: n, note: true }))]);
     bubble.innerHTML = '<span class="thinking">Thinking</span>';
     let full = '';
     try {
@@ -119,7 +123,7 @@ async function ask(text) {
     }
   }
   if (!answered) {
-    setWhy(ai, [{ text: KINDS[decision.kind] }, ...notes.map((n) => ({ text: n, note: true }))]);
+    setWhy(ai, [{ text: judgeTag }, ...notes.map((n) => ({ text: n, note: true }))]);
     bubble.innerHTML = '<p class="err">None of your connected AIs could answer right now. They may all be at their free limits. Try again in a few minutes, or connect another one in "Your AIs".</p>';
   }
   renderProviders();

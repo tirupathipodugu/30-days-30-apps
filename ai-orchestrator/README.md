@@ -24,3 +24,7 @@ One chat box for all your free AI accounts. It decides what kind of question you
 Free tiers are set by each service and change often; the app reads the live model list from your key rather than hard-coding one.
 
 Part of [30 Days, 30 Apps](../) by [@tirupathipodugu](https://x.com/tirupathipodugu).
+
+## Jev decides first
+
+When OpenRouter is connected, every question goes to Jev (TypeSafe's decision model, `typesafe/jev-1.13`) before anything else, through OpenRouter's Decisions API. Jev doesn't write the answer. It picks one kind (coding, quick fact, writing, maths or deep thinking) and says how sure it is, and the chat shows that as "Jev: Coding · 81% sure". The best connected model for that kind then answers. If Jev can't decide within 4 seconds, has no OpenRouter credits, or rejects the key, the keyword rules decide instead, and the chat says why. Jev is paid per input token on OpenRouter (output is free), so it needs a little credit on the OpenRouter account.
