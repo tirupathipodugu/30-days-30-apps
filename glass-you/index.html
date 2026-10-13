@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- Glass You (preview): the camera turns you into a living glass figure. Swipe to jump universes. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' data: blob:; worker-src 'self' blob:">
+<title>Glass You</title>
+<meta name="description" content="Your camera turns you into living glass. Tap to crack yourself, swipe to jump universes.">
+<meta name="theme-color" content="#0b0d12">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%230b0d12%22/%3E%3Cpath d=%22M16 4c5 0 7 4 7 8s-2 6-3 7l3 9H9l3-9c-1-1-3-3-3-7s2-8 7-8z%22 fill=%22none%22 stroke=%22%23bfe9ff%22 stroke-width=%221.6%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<canvas id="view" aria-label="You, from the camera, drawn as living glass"></canvas>
+
+<header class="top">
+  <h1>Glass You</h1>
+  <p class="verse" id="verse" aria-live="polite">Universe 1 of 5 · Glass</p>
+</header>
+
+<p class="hint" id="hint">Tap yourself to crack. Swipe to jump universes.</p>
+
+<nav class="controls" aria-label="Universes">
+  <button type="button" id="prev" class="round" aria-label="Previous universe">◀</button>
+  <button type="button" id="record" class="rec">Record 6 s</button>
+  <button type="button" id="next" class="round" aria-label="Next universe">▶</button>
+</nav>
+
+<button type="button" id="sound" class="sound">Sound on</button>
+
+<div class="start" id="start">
+  <div class="startcard">
+    <p class="kicker">Day preview</p>
+    <h2>See yourself made of glass.</h2>
+    <p>Your camera stays on your phone. Nothing is uploaded or saved.</p>
+    <button type="button" id="cam" class="primary">Turn on camera</button>
+    <button type="button" id="demo" class="link">No camera? Try a sample video</button>
+    <p class="status" id="status"></p>
+  </div>
+</div>
+
+<a id="save" hidden></a>
+<p class="credit">Preview · runs on your device</p>
+</body>
+</html>
