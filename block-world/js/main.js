@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { TYPES, typeFor, materialFor, cubeGeometry } from './blocks.js';
 import { voxelize } from './voxel.js';
 import { createWalk } from './walk.js';
+import { createLife, shadeByNeighbours } from './life.js';
 
 const $ = (id) => document.getElementById(id);
 const NICE = { 'television receiver': 'TV', windowpane: 'window', 'chest of drawers': 'drawers', 'crt screen': 'screen', person: 'you' };
@@ -21,7 +22,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 const SKY = new THREE.Color(0x8fc4f2);
 scene.background = SKY.clone();
-scene.fog = new THREE.Fog(SKY, 90, 220);
+scene.fog = new THREE.Fog(SKY, 120, 320);
 const camera = new THREE.PerspectiveCamera(55, 1, 0.3, 1000);
 scene.add(new THREE.HemisphereLight(0xffffff, 0xb8a888, 1.9));
 const sun = new THREE.DirectionalLight(0xffffff, 0.9);
@@ -29,6 +30,8 @@ sun.position.set(0.6, 1, 0.45);
 scene.add(sun);
 
 let world = null;   // { meshes: {type: InstancedMesh}, blocks, groups, bounds }
+const life = createLife(scene);
+let skyTint = null;
 const tmpColor = new THREE.Color();
 
 // ---------- camera orbit ----------
@@ -126,7 +129,8 @@ function findGroups(labels, names, gw, gh) {
 function skyFrom(colors, labels, names, gw, gh) {
   let s = [0, 0, 0], n = 0;
   for (let i = 0; i < gw * gh; i++) if (labels[i] >= 0 && names[labels[i]] === 'sky') { s[0] += colors[i * 3]; s[1] += colors[i * 3 + 1]; s[2] += colors[i * 3 + 2]; n++; }
-  const c = n > 30 ? new THREE.Color(s[0] / n / 255, s[1] / n / 255, s[2] / n / 255) : SKY.clone();
+  skyTint = n > 30 ? new THREE.Color(s[0] / n / 255, s[1] / n / 255, s[2] / n / 255) : null;
+  const c = skyTint ? skyTint.clone().lerp(new THREE.Color(1, 1, 1), 0.35) : SKY.clone();
   scene.background = c; scene.fog.color = c;
 }
 
@@ -144,7 +148,31 @@ function buildWorld(colors, depth, labels, names, gw, gh) {
   const { voxels } = voxelize({ colors, depth, labels, names, gw, gh, across: 48, groupOf: group });
   const bounds = boundsOf(voxels);
   const span = bounds.max.y - bounds.min.y || 1;
+  // Stand the world on a grass and dirt island a few blocks wider than the room.
+  {
+    const floors = voxels.filter((v) => v.type === 'floor' || v.type === 'grass');
+    const fy = (floors.length ? Math.min(...floors.map((v) => v.y)) : bounds.min.y) - 1;
+    const taken = new Set(voxels.map((v) => `${v.x},${v.y},${v.z}`));
+    const pad = 6;
+    for (let x = bounds.min.x - pad; x <= bounds.max.x + pad; x++) {
+      for (let z = bounds.min.z - pad; z <= bounds.max.z + pad; z++) {
+        // Rough, rounded island edge.
+        const ex = Math.max(0, bounds.min.x - x, x - bounds.max.x), ez = Math.max(0, bounds.min.z - z, z - bounds.max.z);
+        const edge = Math.hypot(ex, ez) + Math.abs(Math.sin(x * 1.7 + z * 0.9)) * 2;
+        if (edge > pad) continue;
+        const layers = edge < pad - 2 ? 3 : 2;
+        for (let d = 0; d < layers; d++) {
+          const y = fy - d;
+          if (taken.has(`${x},${y},${z}`)) continue;
+          voxels.push({ x, y, z, type: d === 0 ? 'grass' : 'dirt', color: d === 0 ? [1, 1, 1] : TYPES.dirt.tint, group: 0 });
+        }
+      }
+    }
+    bounds.min.y = Math.min(bounds.min.y, fy - 2);
+  }
   const blocks = voxels.map((v) => ({ ...v, rise: (bounds.max.y - v.y) / span, gone: false }));
+  shadeByNeighbours(blocks);
+  life.setWorld(bounds, skyTint);
   for (const b of blocks) groups[b.group].blocks.push(b);
   world = { blocks, groups, bounds };
   drawBlocks(blocks);
@@ -483,6 +511,7 @@ function liveTick(now) {
       L.depth = d;
       L.updates++;
       const { voxels } = voxelize({ colors: L.colors, depth: d, labels: L.labels, names: L.names, gw: L.gw, gh: L.gh, across: 44 });
+      shadeByNeighbours(voxels);
       drawBlocks(voxels);
       for (const m of Object.values(pool)) {
         (m.userData.list || []).forEach((b, k) => setInstance(m, k, b.x, b.y, b.z, 1));
@@ -553,6 +582,7 @@ function frame(now) {
     if (t >= 1) rising = false;
   }
   // When nobody touches it, it sways gently so you can see it's 3D.
+  life.update(dt, camera, pool);
   if (walk.on) walk.step(dt);
   else if ((world || live) && orbit.idle >= 0) { orbit.idle += dt; orbit.yaw = Math.sin(orbit.idle * 0.35) * 0.5; placeCamera(); }
   renderer.render(scene, camera);
@@ -609,4 +639,4 @@ $('sound').addEventListener('click', () => {
 });
 
 if (new URLSearchParams(location.search).has('sample')) $('sample').click();
-if (location.search.includes('test')) window.__bw = { walk, finishRise: () => { rising = false; }, get world() { return world; }, get live() { return live; }, startLive, liveTick, writeAll, renderer, scene, camera, orbit, placeCamera, fitCamera, pool };
+if (location.search.includes('test')) window.__bw = { walk, life, finishRise: () => { rising = false; }, get world() { return world; }, get live() { return live; }, startLive, liveTick, writeAll, renderer, scene, camera, orbit, placeCamera, fitCamera, pool };
