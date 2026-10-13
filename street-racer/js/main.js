@@ -137,15 +137,16 @@ function streetName(x, z) {
 }
 
 function nearestRoad(x, z) {
-  let best = null, bestD = Infinity;
+  let best = null, bestD = Infinity, bx = x, bz = z;
   for (const i of grid.get(cellKey(x, z)) || []) {
     const s = segs[i];
     const vx = s.bx - s.ax, vz = s.bz - s.az;
     const t = Math.max(0, Math.min(1, ((x - s.ax) * vx + (z - s.az) * vz) / (vx * vx + vz * vz || 1)));
-    const d = Math.hypot(x - (s.ax + vx * t), z - (s.az + vz * t));
-    if (d < bestD) { bestD = d; best = s; }
+    const px = s.ax + vx * t, pz = s.az + vz * t;
+    const d = Math.hypot(x - px, z - pz);
+    if (d < bestD) { bestD = d; best = s; bx = px; bz = pz; }
   }
-  return { seg: best, dist: bestD };
+  return { seg: best, dist: bestD, px: bx, pz: bz };
 }
 
 function ribbon(points, width) {
@@ -348,6 +349,18 @@ function step(dt) {
   state.yaw += steer * 1.9 * grip * dt * Math.sign(state.speed || 1);
   state.x -= Math.sin(state.yaw) * state.speed * dt;
   state.z -= Math.cos(state.yaw) * state.speed * dt;
+
+  // The road edges are walls: if the car drifts past the edge, put it back on the road and scrub speed.
+  const after = nearestRoad(state.x, state.z);
+  if (after.seg) {
+    const limit = Math.max(1, after.seg.w / 2 - 1.1);
+    if (after.dist > limit) {
+      const k = limit / after.dist;
+      state.x = after.px + (state.x - after.px) * k;
+      state.z = after.pz + (state.z - after.pz) * k;
+      state.speed *= Math.pow(0.35, dt * 4);
+    }
+  }
 
   if (!racing && !finished && Math.abs(state.speed) > 1) { racing = true; raceStart = performance.now(); }
   const cp = cps[cpNext];
