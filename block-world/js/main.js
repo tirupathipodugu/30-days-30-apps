@@ -1,65 +1,107 @@
-// Block World: turn one photo into a world of blocks. Two on-device AIs say how far away
-// every part of the photo is and what it is; here each patch becomes blocks at that depth, with a
-// block texture that fits (walls plaster, floor planks, plants leaves, windows glass). Every object
-// (sofa, chair, lamp, each plant) is its own group you can pick up and move. Nothing is uploaded.
+// Block World: turn a photo, or the live camera, into a block-game world. Two on-device AIs say how far
+// away every part of the picture is and what it is. voxel.js places every point in real 3D (flat floor,
+// upright walls), snaps it to big blocks and gives each block the material of what it is: plaster walls,
+// plank floors, wool sofas, leaf plants, glass windows. Every object is its own group you can pick up and
+// move. Nothing is uploaded.
 
 import * as THREE from 'three';
-import { TYPES, typeFor, materialFor, blockColor } from './blocks.js';
+import { TYPES, typeFor, materialFor, cubeGeometry } from './blocks.js';
+import { voxelize } from './voxel.js';
 
 const $ = (id) => document.getElementById(id);
-const ZR = 56;                 // how many blocks deep the scene is, from nearest to farthest
-const NICE = { 'television receiver': 'TV', windowpane: 'window', 'chest of drawers': 'drawers', 'coffee table': 'coffee table', 'crt screen': 'screen', person: 'you' };
+const NICE = { 'television receiver': 'TV', windowpane: 'window', 'chest of drawers': 'drawers', 'crt screen': 'screen', person: 'you' };
 const nice = (n) => NICE[n] || n;
 
 // ---------- three.js ----------
 
-const renderer = new THREE.WebGLRenderer({ canvas: $('scene'), antialias: true, preserveDrawingBuffer: true });
+const renderer = new THREE.WebGLRenderer({ canvas: $('scene'), antialias: false, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x9fd3f5);
-const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 2000);
-scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a66, 1.6));
-const sunLight = new THREE.DirectionalLight(0xffffff, 1.4);
-sunLight.position.set(40, 80, 60);
-scene.add(sunLight);
+const SKY = new THREE.Color(0x8fc4f2);
+scene.background = SKY.clone();
+scene.fog = new THREE.Fog(SKY, 90, 220);
+const camera = new THREE.PerspectiveCamera(55, 1, 0.3, 1000);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb8a888, 1.9));
+const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+sun.position.set(0.6, 1, 0.45);
+scene.add(sun);
 
-let world = null;            // { meshes: {type: InstancedMesh}, blocks: [], groups: [], gw, gh }
-const dummy = new THREE.Object3D();
+let world = null;   // { meshes: {type: InstancedMesh}, blocks, groups, bounds }
 const tmpColor = new THREE.Color();
 
 // ---------- camera orbit ----------
 
-const orbit = { yaw: 0, pitch: 0.05, dist: 120, target: new THREE.Vector3(), idle: 0 };
+const orbit = { yaw: 0, pitch: 0.1, dist: 60, target: new THREE.Vector3(), idle: 0, swayCentre: 0 };
 function placeCamera() {
   const { yaw, pitch, dist, target } = orbit;
   camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, target.z + Math.cos(yaw) * Math.cos(pitch) * dist);
   camera.lookAt(target);
 }
+function fitCamera(bounds) {
+  const fov = camera.fov * Math.PI / 180;
+  const w = bounds.max.x - bounds.min.x + 2, h = bounds.max.y - bounds.min.y + 2;
+  orbit.target.set((bounds.min.x + bounds.max.x) / 2, (bounds.min.y + bounds.max.y) / 2, (bounds.min.z + bounds.max.z) / 2);
+  const front = bounds.max.z - orbit.target.z;
+  orbit.dist = Math.max(h / 2 / Math.tan(fov / 2), w / 2 / Math.tan(fov / 2) / camera.aspect) * 0.92 + front;
+  orbit.yaw = 0; orbit.pitch = 0.12; orbit.idle = 0;
+  placeCamera();
+}
 
-// ---------- building the world ----------
+// ---------- meshes ----------
 
-function buildWorld(colors, depth, labels, names, gw, gh) {
-  if (world) for (const m of Object.values(world.meshes)) { scene.remove(m); m.geometry.dispose(); }
+const pool = {};        // type -> InstancedMesh, grown when needed
+function meshFor(type, need) {
+  let m = pool[type];
+  if (!m || m.instanceMatrix.count < need) {
+    if (m) { scene.remove(m); m.dispose(); }
+    m = new THREE.InstancedMesh(cubeGeometry(), materialFor(type), Math.max(256, Math.ceil(need * 1.4)));
+    m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(m.instanceMatrix.count * 3), 3);
+    m.frustumCulled = false;
+    m.userData.type = type;
+    scene.add(m);
+    pool[type] = m;
+  }
+  return m;
+}
+function hideAll() { for (const m of Object.values(pool)) { m.count = 0; m.userData.list = []; } }
 
-  // Normalise depth to 0 (far) .. 1 (near).
-  let lo = 1, hi = 0;
-  for (const d of depth) { lo = Math.min(lo, d); hi = Math.max(hi, d); }
-  const zOf = (i) => Math.round((1 - (depth[i] - lo) / ((hi - lo) || 1)) * ZR);
+function setInstance(m, k, x, y, z, s) {
+  const a = m.instanceMatrix.array, o = k * 16;
+  a[o] = s; a[o + 1] = 0; a[o + 2] = 0; a[o + 3] = 0;
+  a[o + 4] = 0; a[o + 5] = s; a[o + 6] = 0; a[o + 7] = 0;
+  a[o + 8] = 0; a[o + 9] = 0; a[o + 10] = s; a[o + 11] = 0;
+  a[o + 12] = x; a[o + 13] = y; a[o + 14] = z; a[o + 15] = 1;
+}
+function setColor(m, k, c) {
+  tmpColor.setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
+  const a = m.instanceColor.array;
+  a[k * 3] = tmpColor.r; a[k * 3 + 1] = tmpColor.g; a[k * 3 + 2] = tmpColor.b;
+}
 
-  const cellType = new Array(gw * gh);
-  for (let i = 0; i < gw * gh; i++) cellType[i] = labels[i] < 0 ? 'plain' : typeFor(names[labels[i]]);
+/** Draw a list of blocks [{x,y,z,type,color}] into the pooled meshes. */
+function drawBlocks(blocks) {
+  const byType = {};
+  for (const b of blocks) (byType[b.type] ||= []).push(b);
+  hideAll();
+  for (const [type, list] of Object.entries(byType)) {
+    const m = meshFor(type, list.length + (world ? 2000 : 0));
+    m.userData.list = list;
+    list.forEach((b, k) => { b.mesh = m; b.k = k; setColor(m, k, b.color); });
+    m.count = list.length;
+    m.instanceColor.needsUpdate = true;
+  }
+}
 
-  // Sky colour becomes the background.
-  let sky = [0, 0, 0], skyN = 0;
-  for (let i = 0; i < gw * gh; i++) if (cellType[i] === null) { sky[0] += colors[i * 3]; sky[1] += colors[i * 3 + 1]; sky[2] += colors[i * 3 + 2]; skyN++; }
-  scene.background = skyN > 20 ? new THREE.Color(sky[0] / skyN / 255, sky[1] / skyN / 255, sky[2] / skyN / 255) : new THREE.Color(0x9fd3f5);
+// ---------- groups: each object is a connected patch of one label ----------
 
-  // Objects: connected patches of the same label that aren't walls, floors or ground.
+function findGroups(labels, names, gw, gh) {
   const group = new Int32Array(gw * gh);
   const groups = [{ name: 'room', offset: new THREE.Vector3(), blocks: [] }];
   for (let i = 0; i < gw * gh; i++) {
-    if (group[i] || !cellType[i] || TYPES[cellType[i]].fixed || labels[i] < 0) continue;
+    if (group[i] || labels[i] < 0) continue;
+    const t = typeFor(names[labels[i]]);
+    if (!t || TYPES[t].fixed) continue;
     const stack = [i], cells = [];
     group[i] = -1;
     while (stack.length) {
@@ -72,100 +114,58 @@ function buildWorld(colors, depth, labels, names, gw, gh) {
         if (!group[kk] && labels[kk] === labels[i]) { group[kk] = -1; stack.push(kk); }
       }
     }
-    const id = cells.length >= 8 ? groups.length : 0;
+    const id = cells.length >= 20 ? groups.length : 0;
     if (id) groups.push({ name: nice(names[labels[i]]), offset: new THREE.Vector3(), blocks: [] });
     for (const k of cells) group[k] = id;
   }
+  for (let i = 0; i < gw * gh; i++) if (group[i] < 0) group[i] = 0;
+  return { group, groups };
+}
 
-  // Blocks: one at each cell's depth, then filled backwards toward its neighbours so there are no
-  // holes when you turn the world, and objects get some thickness.
-  const blocks = [];
-  const occupied = new Set();
-  const cx = gw / 2, cy = gh / 2, cz = ZR / 2;
-  for (let r = 0; r < gh; r++) for (let c = 0; c < gw; c++) {
-    const i = r * gw + c, type = cellType[i];
-    if (!type) continue;
-    const z = zOf(i);
-    let back = z;
-    for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const rr = r + dr, cc = c + dc;
-      if (rr < 0 || cc < 0 || rr >= gh || cc >= gw || !cellType[rr * gw + cc]) continue;
-      back = Math.max(back, zOf(rr * gw + cc));
-    }
-    const fixed = TYPES[type].fixed;
-    back = Math.min(back, z + (fixed ? 3 : 8));
-    if (!fixed) back = Math.max(back, z + 1);
-    const rgb = [colors[i * 3] / 255, colors[i * 3 + 1] / 255, colors[i * 3 + 2] / 255];
-    const col = blockColor(type, rgb);
-    for (let zz = z; zz <= back; zz++) {
-      const x = c - cx, y = gh - 1 - r - cy, zw = cz - zz;
-      const key = `${x},${y},${zw}`;
-      if (occupied.has(key)) continue;
-      occupied.add(key);
-      // Blocks behind the front face get a little darker, like real shade.
-      const shade = zz === z ? 1 : 0.82;
-      const b = { type, x, y, z: zw, color: col.map((v) => v * shade), group: group[i], row: r, gone: false };
-      blocks.push(b);
-      groups[b.group].blocks.push(b);
-    }
-  }
+function skyFrom(colors, labels, names, gw, gh) {
+  let s = [0, 0, 0], n = 0;
+  for (let i = 0; i < gw * gh; i++) if (labels[i] >= 0 && names[labels[i]] === 'sky') { s[0] += colors[i * 3]; s[1] += colors[i * 3 + 1]; s[2] += colors[i * 3 + 2]; n++; }
+  const c = n > 30 ? new THREE.Color(s[0] / n / 255, s[1] / n / 255, s[2] / n / 255) : SKY.clone();
+  scene.background = c; scene.fog.color = c;
+}
 
-  // One instanced mesh per block type, with room to place new blocks.
-  const meshes = {};
-  const byType = {};
-  for (const b of blocks) (byType[b.type] ||= []).push(b);
-  const geo = new THREE.BoxGeometry(1, 1, 1);
-  for (const type of Object.keys(TYPES)) {
-    const list = byType[type] || [];
-    const mesh = new THREE.InstancedMesh(geo, materialFor(type), list.length + 3000);
-    mesh.count = list.length;
-    mesh.userData = { type, list };
-    list.forEach((b, k) => {
-      b.mesh = mesh; b.k = k;
-      mesh.setColorAt(k, tmpColor.setRGB(b.color[0], b.color[1], b.color[2], THREE.SRGBColorSpace));
-    });
-    if (!list.length) mesh.setColorAt(0, tmpColor.set(1, 1, 1));
-    mesh.frustumCulled = false;
-    scene.add(mesh);
-    meshes[type] = mesh;
-  }
-  world = { meshes, blocks, groups, gw, gh, built: performance.now(), occupied };
+function boundsOf(blocks) {
+  const min = new THREE.Vector3(Infinity, Infinity, Infinity), max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+  for (const b of blocks) { min.min(new THREE.Vector3(b.x, b.y, b.z)); max.max(new THREE.Vector3(b.x, b.y, b.z)); }
+  return { min, max };
+}
+
+// ---------- building a world you can edit ----------
+
+function buildWorld(colors, depth, labels, names, gw, gh) {
+  skyFrom(colors, labels, names, gw, gh);
+  const { group, groups } = findGroups(labels, names, gw, gh);
+  const { voxels } = voxelize({ colors, depth, labels, names, gw, gh, across: 48, groupOf: group });
+  const bounds = boundsOf(voxels);
+  const span = bounds.max.y - bounds.min.y || 1;
+  const blocks = voxels.map((v) => ({ ...v, rise: (bounds.max.y - v.y) / span, gone: false }));
+  for (const b of blocks) groups[b.group].blocks.push(b);
+  world = { blocks, groups, bounds };
+  drawBlocks(blocks);
   writeAll(1);
-
-  // Start in front, as the photo was taken, a little further back so everything fits.
-  const fov = camera.fov * Math.PI / 180;
-  orbit.target.set(0, 0, 0);
-  orbit.dist = Math.max(gh / 2 / Math.tan(fov / 2), gw / 2 / Math.tan(fov / 2) / camera.aspect) + cz + 6;
-  orbit.yaw = 0; orbit.pitch = 0.05; orbit.idle = 0;
-  placeCamera();
-
-  // What we found.
+  fitCamera(bounds);
   const found = [...new Set(groups.slice(1).map((g) => g.name))];
   $('found').textContent = found.length ? `Found ${found.slice(0, 8).join(', ')}${found.length > 8 ? '…' : ''}` : '';
   $('count').textContent = `${blocks.length.toLocaleString()} blocks · ${groups.length - 1} objects`;
-  return world;
 }
 
-// Write every block's matrix. `rise` (0..1) animates the build: rows fall into place top to bottom.
 function writeAll(rise) {
-  for (const mesh of Object.values(world.meshes)) {
-    for (const b of mesh.userData.list) writeBlock(b, rise);
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  }
+  for (const b of world.blocks) writeBlock(b, rise);
+  for (const m of Object.values(pool)) m.instanceMatrix.needsUpdate = true;
 }
 function writeBlock(b, rise = 1) {
   const off = world.groups[b.group].offset;
   let y = b.y + off.y;
   if (rise < 1) {
-    const delay = (b.row / world.gh) * 0.6;
-    const t = Math.min(1, Math.max(0, (rise - delay) / 0.4));
-    y += (1 - t * t * (3 - 2 * t)) * 60;
+    const t = Math.min(1, Math.max(0, (rise - b.rise * 0.6) / 0.4));
+    y += (1 - t * t * (3 - 2 * t)) * 40;
   }
-  dummy.position.set(b.x + off.x, y, b.z + off.z);
-  dummy.scale.setScalar(b.gone ? 0 : 1);
-  dummy.updateMatrix();
-  b.mesh.setMatrixAt(b.k, dummy.matrix);
+  setInstance(b.mesh, b.k, b.x + off.x, y, b.z + off.z, b.gone ? 0 : 1);
 }
 
 // ---------- tools: look, move, break, place ----------
@@ -181,14 +181,14 @@ for (const btn of document.querySelectorAll('[data-tool]')) {
 
 const ray = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
-function hit(e) {
+function pick(e) {
   if (!world) return null;
   const rect = renderer.domElement.getBoundingClientRect();
   ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  const hits = ray.intersectObjects(Object.values(world.meshes).filter((m) => m.count), false);
+  const hits = ray.intersectObjects(Object.values(pool).filter((m) => m.count), false);
   for (const h of hits) {
-    const b = h.object.userData.list[h.instanceId];
+    const b = h.object.userData.list?.[h.instanceId];
     if (b && !b.gone) return { b, h };
   }
   return null;
@@ -206,7 +206,7 @@ canvas.addEventListener('pointerdown', (e) => {
     pinch0 = Math.hypot(a.x - b.x, a.y - b.y); dist0 = orbit.dist; drag = null; return;
   }
   if (tool === 'move') {
-    const h = hit(e);
+    const h = pick(e);
     if (h && h.b.group > 0) {
       const g = world.groups[h.b.group];
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -h.h.point.y);
@@ -225,7 +225,7 @@ canvas.addEventListener('pointermove', (e) => {
   p.x = e.clientX; p.y = e.clientY;
   if (pointers.size === 2) {
     const [a, b] = [...pointers.values()];
-    orbit.dist = Math.min(400, Math.max(15, dist0 * pinch0 / Math.max(10, Math.hypot(a.x - b.x, a.y - b.y))));
+    orbit.dist = Math.min(300, Math.max(6, dist0 * pinch0 / Math.max(10, Math.hypot(a.x - b.x, a.y - b.y))));
     placeCamera(); return;
   }
   if (drag) {
@@ -236,57 +236,65 @@ canvas.addEventListener('pointermove', (e) => {
     if (ray.ray.intersectPlane(drag.plane, now)) {
       drag.g.offset.set(Math.round(drag.off0.x + now.x - drag.start.x), drag.off0.y, Math.round(drag.off0.z + now.z - drag.start.z));
       for (const b of drag.g.blocks) writeBlock(b);
-      for (const m of Object.values(world.meshes)) m.instanceMatrix.needsUpdate = true;
+      for (const m of Object.values(pool)) m.instanceMatrix.needsUpdate = true;
     }
     return;
   }
   orbit.yaw -= dx * 0.006;
-  orbit.pitch = Math.min(1.3, Math.max(-0.6, orbit.pitch + dy * 0.005));
+  orbit.pitch = Math.min(1.35, Math.max(-0.5, orbit.pitch + dy * 0.005));
   placeCamera();
 });
 canvas.addEventListener('pointerup', (e) => {
   const p = pointers.get(e.pointerId);
   pointers.delete(e.pointerId);
   if (drag) { drag = null; setTimeout(() => ($('picked').textContent = ''), 1200); return; }
-  if (!p) return;
+  if (!p || live) return;
   const tap = Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < 8 && performance.now() - p.t < 400;
   if (!tap) return;
-  const h = hit(e);
+  const h = pick(e);
   if (!h) return;
   if (tool === 'break') { h.b.gone = true; writeBlock(h.b); h.b.mesh.instanceMatrix.needsUpdate = true; crunch(); }
   else if (tool === 'place') placeBlock(h);
   else if (h.b.group > 0) { $('picked').textContent = `That's the ${world.groups[h.b.group].name}`; setTimeout(() => ($('picked').textContent = ''), 1500); }
 });
 canvas.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); drag = null; });
-canvas.addEventListener('wheel', (e) => { e.preventDefault(); orbit.dist = Math.min(400, Math.max(15, orbit.dist * (1 + e.deltaY * 0.001))); orbit.idle = -1e9; placeCamera(); }, { passive: false });
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); orbit.dist = Math.min(300, Math.max(6, orbit.dist * (1 + e.deltaY * 0.001))); orbit.idle = -1e9; placeCamera(); }, { passive: false });
 
 let placeType = 'planks';
 $('blockType').addEventListener('change', (e) => (placeType = e.target.value));
 function placeBlock({ b, h }) {
   const n = h.face.normal;
   const off = world.groups[b.group].offset;
-  const x = b.x + off.x + Math.round(n.x), y = b.y + off.y + Math.round(n.y), z = b.z + off.z + Math.round(n.z);
-  const mesh = world.meshes[placeType];
-  if (mesh.count >= mesh.instanceMatrix.count) return;
-  const nb = { type: placeType, x, y, z, color: TYPES[placeType].tint.slice(), group: 0, row: 0, gone: false, mesh, k: mesh.count };
-  mesh.userData.list.push(nb);
+  const nb = { type: placeType, x: b.x + off.x + Math.round(n.x), y: b.y + off.y + Math.round(n.y), z: b.z + off.z + Math.round(n.z), color: TYPES[placeType].dye ? [0.9, 0.9, 0.9] : TYPES[placeType].tint, group: 0, rise: 0, gone: false };
+  let m = pool[placeType];
+  if (!m || m.count >= m.instanceMatrix.count) {
+    // Grow this mesh, keeping what's there.
+    const list = m?.userData.list || [];
+    m = meshFor(placeType, list.length + 500);
+    m.userData.list = list;
+    list.forEach((x, k) => { x.mesh = m; x.k = k; setColor(m, k, x.color); writeBlock(x); });
+    m.count = list.length;
+  }
+  nb.mesh = m; nb.k = m.count;
+  m.userData.list.push(nb);
+  world.blocks.push(nb);
   world.groups[0].blocks.push(nb);
-  mesh.count++;
-  mesh.setColorAt(nb.k, tmpColor.setRGB(nb.color[0], nb.color[1], nb.color[2], THREE.SRGBColorSpace));
-  mesh.instanceColor.needsUpdate = true;
+  m.count++;
+  setColor(m, nb.k, nb.color);
+  m.instanceColor.needsUpdate = true;
   writeBlock(nb);
-  mesh.instanceMatrix.needsUpdate = true;
+  m.instanceMatrix.needsUpdate = true;
   blip(660);
 }
 
 // ---------- photo in, world out ----------
 
 async function fromImage(source) {
+  stopLive();
   showBusy('Reading your photo…');
   const bmp = await createImageBitmap(source);
   const landscape = bmp.width >= bmp.height;
-  const gw = landscape ? 128 : 96, gh = Math.round(gw * bmp.height / bmp.width);
-  // A smaller copy for the AI (faster), and the block colours from a gw x gh copy.
+  const gw = landscape ? 160 : 120, gh = Math.round(gw * bmp.height / bmp.width);
   const scale = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
   const big = new OffscreenCanvas(Math.round(bmp.width * scale), Math.round(bmp.height * scale));
   big.getContext('2d').drawImage(bmp, 0, 0, big.width, big.height);
@@ -308,7 +316,7 @@ async function fromImage(source) {
         showBusy('Placing the blocks…');
         setTimeout(() => {
           buildWorld(colors, data.depth, data.labels, data.names, gw, gh);
-          hideBusy();
+          hideBusy(); $('tools').hidden = false;
           rising = true; riseStart = performance.now();
           thud();
           resolve();
@@ -320,9 +328,9 @@ async function fromImage(source) {
 }
 
 function showBusy(text) { $('busyText').textContent = text; $('busy').hidden = false; $('start').hidden = true; }
-function hideBusy() { $('busy').hidden = true; $('tools').hidden = false; }
+function hideBusy() { $('busy').hidden = true; }
 function failed(err) {
-  $('busy').hidden = true; $('start').hidden = false;
+  $('busy').hidden = true; $('start').hidden = false; $('tools').hidden = true; $('livebar').hidden = true;
   $('status').textContent = `That didn't work (${err.message}). Try another photo, or the sample room.`;
 }
 
@@ -331,8 +339,8 @@ $('sample').addEventListener('click', async () => {
   startSound();
   try { const res = await fetch(new URL('../assets/sample-room.jpg', import.meta.url)); fromImage(await res.blob()).catch(failed); } catch (err) { failed(err); }
 });
-$('again').addEventListener('click', () => { stopLive(); $('tools').hidden = true; $('start').hidden = false; $('status').textContent = ''; });
-$('front').addEventListener('click', () => { orbit.yaw = 0; orbit.pitch = 0.05; orbit.idle = 0; placeCamera(); });
+$('again').addEventListener('click', () => { stopLive(); world = null; hideAll(); $('tools').hidden = true; $('start').hidden = false; $('status').textContent = ''; $('found').textContent = ''; $('count').textContent = ''; });
+$('front').addEventListener('click', () => { if (world) fitCamera(world.bounds); });
 $('save').addEventListener('click', () => {
   renderer.render(scene, camera);
   renderer.domElement.toBlob((blob) => {
@@ -342,17 +350,11 @@ $('save').addEventListener('click', () => {
 });
 
 // ---------- live camera ----------
-// Depth runs on every frame the AI can manage; the object AI refreshes every 1.5 s in the background.
-// Each cell is drawn as a short stack of 3 blocks, which glide toward the newest depth.
+// Depth runs as often as the AI can manage; the object AI refreshes every 1.5 s in the background.
+// Each depth update rebuilds the block world from the newest picture.
 
-const LGW = 72;
+const LGW = 112;
 let live = null, liveFacing = 'environment';
-
-function clearWorld() {
-  if (world) for (const m of Object.values(world.meshes)) { scene.remove(m); m.geometry.dispose(); }
-  world = null;
-  $('found').textContent = ''; $('count').textContent = '';
-}
 
 function onProgress(data) {
   if (data.type === 'progress') showBusy(`Getting the ${data.what} AI ready… ${Math.round(data.loaded / data.total * 100)}%`);
@@ -360,6 +362,7 @@ function onProgress(data) {
 
 async function startLive(src) {
   startSound();
+  world = null; hideAll();
   showBusy('Starting the camera…');
   const video = document.createElement('video');
   video.playsInline = true; video.muted = true;
@@ -384,118 +387,63 @@ async function startLive(src) {
   ai.loadSeg().catch(() => {});
   const vw = video.videoWidth, vh = video.videoHeight;
   const gw = LGW, gh = Math.round(LGW * vh / vw);
-  clearWorld();
-  const meshes = {};
-  const geo = new THREE.BoxGeometry(1, 1, 1);
-  for (const type of Object.keys(TYPES)) {
-    const mesh = new THREE.InstancedMesh(geo, materialFor(type), gw * gh * 3);
-    mesh.count = 0;
-    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(gw * gh * 3 * 3), 3);
-    mesh.frustumCulled = false;
-    scene.add(mesh);
-    meshes[type] = mesh;
-  }
   live = {
-    ai, video, stream, mirror, gw, gh, meshes,
+    ai, video, stream, mirror, gw, gh,
     colorsCv: new OffscreenCanvas(gw, gh), aiCv: new OffscreenCanvas(256, Math.max(64, Math.round(256 * vh / vw))),
-    target: new Float32Array(gw * gh), z: new Float32Array(gw * gh), lastDepth: new Float32Array(gw * gh),
-    labels: new Int16Array(gw * gh).fill(-1), names: [], colors: new Uint8Array(gw * gh * 3),
-    busyD: false, busyS: false, lastSeg: 0, have: false, updates: 0, statT: performance.now(), lists: null,
+    depth: null, labels: new Int16Array(gw * gh).fill(-1), names: [], colors: new Uint8Array(gw * gh * 3),
+    busyD: false, busyS: false, lastSeg: 0, updates: 0, statT: performance.now(), fitted: false,
   };
-  assignLists();
-  fitCamera(gw, gh);
   hideBusy();
   $('tools').hidden = true; $('livebar').hidden = false; $('start').hidden = true;
 }
 
-function fitCamera(gw, gh) {
-  const fov = camera.fov * Math.PI / 180;
-  orbit.target.set(0, 0, 0);
-  orbit.dist = Math.max(gh / 2 / Math.tan(fov / 2), gw / 2 / Math.tan(fov / 2) / camera.aspect) + ZR / 2 + 6;
-  orbit.yaw = 0; orbit.pitch = 0.05; orbit.idle = 0;
-  placeCamera();
+function readColors(L) {
+  const cg = L.colorsCv.getContext('2d', { willReadFrequently: true });
+  if (L.mirror) { cg.setTransform(-1, 0, 0, 1, L.gw, 0); } else cg.setTransform(1, 0, 0, 1, 0, 0);
+  cg.drawImage(L.video, 0, 0, L.gw, L.gh);
+  const px = cg.getImageData(0, 0, L.gw, L.gh).data;
+  for (let i = 0; i < L.gw * L.gh; i++) { L.colors[i * 3] = px[i * 4]; L.colors[i * 3 + 1] = px[i * 4 + 1]; L.colors[i * 3 + 2] = px[i * 4 + 2]; }
 }
-
-function assignLists() {
-  const L = live, lists = {};
-  for (const t of Object.keys(TYPES)) lists[t] = [];
-  for (let i = 0; i < L.gw * L.gh; i++) {
-    const type = L.labels[i] < 0 ? 'plain' : typeFor(L.names[L.labels[i]]);
-    if (type) lists[type].push(i);
-  }
-  L.lists = lists;
-  const seen = new Set();
-  for (const x of L.labels) {
-    if (x < 0) continue;
-    const t = typeFor(L.names[x]);
-    if (t && !TYPES[t].fixed) seen.add(nice(L.names[x]));
-  }
-  const objs = [...seen];
-  $('found').textContent = objs.length ? `Seeing ${objs.slice(0, 6).join(', ')}` : '';
+function grab(L) {
+  const g = L.aiCv.getContext('2d', { willReadFrequently: true });
+  if (L.mirror) g.setTransform(-1, 0, 0, 1, L.aiCv.width, 0); else g.setTransform(1, 0, 0, 1, 0, 0);
+  g.drawImage(L.video, 0, 0, L.aiCv.width, L.aiCv.height);
+  return L.ai.fromCanvas(L.aiCv);
 }
 
 function liveTick(now) {
-  const L = live, v = L.video;
-  if (v.readyState < 2) return;
-  const cg = L.colorsCv.getContext('2d', { willReadFrequently: true });
-  cg.drawImage(v, 0, 0, L.gw, L.gh);
-  const px = cg.getImageData(0, 0, L.gw, L.gh).data;
-  for (let i = 0; i < L.gw * L.gh; i++) { L.colors[i * 3] = px[i * 4]; L.colors[i * 3 + 1] = px[i * 4 + 1]; L.colors[i * 3 + 2] = px[i * 4 + 2]; }
-
-  const grab = () => { const g = L.aiCv.getContext('2d', { willReadFrequently: true }); g.drawImage(v, 0, 0, L.aiCv.width, L.aiCv.height); return L.ai.fromCanvas(L.aiCv); };
+  const L = live;
+  if (L.video.readyState < 2) return;
   if (!L.busyD) {
     L.busyD = true;
-    L.ai.depthGrid(grab(), L.gw, L.gh, true).then((d) => {
+    readColors(L);
+    L.ai.depthGrid(grab(L), L.gw, L.gh, true).then((d) => {
       if (live !== L) return;
-      let lo = 1, hi = 0;
-      for (const x of d) { lo = Math.min(lo, x); hi = Math.max(hi, x); }
-      for (let i = 0; i < d.length; i++) { L.lastDepth[i] = d[i]; L.target[i] = (1 - (d[i] - lo) / ((hi - lo) || 1)) * ZR; }
-      if (!L.have) { L.z.set(L.target); L.have = true; }
+      L.depth = d;
       L.updates++;
+      const { voxels } = voxelize({ colors: L.colors, depth: d, labels: L.labels, names: L.names, gw: L.gw, gh: L.gh, across: 44 });
+      drawBlocks(voxels);
+      for (const m of Object.values(pool)) {
+        (m.userData.list || []).forEach((b, k) => setInstance(m, k, b.x, b.y, b.z, 1));
+        m.instanceMatrix.needsUpdate = true;
+      }
+      if (!L.fitted) { fitCamera(boundsOf(voxels)); L.fitted = true; }
     }).catch(() => {}).finally(() => { L.busyD = false; });
   }
   if (L.ai.segReady() && !L.busyS && now - L.lastSeg > 1500) {
     L.busyS = true; L.lastSeg = now;
-    L.ai.labelGrid(grab(), L.gw, L.gh).then(({ labels, names }) => {
+    L.ai.labelGrid(grab(L), L.gw, L.gh).then(({ labels, names }) => {
       if (live !== L) return;
-      L.labels = labels; L.names = names; assignLists();
+      L.labels = labels; L.names = names;
+      skyFrom(L.colors, labels, names, L.gw, L.gh);
+      const seen = new Set();
+      for (const x of labels) if (x >= 0) { const t = typeFor(names[x]); if (t && !TYPES[t].fixed) seen.add(nice(names[x])); }
+      $('found').textContent = seen.size ? `Seeing ${[...seen].slice(0, 6).join(', ')}` : '';
     }).catch(() => {}).finally(() => { L.busyS = false; });
   }
   if (now - L.statT > 1000) {
-    $('liveStat').textContent = `Live · ${L.updates} depth updates a second · ${L.ai.depthDevice === 'webgpu' ? 'fast mode' : 'standard mode'}`;
+    $('liveStat').textContent = `Live · ${L.updates} updates a second · ${L.ai.depthDevice === 'webgpu' ? 'fast mode' : 'standard mode'}`;
     L.updates = 0; L.statT = now;
-  }
-  if (!L.have) return;
-  for (let i = 0; i < L.z.length; i++) L.z[i] += (L.target[i] - L.z[i]) * 0.35;
-  writeLive();
-}
-
-function writeLive() {
-  const L = live, cx = L.gw / 2, cy = L.gh / 2, cz = ZR / 2;
-  for (const [type, cells] of Object.entries(L.lists)) {
-    const mesh = L.meshes[type], ma = mesh.instanceMatrix.array, ca = mesh.instanceColor.array;
-    const { tint, keep } = TYPES[type];
-    let k = 0;
-    for (const i of cells) {
-      const c = i % L.gw, r = (i - c) / L.gw;
-      const x = (L.mirror ? L.gw - 1 - c : c) - cx, y = L.gh - 1 - r - cy, z0 = Math.round(L.z[i]);
-      const rgb = [L.colors[i * 3] / 255, L.colors[i * 3 + 1] / 255, L.colors[i * 3 + 2] / 255];
-      const base = rgb.map((v, j) => v * keep + tint[j] * (1 - keep) * (0.6 + 0.48 * v));
-      for (let d = 0; d < 3; d++) {
-        const o = k * 16;
-        ma[o] = 1; ma[o + 1] = 0; ma[o + 2] = 0; ma[o + 3] = 0;
-        ma[o + 4] = 0; ma[o + 5] = 1; ma[o + 6] = 0; ma[o + 7] = 0;
-        ma[o + 8] = 0; ma[o + 9] = 0; ma[o + 10] = 1; ma[o + 11] = 0;
-        ma[o + 12] = x; ma[o + 13] = y; ma[o + 14] = cz - (z0 + d); ma[o + 15] = 1;
-        const sh = d ? 0.8 : 1;
-        // sRGB to linear, roughly, since the renderer works in linear light.
-        ca[k * 3] = (base[0] * sh) ** 2.2; ca[k * 3 + 1] = (base[1] * sh) ** 2.2; ca[k * 3 + 2] = (base[2] * sh) ** 2.2;
-        k++;
-      }
-    }
-    mesh.count = k;
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.instanceColor.needsUpdate = true;
   }
 }
 
@@ -503,26 +451,19 @@ function stopLive() {
   if (!live) return;
   if (live.stream) live.stream.getTracks().forEach((t) => t.stop());
   live.video.pause();
-  for (const m of Object.values(live.meshes)) { scene.remove(m); m.dispose(); }
   live = null;
   $('livebar').hidden = true;
 }
 
 $('live').addEventListener('click', () => startLive().catch(failed));
-$('stopLive').addEventListener('click', () => { stopLive(); clearWorld(); $('start').hidden = false; });
+$('stopLive').addEventListener('click', () => { stopLive(); hideAll(); $('start').hidden = false; $('found').textContent = ''; });
 $('flip').addEventListener('click', () => { liveFacing = liveFacing === 'user' ? 'environment' : 'user'; stopLive(); startLive().catch(failed); });
 $('freeze').addEventListener('click', () => {
-  if (!live || !live.have) return;
+  if (!live || !live.depth) return;
   const L = live;
-  // Freeze what the camera sees right now into the full world you can edit.
-  let colors = L.colors.slice(), depth = L.lastDepth.slice(), labels = L.labels.slice();
-  if (L.mirror) {
-    const flip = (arr, ch) => { const out = arr.slice(); for (let r = 0; r < L.gh; r++) for (let c = 0; c < L.gw; c++) for (let j = 0; j < ch; j++) out[(r * L.gw + c) * ch + j] = arr[(r * L.gw + (L.gw - 1 - c)) * ch + j]; return out; };
-    colors = flip(colors, 3); depth = flip(depth, 1); labels = flip(labels, 1);
-  }
-  const names = L.names.slice(), gw = L.gw, gh = L.gh;
+  const args = [L.colors.slice(), L.depth.slice(), L.labels.slice(), L.names.slice(), L.gw, L.gh];
   stopLive();
-  buildWorld(colors, depth, labels, names, gw, gh);
+  buildWorld(...args);
   $('tools').hidden = false;
   rising = true; riseStart = performance.now();
   thud();
@@ -536,12 +477,12 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (live) liveTick(now);
   if (world && rising) {
-    const t = (now - riseStart) / 1600;
+    const t = Math.max(0, (performance.now() - riseStart) / 1600);
     writeAll(Math.min(1, t));
     if (t >= 1) rising = false;
   }
   // When nobody touches it, it sways gently so you can see it's 3D.
-  if ((world || live) && orbit.idle >= 0) { orbit.idle += dt; orbit.yaw = Math.sin(orbit.idle * 0.35) * 0.45; placeCamera(); }
+  if ((world || live) && orbit.idle >= 0) { orbit.idle += dt; orbit.yaw = Math.sin(orbit.idle * 0.35) * 0.5; placeCamera(); }
   renderer.render(scene, camera);
 }
 function resize() {
@@ -578,4 +519,4 @@ $('sound').addEventListener('click', () => {
 });
 
 if (new URLSearchParams(location.search).has('sample')) $('sample').click();
-if (location.search.includes('test')) window.__bw = { get world() { return world; }, get live() { return live; }, startLive, liveTick, writeAll, renderer, scene, camera, orbit, placeCamera };
+if (location.search.includes('test')) window.__bw = { finishRise: () => { rising = false; }, get world() { return world; }, get live() { return live; }, startLive, liveTick, writeAll, renderer, scene, camera, orbit, placeCamera, fitCamera, pool };
