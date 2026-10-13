@@ -64,6 +64,22 @@ button.primary { width: 100%; }
 .row button, .row select { padding: 7px 10px; border: 2px solid var(--edge); background: var(--panel); font-size: 13px; }
 .hint { margin: 0; font-size: 12px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
 
+.hotbar { position: fixed; z-index: 3; left: 50%; transform: translateX(-50%); bottom: max(118px, calc(env(safe-area-inset-bottom) + 112px)); display: flex; gap: 0; border: 3px solid #1b1d22; background: rgba(40,42,48,.7); box-shadow: 3px 3px 0 rgba(0,0,0,.4); }
+.hotbar button { width: 42px; height: 42px; padding: 4px; border: 2px solid rgba(255,255,255,.18); background: rgba(0,0,0,.25); }
+.hotbar button[aria-pressed="true"] { border: 3px solid #fff; padding: 3px; }
+.hotbar canvas { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+.crosshair { position: fixed; z-index: 3; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); pointer-events: none; mix-blend-mode: difference; }
+.crosshair::before, .crosshair::after { content: ""; position: absolute; background: #fff; }
+.crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+.crosshair::after { left: 0; top: 10px; width: 22px; height: 2px; }
+.walkui { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+.stick { position: fixed; width: 100px; height: 100px; border-radius: 50%; border: 2px solid rgba(255,255,255,.6); background: rgba(0,0,0,.2); }
+.knob { position: absolute; left: 30px; top: 30px; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.75); }
+.jump, .exitwalk { position: fixed; pointer-events: auto; border: 2px solid var(--edge); background: var(--panel); font-weight: 800; }
+.jump { right: var(--gutter); bottom: max(180px, calc(env(safe-area-inset-bottom) + 170px)); width: 74px; height: 74px; border-radius: 50%; }
+.exitwalk { left: var(--gutter); top: calc(max(10px, env(safe-area-inset-top)) + 48px); padding: 6px 10px; font-size: 13px; }
+.walkhint { position: fixed; left: 50%; transform: translateX(-50%); top: calc(max(10px, env(safe-area-inset-top)) + 88px); margin: 0; width: min(560px, calc(100% - 2 * var(--gutter))); font-size: 12px; text-align: center; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.8); transition: opacity 1s; }
+@media (hover: hover) and (pointer: fine) { .jump { display: none; } }
 .sound { position: fixed; z-index: 3; right: var(--gutter); top: calc(max(10px, env(safe-area-inset-top)) + 40px); padding: 4px 8px; border: 2px solid var(--edge); background: var(--panel); font-size: 12px; }
 .credit { position: fixed; z-index: 1; left: var(--gutter); right: var(--gutter); bottom: 2px; margin: 0; font-size: 9px; color: rgba(255,255,255,.45); text-align: center; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .spinner span { animation: none; } }

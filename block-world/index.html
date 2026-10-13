@@ -54,23 +54,28 @@
 <nav class="tools" id="tools" hidden aria-label="Tools">
   <div class="seg">
     <button type="button" data-tool="look" aria-pressed="true">Look</button>
+    <button type="button" data-tool="walk" aria-pressed="false">Walk</button>
     <button type="button" data-tool="move" aria-pressed="false">Move</button>
     <button type="button" data-tool="break" aria-pressed="false">Break</button>
     <button type="button" data-tool="place" aria-pressed="false">Place</button>
   </div>
   <div class="row">
-    <label class="sr" for="blockType">Block to place</label>
-    <select id="blockType">
-      <option value="planks">Planks</option><option value="stone">Stone</option><option value="brick">Brick</option>
-      <option value="glass">Glass</option><option value="leaves">Leaves</option><option value="wool">Wool</option>
-      <option value="glow">Glow</option><option value="water">Water</option><option value="sand">Sand</option>
-    </select>
     <button type="button" id="front">Front view</button>
     <button type="button" id="save">Save picture</button>
     <button type="button" id="again">New photo</button>
   </div>
   <p class="hint" id="hint">Drag to look around. Pinch or scroll to zoom.</p>
 </nav>
+
+<div class="hotbar" id="hotbar" hidden aria-label="Blocks"></div>
+
+<div class="crosshair" id="crosshair" hidden aria-hidden="true"></div>
+<div class="walkui" id="walkui" hidden>
+  <div class="stick" id="stick" hidden><div class="knob" id="knob"></div></div>
+  <button type="button" class="jump" id="jump">Jump</button>
+  <button type="button" class="exitwalk" id="exitWalk">Done walking</button>
+  <p class="walkhint" id="walkhint">Laptop: click to look around, WASD to walk, space to jump, left click breaks, right click places, 1 to 9 picks a block, Esc stops. Phone: left thumb walks, drag to look, tap breaks, hold places.</p>
+</div>
 
 <button type="button" id="sound" class="sound">Sound on</button>
 <p class="credit">Preview · AI runs on your device (Depth Anything V2, SegFormer) · sample photo CC0, Wikimedia Commons</p>

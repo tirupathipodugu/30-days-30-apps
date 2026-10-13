@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { TYPES, typeFor, materialFor, cubeGeometry } from './blocks.js';
 import { voxelize } from './voxel.js';
+import { createWalk } from './walk.js';
 
 const $ = (id) => document.getElementById(id);
 const NICE = { 'television receiver': 'TV', windowpane: 'window', 'chest of drawers': 'drawers', 'crt screen': 'screen', person: 'you' };
@@ -175,17 +176,22 @@ for (const btn of document.querySelectorAll('[data-tool]')) {
   btn.addEventListener('click', () => {
     tool = btn.dataset.tool;
     document.querySelectorAll('[data-tool]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
-    $('hint').textContent = { look: 'Drag to look around. Pinch or scroll to zoom.', move: 'Drag any object to move it.', break: 'Tap a block to break it.', place: 'Tap a block to place a new one on it.' }[tool];
+    if (tool === 'walk') { walk.start(); $('tools').classList.add('walking'); setTimeout(() => ($('walkhint').style.opacity = 0), 6000); }
+    else if (walk.on) { walk.stop(); $('tools').classList.remove('walking'); fitCamera(world.bounds); }
+    $('hint').textContent = { look: 'Drag to look around. Pinch or scroll to zoom.', walk: 'Walk around inside your world.', move: 'Drag any object to move it.', break: 'Tap a block to break it.', place: 'Tap a block to place a new one on it.' }[tool];
   });
 }
 
 const ray = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
 function pick(e) {
-  if (!world) return null;
   const rect = renderer.domElement.getBoundingClientRect();
   ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-  ray.setFromCamera(ndc, camera);
+  return pickAt(ndc);
+}
+function pickAt(point) {
+  if (!world) return null;
+  ray.setFromCamera(point, camera);
   const hits = ray.intersectObjects(Object.values(pool).filter((m) => m.count), false);
   for (const h of hits) {
     const b = h.object.userData.list?.[h.instanceId];
@@ -198,6 +204,7 @@ const pointers = new Map();
 let drag = null, pinch0 = 0, dist0 = 0;
 const canvas = renderer.domElement;
 canvas.addEventListener('pointerdown', (e) => {
+  if (walk.on) return;
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t: performance.now() });
   orbit.idle = -1e9;
@@ -219,6 +226,7 @@ canvas.addEventListener('pointerdown', (e) => {
   }
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (walk.on) return;
   const p = pointers.get(e.pointerId);
   if (!p) return;
   const dx = e.clientX - p.x, dy = e.clientY - p.y;
@@ -245,6 +253,7 @@ canvas.addEventListener('pointermove', (e) => {
   placeCamera();
 });
 canvas.addEventListener('pointerup', (e) => {
+  if (walk.on) return;
   const p = pointers.get(e.pointerId);
   pointers.delete(e.pointerId);
   if (drag) { drag = null; setTimeout(() => ($('picked').textContent = ''), 1200); return; }
@@ -253,19 +262,24 @@ canvas.addEventListener('pointerup', (e) => {
   if (!tap) return;
   const h = pick(e);
   if (!h) return;
-  if (tool === 'break') { h.b.gone = true; writeBlock(h.b); h.b.mesh.instanceMatrix.needsUpdate = true; crunch(); }
+  if (tool === 'break') breakBlock(h.b);
   else if (tool === 'place') placeBlock(h);
   else if (h.b.group > 0) { $('picked').textContent = `That's the ${world.groups[h.b.group].name}`; setTimeout(() => ($('picked').textContent = ''), 1500); }
 });
 canvas.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); drag = null; });
-canvas.addEventListener('wheel', (e) => { e.preventDefault(); orbit.dist = Math.min(300, Math.max(6, orbit.dist * (1 + e.deltaY * 0.001))); orbit.idle = -1e9; placeCamera(); }, { passive: false });
+canvas.addEventListener('wheel', (e) => { if (walk.on) return; e.preventDefault(); orbit.dist = Math.min(300, Math.max(6, orbit.dist * (1 + e.deltaY * 0.001))); orbit.idle = -1e9; placeCamera(); }, { passive: false });
 
 let placeType = 'planks';
-$('blockType').addEventListener('change', (e) => (placeType = e.target.value));
+const HOTBAR = ['planks', 'stone', 'brick', 'glass', 'leaves', 'wool', 'glow', 'sand', 'water'];
+const colorFor = (type) => (TYPES[type].dye ? [0.92, 0.92, 0.9] : TYPES[type].tint);
+function breakBlock(b) { b.gone = true; writeBlock(b); b.mesh.instanceMatrix.needsUpdate = true; crunch(b.type); }
 function placeBlock({ b, h }) {
   const n = h.face.normal;
   const off = world.groups[b.group].offset;
-  const nb = { type: placeType, x: b.x + off.x + Math.round(n.x), y: b.y + off.y + Math.round(n.y), z: b.z + off.z + Math.round(n.z), color: TYPES[placeType].dye ? [0.9, 0.9, 0.9] : TYPES[placeType].tint, group: 0, rise: 0, gone: false };
+  placeAt(new THREE.Vector3(b.x + off.x + Math.round(n.x), b.y + off.y + Math.round(n.y), b.z + off.z + Math.round(n.z)));
+}
+function placeAt(p) {
+  const nb = { type: placeType, x: p.x, y: p.y, z: p.z, color: colorFor(placeType), group: 0, rise: 0, gone: false };
   let m = pool[placeType];
   if (!m || m.count >= m.instanceMatrix.count) {
     // Grow this mesh, keeping what's there.
@@ -284,8 +298,55 @@ function placeBlock({ b, h }) {
   m.instanceColor.needsUpdate = true;
   writeBlock(nb);
   m.instanceMatrix.needsUpdate = true;
-  blip(660);
+  placeSound(placeType);
 }
+
+// ---------- hotbar: 9 blocks to place, picked by tap or number keys ----------
+
+function blockIcon(type) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  let m = materialFor(type);
+  if (Array.isArray(m)) m = m[2];
+  const img = m.map.image;
+  // An isometric-ish icon: the top face lighter, two side faces darker.
+  const col = colorFor(type).map((v) => Math.round(v * 255));
+  const face = (shade, draw) => {
+    const f = document.createElement('canvas'); f.width = f.height = 16;
+    const fg = f.getContext('2d');
+    fg.drawImage(img, 0, 0);
+    fg.globalCompositeOperation = 'multiply';
+    fg.fillStyle = `rgb(${Math.round(col[0] * shade)},${Math.round(col[1] * shade)},${Math.round(col[2] * shade)})`;
+    fg.fillRect(0, 0, 16, 16);
+    fg.globalCompositeOperation = 'destination-in';
+    fg.drawImage(img, 0, 0);
+    draw(f);
+  };
+  face(1, (f) => { g.setTransform(1, 0.5, -1, 0.5, 16, 2); g.drawImage(f, 0, 0, 16, 16); });
+  face(0.66, (f) => { g.setTransform(1, 0.5, 0, 1, 0, 10); g.drawImage(f, 0, 0, 16, 16); });
+  face(0.82, (f) => { g.setTransform(1, -0.5, 0, 1, 16, 18); g.drawImage(f, 0, 0, 16, 16); });
+  return c;
+}
+
+function pickSlot(i) {
+  placeType = HOTBAR[i] || placeType;
+  document.querySelectorAll('#hotbar button').forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
+  if (walk.on) walk.setHeld(placeType);
+  blip(520);
+}
+HOTBAR.forEach((type, i) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.title = `${type} (${i + 1})`;
+  b.setAttribute('aria-label', type);
+  b.setAttribute('aria-pressed', String(i === 0));
+  b.append(blockIcon(type));
+  b.addEventListener('click', () => pickSlot(i));
+  $('hotbar').append(b);
+});
+
 
 // ---------- photo in, world out ----------
 
@@ -316,7 +377,7 @@ async function fromImage(source) {
         showBusy('Placing the blocks…');
         setTimeout(() => {
           buildWorld(colors, data.depth, data.labels, data.names, gw, gh);
-          hideBusy(); $('tools').hidden = false;
+          hideBusy(); $('tools').hidden = false; $('hotbar').hidden = false;
           rising = true; riseStart = performance.now();
           thud();
           resolve();
@@ -339,7 +400,7 @@ $('sample').addEventListener('click', async () => {
   startSound();
   try { const res = await fetch(new URL('../assets/sample-room.jpg', import.meta.url)); fromImage(await res.blob()).catch(failed); } catch (err) { failed(err); }
 });
-$('again').addEventListener('click', () => { stopLive(); world = null; hideAll(); $('tools').hidden = true; $('start').hidden = false; $('status').textContent = ''; $('found').textContent = ''; $('count').textContent = ''; });
+$('again').addEventListener('click', () => { if (walk.on) exitWalk(); $('hotbar').hidden = true; stopLive(); world = null; hideAll(); $('tools').hidden = true; $('start').hidden = false; $('status').textContent = ''; $('found').textContent = ''; $('count').textContent = ''; });
 $('front').addEventListener('click', () => { if (world) fitCamera(world.bounds); });
 $('save').addEventListener('click', () => {
   renderer.render(scene, camera);
@@ -464,10 +525,20 @@ $('freeze').addEventListener('click', () => {
   const args = [L.colors.slice(), L.depth.slice(), L.labels.slice(), L.names.slice(), L.gw, L.gh];
   stopLive();
   buildWorld(...args);
-  $('tools').hidden = false;
+  $('tools').hidden = false; $('hotbar').hidden = false;
   rising = true; riseStart = performance.now();
   thud();
 });
+
+// ---------- walk mode ----------
+
+const walk = createWalk({
+  camera, scene, renderer, $, materialFor,
+  world: () => world, pickAt, breakBlock, placeAt, colorFor,
+  placeType: () => placeType, pickSlot: (i) => pickSlot(i), sound: gameSound, exitWalk: () => exitWalk(),
+});
+function exitWalk() { document.querySelector('[data-tool="look"]').click(); }
+$('exitWalk').addEventListener('click', exitWalk);
 
 // ---------- loop ----------
 
@@ -482,7 +553,8 @@ function frame(now) {
     if (t >= 1) rising = false;
   }
   // When nobody touches it, it sways gently so you can see it's 3D.
-  if ((world || live) && orbit.idle >= 0) { orbit.idle += dt; orbit.yaw = Math.sin(orbit.idle * 0.35) * 0.5; placeCamera(); }
+  if (walk.on) walk.step(dt);
+  else if ((world || live) && orbit.idle >= 0) { orbit.idle += dt; orbit.yaw = Math.sin(orbit.idle * 0.35) * 0.5; placeCamera(); }
   renderer.render(scene, camera);
 }
 function resize() {
@@ -509,7 +581,25 @@ function tone(f, len, type = 'square', vol = 0.05) {
   o.connect(g).connect(ac.destination); o.start(t); o.stop(t + len);
 }
 const blip = (f) => tone(f, 0.12);
-function crunch() { tone(180, 0.15, 'sawtooth', 0.06); tone(120, 0.2, 'square', 0.04); }
+function noise(len, vol, lp) {
+  if (!ac || !soundOn) return;
+  const n = ac.createBuffer(1, Math.floor(ac.sampleRate * len), ac.sampleRate), d = n.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length) ** 2;
+  const s = ac.createBufferSource(), g = ac.createGain(), f = ac.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = lp; s.buffer = n; g.gain.value = vol;
+  s.connect(f).connect(g).connect(ac.destination); s.start();
+}
+const MATERIAL_SOUND = { planks: [900, 0.18], floor: [900, 0.18], stone: [2200, 0.2], brick: [1800, 0.2], dirt: [600, 0.2], sand: [1400, 0.16], grass: [700, 0.18], leaves: [3000, 0.12], wool: [500, 0.14], plaster: [1600, 0.16], iron: [3500, 0.16] };
+function crunch(type = 'stone') {
+  if (type === 'glass') { tone(2600, 0.25, 'triangle', 0.05); tone(3900, 0.3, 'sine', 0.04); noise(0.25, 0.25, 6000); return; }
+  const [lp, len] = MATERIAL_SOUND[type] || [1500, 0.16];
+  noise(len, 0.5, lp); tone(lp / 8, len, 'square', 0.03);
+}
+function placeSound(type) { const [lp] = MATERIAL_SOUND[type] || [1500]; noise(0.08, 0.4, lp); }
+function gameSound(name) {
+  if (name === 'step') noise(0.06, 0.18, 700);
+  if (name === 'jump') noise(0.1, 0.2, 500);
+}
 function thud() { for (let i = 0; i < 6; i++) setTimeout(() => tone(90 + Math.random() * 40, 0.18, 'triangle', 0.08), i * 220); }
 $('sound').addEventListener('click', () => {
   soundOn = !soundOn;
@@ -519,4 +609,4 @@ $('sound').addEventListener('click', () => {
 });
 
 if (new URLSearchParams(location.search).has('sample')) $('sample').click();
-if (location.search.includes('test')) window.__bw = { finishRise: () => { rising = false; }, get world() { return world; }, get live() { return live; }, startLive, liveTick, writeAll, renderer, scene, camera, orbit, placeCamera, fitCamera, pool };
+if (location.search.includes('test')) window.__bw = { walk, finishRise: () => { rising = false; }, get world() { return world; }, get live() { return live; }, startLive, liveTick, writeAll, renderer, scene, camera, orbit, placeCamera, fitCamera, pool };

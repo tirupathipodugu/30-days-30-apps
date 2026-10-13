@@ -71,6 +71,31 @@ export function voxelize({ colors, depth, labels, names, gw, gh, across = 48, so
     Zs[i] = 1 / inv;
     zs.push(Zs[i]);
   }
+  // Windows and mirrors: the depth AI sees through them (outdoors is far away), which would make a deep
+  // slab of glass. A window sits flat in its wall, so give each glass region the depth of what borders it.
+  {
+    const typeAt = (i) => (labels[i] < 0 ? 'plain' : typeFor(names[labels[i]]));
+    const border = new Map();
+    for (let r = 0; r < gh; r++) for (let c = 0; c < gw; c++) {
+      const i = r * gw + c;
+      if (labels[i] < 0 || typeAt(i) !== 'glass') continue;
+      for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const rr = r + dr, cc = c + dc;
+        if (rr < 0 || cc < 0 || rr >= gh || cc >= gw) continue;
+        const j = rr * gw + cc;
+        if (labels[j] === labels[i] || typeAt(j) === 'glass' || typeAt(j) === null) continue;
+        if (!border.has(labels[i])) border.set(labels[i], []);
+        border.get(labels[i]).push(Zs[j]);
+      }
+    }
+    for (const [lab, list] of border) {
+      list.sort((a, b) => a - b);
+      const z = list[Math.floor(list.length / 2)] * 1.02;
+      for (let i = 0; i < gw * gh; i++) if (labels[i] === lab) Zs[i] = z;
+    }
+    zs.length = 0;
+    for (let i = 0; i < gw * gh; i++) zs.push(Zs[i]);
+  }
   zs.sort((a, b) => a - b);
   const zMid = zs[Math.floor(zs.length * 0.6)];
   const v = (2 * zMid * Math.tan(HFOV / 2)) / across;   // block size in world units
@@ -165,7 +190,7 @@ export function voxelize({ colors, depth, labels, names, gw, gh, across = 48, so
     else color = spec.tint;                                              // wood, stone, leaves…: the material's own colour
     add(c.x, c.y, c.z, type, color, c.group);
     if (!solid) continue;
-    const depthFill = spec.fixed ? (type === 'floor' || type === 'grass' ? 0 : 1) : 2;
+    const depthFill = type === 'glass' ? 0 : spec.fixed ? (type === 'floor' || type === 'grass' ? 0 : 1) : 2;
     for (let d = 1; d <= depthFill; d++) add(c.x, c.y, c.z - d, type, color.map((x) => x * 0.92), c.group);
     if (type === 'floor' || type === 'grass') add(c.x, c.y - 1, c.z, type === 'grass' ? 'dirt' : type, (type === 'grass' ? TYPES.dirt.tint : color).map((x) => x * 0.85), c.group);
   }
