@@ -91,7 +91,7 @@ export function createLook(renderer, scene, camera, lowEnd) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.info.autoReset = false; // count every pass of a frame together
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 0.96;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = tier.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
 
@@ -135,7 +135,7 @@ export function createLook(renderer, scene, camera, lowEnd) {
     composer.addPass(new RenderPass(scene, camera));
     if (tier.outline) { outline = new OutlinePass(camera); composer.addPass(outline); }
     if (tier.bloom) {
-      bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.38, 0.45, 1.25);
+      bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.32, 0.5, 1.5);
       composer.addPass(bloom);
     }
     composer.addPass(new OutputPass());

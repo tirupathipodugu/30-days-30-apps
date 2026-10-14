@@ -6,7 +6,7 @@ import { MATCH } from './match.js';
 const $ = (s) => document.querySelector(s);
 const SHARE_URL = 'https://tirupathipodugu.github.io/ideas/team-war/v2/';
 const ICONS = { human: { dash: '➜', q: '▥', e: '⚑', r: '☄' }, ai: { dash: '➜', q: '≋', e: '⟡', r: '◎' } };
-const BOSS_NAMES = { human: 'Siege Giant', ai: 'Mainframe Titan' };
+const BOSS_NAMES = { human: 'Magma Colossus', ai: 'Tidal Colossus' };
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const COIN = { human: '🪙', ai: '⚙️' };
 
@@ -293,7 +293,7 @@ export class UI {
     // rewards + xp bar fill
     $('#rwBank').textContent = `+${d.rw.earned} ${currencyName(d.team)} · +${d.rw.xp} XP`;
     this.animateXp(d);
-    const share = `I ${won ? 'beat all 10 waves' : 'reached wave ' + d.wave} as Team ${TEAMS[d.team].short} in Human vs AI 2.0 with ${fmt(d.score)} points${d.daily ? ' (daily challenge)' : ''}. Can you beat it?`;
+    const share = `I ${won ? 'beat all 10 waves' : 'reached wave ' + d.wave} as Team ${TEAMS[d.team].short} in Fire vs Water with ${fmt(d.score)} points${d.daily ? ' (daily challenge)' : ''}. Can you beat it?`;
     $('#shareBtn').href = `https://x.com/intent/tweet?text=${encodeURIComponent(share)}&url=${encodeURIComponent(SHARE_URL)}`;
     $('#switchBtn').textContent = `Play as ${TEAMS[other(d.team)].short}`;
     $('#againBtn').textContent = d.daily ? 'Play again (practice) ▶' : 'Play again ▶';

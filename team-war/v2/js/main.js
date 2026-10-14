@@ -183,12 +183,13 @@ function buildInput(g) {
 }
 
 // ---------- events -> juice ----------
+// elemental debris: Fire bursts into embers & ash, Water into droplets & foam
 const DEBRIS = {
-  human: [0xE8743B, 0xF0C08A, 0x5E4430, 0xC3CAD2, 0xA84A17],
-  ai: [0x17A398, 0xD7DFE5, 0x37444F, 0x7BFFEE, 0x0C6E66],
+  human: [0xFF5A1E, 0xFF9A3A, 0x2A1A16, 0xFFC24D, 0x7A2A10],
+  ai: [0x27A8E0, 0xCFEFFF, 0x0C5E90, 0x7FE0FF, 0x145A7E],
 };
-const KIND_ACCENT = { runner: 0xFFD23F, brute: 0xE04848, shooter: 0x9B5DE5, boss: 0xFFC83D, grunt: null };
-const SPARK = { human: 0xFFC890, ai: 0x7BFFEE };
+const KIND_ACCENT = { runner: 0xFFD23F, brute: 0xFF5A3A, shooter: 0x8FE0FF, boss: 0xFFC83D, grunt: null };
+const SPARK = { human: 0xFFB060, ai: 0xBFF4FF };
 
 function handleEvents(g, quiet) {
   const ev = g.events;
@@ -239,7 +240,7 @@ function onEvent(g, e, quiet) {
       if (e.byHero && !quiet && e.pts && (big || g.mult >= 3)) fx.number(e.x, 3, e.z, '+' + e.pts, 'pts', 0.9);
       if (e.side === g.foe) sfx(quiet, big ? 'bigKill' : 'kill', { combo: g.combo });
       if (e.kind === 'boss' && !quiet) {
-        ui.banner(`${e.side === 'ai' ? 'Mainframe Titan' : 'Siege Giant'} down!`, `+${e.pts} points`, '#FFC83D');
+        ui.banner(`${e.side === 'ai' ? 'Tidal Colossus' : 'Magma Colossus'} down!`, `+${e.pts} points`, '#FFC83D');
         for (let k = 1; k <= 5; k++) setTimeout(() => { fx.burst(e.x + (Math.random() - 0.5) * 4, 2, e.z + (Math.random() - 0.5) * 4, 20, 0xFFC83D, 14, 0.6, 0.25); fx.ring(e.x, e.z, 1, 6 + k, 0.5, 0xFFE0A0); audio.play('boom'); }, k * 140);
         audio.setMusic(true, 1);
       }
@@ -314,7 +315,7 @@ function onEvent(g, e, quiet) {
       break;
     }
     case 'bossSpawn':
-      if (!quiet) { ui.banner('BOSS', g.foe === 'ai' ? 'The Mainframe Titan is here' : 'The Siege Giant is here', '#FF5A5A'); fx.shake(0.6); audio.setMusic(true, 2); }
+      if (!quiet) { ui.banner('BOSS', g.foe === 'ai' ? 'The Tidal Colossus rises' : 'The Magma Colossus rises', '#FF5A5A'); fx.shake(0.6); audio.setMusic(true, 2); }
       fx.ring(e.x, e.z, 1, 10, 0.8, 0xFF5A5A); fx.puff(e.x, 0.5, e.z, 16, 0x8A8070, 1.4, 6, 0.9);
       sfx(quiet, 'bossSpawn');
       break;
@@ -433,18 +434,23 @@ function ambient(g, dt) {
     for (let k = 0; k < (lowEnd ? 2 : 4); k++) {
       const t = Math.random();
       const x = f.x0 + (f.x1 - f.x0) * t + (Math.random() - 0.5) * f.w * 1.6, z = f.z0 + (f.z1 - f.z0) * t + (Math.random() - 0.5) * f.w * 1.6;
-      fx.glowDot(x, 0.2, z, 0, 3 + Math.random() * 4, 0, 0.5, 0.35 + Math.random() * 0.3, Math.random() < 0.3 ? 0xffffff : 0x3BFFE0, -2, 1);
+      fx.glowDot(x, 0.2, z, 0, 2 + Math.random() * 2.5, 0, 0.5, 0.35 + Math.random() * 0.3, Math.random() < 0.3 ? 0xffffff : 0x6FD8FF, 1, 1.4);
     }
   }
   if (ambT < 0.05) return;
   ambT = 0;
   const h = g.hero;
+  // elemental trail: embers drift off the Fire hero, droplets off the Water hero while moving
+  if (!h.dead && (h.vx * h.vx + h.vz * h.vz) > 4) {
+    if (g.team === 'human') fx.glowDot(h.x + (Math.random() - 0.5) * 0.6, 0.6 + Math.random() * 0.8, h.z + (Math.random() - 0.5) * 0.6, 0, 1.4 + Math.random(), 0, 0.5, 0.18, Math.random() < 0.5 ? 0xFF6A1E : 0xFFB040, -1, 1);
+    else fx.glowDot(h.x + (Math.random() - 0.5) * 0.6, 0.4, h.z + (Math.random() - 0.5) * 0.6, 0, 0.4, 0, 0.5, 0.14, 0x7FE0FF, 4, 2);
+  }
   if (g.frenzy > 0 && !h.dead) fx.glowDot(h.x + (Math.random() - 0.5), 1 + Math.random(), h.z + (Math.random() - 0.5), 0, 2, 0, 0.4, 0.25, 0xFFC83D);
   if (g.rally > 0) for (const u of g.units) if (u.ally && Math.random() < 0.15) fx.glowDot(u.x, 1.8, u.z, 0, 1.5, 0, 0.4, 0.2, 0xFFC83D);
   for (const k of ['human', 'ai']) {
     const b = g.bases[k], dmg = 1 - b.hp / b.max;
     if (dmg > 0.4 && Math.random() < dmg) fx.puff(b.x + (Math.random() - 0.5) * 6, 4 + Math.random() * 4, b.z, 1, 0x4A4646, 1.4, 0.5, 1.6, 2);
-    if (dmg > 0.65 && Math.random() < dmg * 0.6) fx.glowDot(b.x + (Math.random() - 0.5) * 5, 3 + Math.random() * 3, b.z, 0, 3, 0, 0.5, 0.5, 0xFF8A3D);
+    if (dmg > 0.65 && Math.random() < dmg * 0.6) fx.glowDot(b.x + (Math.random() - 0.5) * 5, 3 + Math.random() * 3, b.z, 0, 3, 0, 0.5, 0.5, k === 'human' ? 0xFF8A3D : 0x9FE0FF);
   }
   for (const u of g.units) if (u.elite && Math.random() < 0.4) fx.glowDot(u.x + (Math.random() - 0.5), 0.5 + Math.random() * 1.5, u.z + (Math.random() - 0.5), 0, 1.5, 0, 0.5, 0.18, 0xFFC83D);
   for (const p of g.pickups) if (Math.random() < 0.5) fx.glowDot(p.x + (Math.random() - 0.5), 0.3, p.z + (Math.random() - 0.5), 0, 2.5, 0, 0.6, 0.15, 0xffffff);

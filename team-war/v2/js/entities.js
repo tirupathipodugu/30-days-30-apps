@@ -93,7 +93,8 @@ export class Entities {
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48).rotateX(-Math.PI / 2), norm(0xff2a2a, 0.9));
       const fill = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), norm(0xff2a2a, 0.3));
       const cross = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.3, 4).rotateX(-Math.PI / 2), norm(0xff2a2a, 0.8));
-      const rock = new THREE.Mesh(GEO.dodec, toon(0x9C9282, 0.2)); rock.castShadow = true; rock.visible = false;
+      const rock = new THREE.Mesh(GEO.dodec, toon(0x2E1C18, 0.2)); rock.castShadow = true; rock.visible = false;
+      const rockGlow = new THREE.Mesh(GEO.dodec, additive(0xFF6A1E, 0.9, 2.4)); rockGlow.scale.setScalar(1.15); rock.add(rockGlow);
       g.add(ring, fill, cross, rock); g.visible = false; g.position.y = 0.06;
       ring.renderOrder = fill.renderOrder = 4;
       scene.add(g); this.tele.push({ g, ring, fill, cross, rock });
@@ -102,7 +103,7 @@ export class Entities {
     this.walls = [];
     for (let i = 0; i < 3; i++) {
       const g = new THREE.Group();
-      const panel = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), curtainMat(0xFF9A4D, 0)); panel.scale.set(7.6, 2.4, 1); panel.position.y = 1.2; panel.material.uniforms.uLen.value = 3.2;
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), curtainMat(0xFF4A12, 1)); panel.scale.set(7.6, 2.8, 1); panel.position.y = 0; panel.material.uniforms.uLen.value = 3.6;
       const edge = new THREE.Mesh(GEO.box, additive(0xFFE0B0, 0.9)); edge.scale.set(7.6, 0.08, 0.3); edge.position.y = 2.2;
       g.add(panel, edge);
       for (let k = 0; k < 7; k++) {
@@ -114,10 +115,10 @@ export class Entities {
     // firewalls (Team AI Q)
     this.fires = [];
     for (let i = 0; i < 3; i++) {
-      const strip = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(0x3BFFE0, 0.35, 1.2));
-      const core = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(0xB8FFF4, 0.25, 1.2));
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(0x4FC8FF, 0.35, 1.2));
+      const core = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(0xCFEFFF, 0.25, 1.2));
       strip.position.y = 0.07; core.position.y = 0.08; strip.visible = core.visible = false;
-      const wall = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), curtainMat(0x2BFFE0, 1));
+      const wall = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), curtainMat(0x6FD8FF, 0));
       wall.visible = false; wall.renderOrder = 5; scene.add(wall);
       scene.add(strip, core); this.fires.push({ strip, core, wall });
     }
@@ -125,9 +126,9 @@ export class Entities {
     this.drones = [];
     for (let i = 0; i < 6; i++) {
       const g = new THREE.Group();
-      const b = new THREE.Mesh(GEO.sphere, toon(PAL.metal, 0.5)); b.scale.set(0.55, 0.4, 0.55); b.castShadow = true;
-      const eye = new THREE.Mesh(GEO.sphere, glowMat(0x7BFFEE)); eye.scale.set(0.22, 0.14, 0.12); eye.position.set(0, 0.02, 0.24);
-      const rot = new THREE.Mesh(GEO.torus, glowMat(0x7BFFEE)); rot.scale.set(0.75, 0.75, 0.75); rot.position.y = 0.18;
+      const b = new THREE.Mesh(GEO.sphere, additive(0x4FC8FF, 0.8, 1.8)); b.scale.set(0.55, 0.5, 0.55);
+      const eye = new THREE.Mesh(GEO.sphere, glowMat(0xBFF4FF)); eye.scale.set(0.22, 0.14, 0.12); eye.position.set(0, 0.02, 0.24);
+      const rot = new THREE.Mesh(GEO.torus, glowMat(0x6FD8FF)); rot.scale.set(0.75, 0.75, 0.75); rot.position.y = 0.18;
       g.add(b, eye, rot); g.visible = false; scene.add(g); this.drones.push({ g, rot });
     }
     // pickups
@@ -221,7 +222,7 @@ export class Entities {
       if (nm < 240) {
         const rr = u.r * (u.elite ? 1.7 : 1.35);
         _m.compose(_v.set(u.x, 0.05, u.z), _q.identity(), _s.set(rr, 1, rr)); this.marks.setMatrixAt(nm, _m);
-        if (u.elite) _c.setHex(0xFFC83D); else _c.setHex(u.side === 'human' ? 0xFF9A50 : 0x3FF0DC).multiplyScalar(u.ally ? 0.5 : 0.32);
+        if (u.elite) _c.setHex(0xFFC83D); else _c.setHex(u.side === 'human' ? 0xFF6A1E : 0x4FC8FF).multiplyScalar(u.ally ? 0.5 : 0.32);
         this.marks.setColorAt(nm, _c); nm++;
       }
       this.alive.add(u.id);
@@ -259,9 +260,9 @@ export class Entities {
       if (s.orb) {
         const pulse = 1 + Math.sin(t * 20 + s.x) * 0.12;
         _m.compose(_v.set(s.x, 1.1, s.z), _q.identity(), _s.setScalar(s.r * 1.6 * pulse));
-        this.orbs.setMatrixAt(norb, _m); this.orbs.setColorAt(norb, _c.setHex(0xFFE3F0));
+        this.orbs.setMatrixAt(norb, _m); this.orbs.setColorAt(norb, _c.setHex(s.side === 'human' ? 0xFFD8A0 : 0xDFF6FF));
         _m.compose(_v, _q, _s.setScalar(s.r * 3.4 * pulse));
-        this.orbHalo.setMatrixAt(norb, _m); this.orbHalo.setColorAt(norb, _c.setHex(0xFF2E7E));
+        this.orbHalo.setMatrixAt(norb, _m); this.orbHalo.setColorAt(norb, _c.setHex(s.side === 'human' ? 0xFF5A1E : 0x4FC8FF));
         norb++;
       } else {
         _q.setFromAxisAngle(UP, yaw);
@@ -271,7 +272,7 @@ export class Entities {
         this.bolts.setMatrixAt(nbolt, _m);
         if (s.src === 'hero') {
           if (trail.prism) _c.setHSL((t * 0.8 + s.x * 0.05) % 1, 1, 0.6); else _c.setHex(s.crit ? 0xFFE066 : heroCol);
-        } else _c.setHex(s.side === 'human' ? 0xFFB070 : 0x6FFFEA);
+        } else _c.setHex(s.side === 'human' ? 0xFF7A2A : 0x7FE0FF);
         this.bolts.setColorAt(nbolt, _c);
         _m.compose(_v, _q, _s.set(0.12 * big, 0.12 * big, l * 0.75));
         this.boltCores.setMatrixAt(nbolt, _m); this.boltCores.setColorAt(nbolt, _c.setHex(0xFFFFFF));

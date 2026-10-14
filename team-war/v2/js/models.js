@@ -4,11 +4,13 @@
 // Each kind carries an accent colour so it reads instantly: runner = yellow, brute = red, shooter = violet, boss = gold.
 
 const PI = Math.PI;
+// Fire team (key 'human') = molten-rock golems: dark basalt bodies with glowing lava seams.
+// Water team (key 'ai') = ice/water golems: pale translucent ice with crystal glow.
 export const PAL = {
-  hTeam: 0xE8743B, hDark: 0xA84A17, skin: 0xF4C79E, cloth: 0x5A4232, leather: 0x4A3122, steel: 0xC9D1D9, wood: 0x9A6233,
-  cream: 0xFFF1D6, hair: 0x5A3820, cheek: 0xF3967F,
-  aTeam: 0x17A398, aDark: 0x0C6E66, metal: 0xEEF2F5, gun: 0x3A4753, black: 0x1A2229, aGlow: 0x7BFFEE,
-  yellow: 0xFFD23F, red: 0xE04848, violet: 0x9B5DE5, gold: 0xFFC83D, white: 0xffffff, ink: 0x1B1512,
+  hTeam: 0xFF5A1E, hDark: 0xA8280A, skin: 0xFF8A3A, cloth: 0x2A1A16, leather: 0x1C110D, steel: 0x3A2C2E, wood: 0x5A2A18,
+  cream: 0xFFC24D, hair: 0xFF7A20, cheek: 0xFF6A3A,
+  aTeam: 0x27A8E0, aDark: 0x0C5E90, metal: 0xDDF4FF, gun: 0x1E6E9A, black: 0x0C3A58, aGlow: 0xBFF4FF,
+  yellow: 0xFFD23F, red: 0xFF5A3A, violet: 0x8FE0FF, gold: 0xFFC83D, white: 0xffffff, ink: 0x120C0A,
 };
 const P = PAL;
 const L = (g, c, p, s, extra = {}) => ({ g, c, p, s, ...extra });

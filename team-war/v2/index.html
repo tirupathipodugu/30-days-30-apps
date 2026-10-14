@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Human vs AI 2.0</title>
-<meta name="description" content="Pick a side, Human or AI. Fight through 10 waves with your hero, build your loadout, beat the bosses.">
-<meta name="theme-color" content="#12161c">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M4 60 L32 4 L32 60Z' fill='%23E8743B'/%3E%3Cpath d='M32 4 L60 60 L32 60Z' fill='%2317A398'/%3E%3C/svg%3E">
+<title>Fire vs Water</title>
+<meta name="description" content="Pick a side, Fire or Water. Fight through 10 waves with your elemental hero, build your loadout, beat the bosses.">
+<meta name="theme-color" content="#0b0f14">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M4 60 L32 4 L32 60Z' fill='%23FF5A1E'/%3E%3Cpath d='M32 4 L60 60 L32 60Z' fill='%2327A8E0'/%3E%3C/svg%3E">
 <style>
   :root {
-    --human: #E8743B; --human-dark: #A84A17; --ai: #17A398; --ai-dark: #0C6E66;
+    --human: #FF5A1E; --human-dark: #A8280A; --ai: #27A8E0; --ai-dark: #0C5E90;
     --ink: #F4F1EA; --muted: #A9B2BB; --panel: rgba(13, 17, 23, 0.72); --line: rgba(255, 255, 255, 0.10);
     --bad: #FF4D4D; --good: #6BE07A; --gold: #FFC83D;
     --team: var(--human); --team-dark: var(--human-dark);
@@ -351,9 +351,9 @@
   .team { border-radius: 22px; border: 3px solid rgba(255, 255, 255, .28); box-shadow: 0 10px 0 rgba(0, 0, 0, .25), 0 16px 34px rgba(0, 0, 0, .35); }
   .team .tname { font-family: var(--display); font-weight: 400; font-style: normal; font-size: 30px; text-shadow: 0 3px 0 rgba(0, 0, 0, .3); }
   .team .play { border-radius: 14px; background: rgba(255, 255, 255, .95); box-shadow: 0 4px 0 rgba(0, 0, 0, .25); }
-  .team.h .play { color: #A84A17; } .team.a .play { color: #0C6E66; }
-  .team.h { background: radial-gradient(circle at 80% 0%, rgba(255, 220, 160, .45), transparent 55%), linear-gradient(150deg, #F59457, #B5521D); }
-  .team.a { background: radial-gradient(circle at 80% 0%, rgba(170, 255, 240, .45), transparent 55%), linear-gradient(150deg, #2CCBBB, #0A5C55); }
+  .team.h .play { color: #A84A17; } .team.a .play { color: #0C5E90; }
+  .team.h { background: radial-gradient(circle at 80% 0%, rgba(255, 210, 150, .5), transparent 55%), linear-gradient(150deg, #FF7A3A, #A8280A); }
+  .team.a { background: radial-gradient(circle at 80% 0%, rgba(150, 215, 255, .5), transparent 55%), linear-gradient(150deg, #34A8E8, #0A4E80); }
   .btn { border-radius: 14px; font-weight: 900; box-shadow: 0 4px 0 rgba(0, 0, 0, .3); }
   .btn.primary { font-family: var(--display); font-weight: 400; font-size: 22px; letter-spacing: .02em; box-shadow: 0 5px 0 var(--team-dark), 0 10px 24px color-mix(in srgb, var(--team) 40%, transparent); }
   .btn:active { transform: translateY(2px); }
@@ -377,6 +377,19 @@
   .up.e::before { background: radial-gradient(circle at 50% 28%, rgba(200, 107, 255, .55), #160f24 62%),
     conic-gradient(from 0deg, rgba(255, 120, 200, .25), rgba(120, 200, 255, .25), rgba(160, 255, 170, .25), rgba(255, 120, 200, .25)); background-blend-mode: screen; }
   @media (max-width: 720px) { .up { min-height: 0; padding: 12px; } .up::before { inset: 5px; } .up .ic { width: 56px; height: 56px; font-size: 28px; margin-top: 0; } }
+  /* compact controls hint, low-opacity, bottom-left corner (clear of roster & touch sticks); auto-fades */
+  #controls { position: fixed; left: calc(14px + var(--safe-l)); bottom: calc(14px + var(--safe-b)); display: none;
+    align-items: center; gap: 8px; pointer-events: none; z-index: 30; font-size: 12px; font-weight: 800;
+    color: rgba(255,255,255,.62); text-shadow: 0 1px 3px rgba(0,0,0,.8); max-width: min(46vw, 420px); transition: opacity .4s; }
+  body.playing #controls.live { display: flex; }
+  #controls .ctext { background: rgba(10,13,18,.5); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 5px 10px;
+    backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); transition: opacity .4s, transform .4s; white-space: normal; }
+  #controls.faded .ctext { opacity: 0; transform: translateX(-8px); pointer-events: none; }
+  #ctoggle { pointer-events: auto; width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%; border: 1px solid rgba(255,255,255,.18);
+    background: rgba(10,13,18,.55); color: rgba(255,255,255,.7); font: 900 13px inherit; cursor: pointer; display: grid; place-items: center; opacity: .55; }
+  #ctoggle:hover { opacity: 1; }
+  body.touch #controls { bottom: calc(80px + var(--safe-b)); font-size: 11px; max-width: 56vw; }
+  @media (max-height: 500px) and (orientation: landscape) { body.touch #controls { bottom: calc(14px + var(--safe-b)); } }
 </style>
 <!-- ===== end look polish ===== -->
 </head>
@@ -433,7 +446,7 @@
 <!-- start screen -->
 <section id="menu" class="screen on" aria-label="Start">
   <div class="wrap">
-    <div class="title"><h1><span class="h">HUMAN</span><span class="vs">vs</span><span class="a">AI</span></h1><span class="ver">2.0</span></div>
+    <div class="title"><h1><span class="h">FIRE</span><span class="vs">vs</span><span class="a">WATER</span></h1><span class="ver">ELEMENTS</span></div>
     <div class="profile panel">
       <div class="lvl" id="pLvl">1</div>
       <div class="grow"><div class="lbl"><span>Level <span id="pLvl2">1</span></span><b id="pXp">0 / 360 XP</b></div><div class="bar thin xpbar"><i id="pXpBar" style="width:0%"></i></div></div>
@@ -442,13 +455,13 @@
       <button class="iconBtn muteBtn" aria-label="Mute sound"></button>
     </div>
     <div class="teams">
-      <button class="team h" data-team="human"><span class="best" id="bestH">Best 0</span><span class="tname">Team Human</span>
-        <span class="tsub">Ranger · Shield Wall · Rally<br>Defend the castle.</span><span class="play">Play as Human ▶</span><span class="glyph">♜</span></button>
-      <button class="team a" data-team="ai"><span class="best" id="bestA">Best 0</span><span class="tname">Team AI</span>
-        <span class="tsub">Unit-7 · Firewall · Drone Swarm<br>Protect the server tower.</span><span class="play">Play as AI ▶</span><span class="glyph">⌬</span></button>
+      <button class="team h" data-team="human"><span class="best" id="bestH">Best 0</span><span class="tname">Team Fire</span>
+        <span class="tsub">Ember · Flame Wall · Meteor<br>Defend the fortress.</span><span class="play">Play as Fire ▶</span><span class="glyph">🔥</span></button>
+      <button class="team a" data-team="ai"><span class="best" id="bestA">Best 0</span><span class="tname">Team Water</span>
+        <span class="tsub">Tide · Ice Wall · Tidal Wave<br>Protect the citadel.</span><span class="play">Play as Water ▶</span><span class="glyph">🌊</span></button>
     </div>
     <div class="daily panel" id="dailyBox"><span style="font-size:28px" aria-hidden="true">📅</span><span class="grow"><span class="dt" id="dailyT">Daily Challenge</span><br><span class="dd" id="dailyD"></span></span>
-      <span class="row" id="dailyBtns" style="flex-wrap:nowrap"><button class="btn gold" data-daily="human">Human ▶</button><button class="btn gold" data-daily="ai">AI ▶</button></span><span class="go hidden" id="dailyDone">Done ✓</span></div>
+      <span class="row" id="dailyBtns" style="flex-wrap:nowrap"><button class="btn gold" data-daily="human">Fire ▶</button><button class="btn gold" data-daily="ai">Water ▶</button></span><span class="go hidden" id="dailyDone">Done ✓</span></div>
     <div class="how">
       <div class="panel kb"><b>Keyboard + mouse</b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · mouse aim · hold click to shoot · <kbd>Space</kbd> dash · <kbd>Q</kbd> <kbd>E</kbd> abilities · <kbd>R</kbd> ultimate (level 5) · <kbd>Esc</kbd> pause</div>
       <div class="panel"><b>Touch</b>Left thumb moves. Right thumb aims and fires (let go and your hero auto-aims). Tap the round buttons to dash and use abilities.</div>
@@ -493,6 +506,22 @@
   </div>
 </section>
 
+<!-- compact controls hint (self-contained; does not touch game modules) -->
+<div id="controls" aria-hidden="true"><span class="ctext">WASD move · hold click to shoot · Space dash · Q/E/R abilities</span><button id="ctoggle" type="button" aria-label="Show controls">?</button></div>
+<script>
+(function () {
+  var el = document.getElementById('controls'), txt = el.querySelector('.ctext'), tog = document.getElementById('ctoggle'), timer;
+  if (matchMedia('(pointer: coarse)').matches) txt.textContent = 'Left stick: move · Right stick: aim & fire (let go to auto-aim) · tap buttons to dash & use abilities';
+  function fade() { clearTimeout(timer); timer = setTimeout(function () { el.classList.add('faded'); }, 7000); }
+  function show() { el.classList.remove('faded'); fade(); }
+  tog.addEventListener('click', function (e) { e.stopPropagation(); el.classList.toggle('faded'); if (!el.classList.contains('faded')) fade(); });
+  var mo = new MutationObserver(function () {
+    if (document.body.classList.contains('playing')) { if (!el.classList.contains('live')) { el.classList.add('live'); show(); } }
+    else { el.classList.remove('live'); clearTimeout(timer); }
+  });
+  mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+})();
+</script>
 <script type="module" src="./js/main.js"></script>
 </body>
 </html>

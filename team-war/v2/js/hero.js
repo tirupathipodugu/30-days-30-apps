@@ -3,11 +3,43 @@
 // Procedural animation: walk cycle with squash & stretch, idle breathing, blinking, lean, recoil kick,
 // dash stretch, cape follow-through, hurt flash. A floating team marker keeps the hero easy to find.
 import * as THREE from 'three';
-import { toon, glowMat, additive, GEO, Baker, M4, GLOW, GRADIENT, blinkAt } from './gfx.js';
+import { toon, glowMat, additive, GEO, Baker, M4, GLOW, GRADIENT, blinkAt, TIME } from './gfx.js';
 import { PAL } from './models.js';
 
-export const DEFAULT_SKIN = { human: { main: 0xE8743B, trim: 0xFFF1D6 }, ai: { main: 0xE9EEF2, trim: 0x17A398 } };
+// Fire hero = a dark ember body overlaid with a climbing flame glow; Water hero = a pale translucent body
+// with a strong cyan fresnel shimmer. The elemental look comes from the materials; the chibi silhouette and
+// the procedural animation stay so the hero still reads clearly.
+export const DEFAULT_SKIN = { human: { main: 0x3A1A12, trim: 0xFF8A2A }, ai: { main: 0x8FD8F0, trim: 0xCFF4FF } };
 const HERO_SCALE = 1.75;
+
+const NOISE = 'float fn(vec2 p){ return fract(sin(dot(floor(p), vec2(12.9,78.2))) * 43758.5); }';
+function elementalMaterial(team) {
+  const fire = team === 'human';
+  const m = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: GRADIENT, transparent: !fire, opacity: fire ? 1 : 0.84 });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = TIME;
+    sh.vertexShader = sh.vertexShader
+      .replace('void main() {', 'varying vec3 vWp;\nvoid main() {')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n vWp = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    const add = fire ? `{
+        float rimF = 1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0);
+        float flame = fn(vec2(vWp.x * 6.0, vWp.y * 6.0 - uTime * 4.0));
+        float heat = smoothstep(0.35, 1.0, flame) * (0.55 + 0.45 * sin(uTime * 10.0 + vWp.y * 8.0));
+        vec3 glow = mix(vec3(1.7, 0.4, 0.04), vec3(2.0, 1.3, 0.3), heat);
+        outgoingLight += glow * (heat * 0.6 + pow(rimF, 1.8) * 0.9);
+      }` : `{
+        float rimF = 1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0);
+        float shimmer = fn(vec2(vWp.x * 5.0 + uTime, vWp.y * 5.0 - uTime * 0.7));
+        outgoingLight += vec3(0.3, 0.85, 1.1) * (pow(rimF, 1.5) * 1.3 + smoothstep(0.6, 1.0, shimmer) * 0.5);
+        outgoingLight = mix(outgoingLight, vec3(0.75, 0.95, 1.1), 0.18);
+      }`;
+    sh.fragmentShader = sh.fragmentShader
+      .replace('void main() {', 'uniform float uTime; varying vec3 vWp;\n' + NOISE + '\nvoid main() {')
+      .replace('#include <opaque_fragment>', add + '\n#include <opaque_fragment>');
+  };
+  m.customProgramCacheKey = () => (fire ? 'heroFire' : 'heroWater');
+  return m;
+}
 
 function G(parent, p) { const g = new THREE.Group(); g.position.set(p[0], p[1], p[2]); parent.add(g); return g; }
 
@@ -18,16 +50,8 @@ export class Hero {
     scene.add(this.root);
     skin = skin || DEFAULT_SKIN[team];
     this.skin = skin;
-    // one material per hero so the hurt flash can tint it
-    this.mat = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: GRADIENT });
-    this.mat.onBeforeCompile = (sh) => {
-      sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `{
-        float rimF = 1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0);
-        outgoingLight += vec3(1.0, 0.95, 0.86) * pow(rimF, 2.4) * 0.55;
-      }
-      #include <opaque_fragment>`);
-    };
-    this.mat.customProgramCacheKey = () => 'heroRim';
+    // one elemental material per hero (fire glow / water shimmer); hurt flash tints its emissive
+    this.mat = elementalMaterial(team);
     this.mats = [this.mat];
     this.glow = glowMat(0xffffff, { vertexColors: true });
     this.bones = [];

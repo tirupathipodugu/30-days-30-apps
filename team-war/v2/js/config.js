@@ -1,20 +1,22 @@
-// Human vs AI 2.0 — all tunable game data in one place. No three.js here (the simulation must run anywhere).
+// Fire vs Water — all tunable game data in one place. No three.js here (the simulation must run anywhere).
+// NOTE: the internal team keys stay 'human' (Fire) and 'ai' (Water) — multiplayer, net and server all key
+// off these strings. Only the DISPLAY fields below (name/short/base/hero/abilities/colour) are themed.
 
 export const TEAMS = {
   human: {
-    id: 'human', name: 'Team Human', short: 'Human', color: 0xE8743B, dark: 0xA84A17, css: '#E8743B', cssDark: '#A84A17',
-    base: 'Castle', hero: 'Ranger', currency: 'coins', abilities: {
-      q: { name: 'Shield Wall', desc: 'Raise a barrier that blocks shots and holds enemies back', cd: 11 },
-      e: { name: 'Rally', desc: 'Call 5 fighters; all allies get faster and hit twice as hard', cd: 17 },
-      r: { name: 'Catapult', desc: 'Three boulders crash down where you aim', cd: 22 },
+    id: 'human', name: 'Team Fire', short: 'Fire', color: 0xFF5A1E, dark: 0xA8280A, css: '#FF5A1E', cssDark: '#A8280A',
+    base: 'Fortress', hero: 'Ember', currency: 'embers', abilities: {
+      q: { name: 'Flame Wall', desc: 'Raise a wall of fire that blocks shots and burns anything that crosses', cd: 11 },
+      e: { name: 'Fire Rally', desc: 'Call 5 fire spirits; all allies move faster and hit twice as hard', cd: 17 },
+      r: { name: 'Meteor', desc: 'Three molten meteors crash down where you aim', cd: 22 },
     },
   },
   ai: {
-    id: 'ai', name: 'Team AI', short: 'AI', color: 0x17A398, dark: 0x0C6E66, css: '#17A398', cssDark: '#0C6E66',
-    base: 'Server Tower', hero: 'Unit-7', currency: 'parts', abilities: {
-      q: { name: 'Firewall', desc: 'A line of burning code that melts anything crossing it', cd: 10 },
-      e: { name: 'Drone Swarm', desc: 'Three homing drones hunt enemies, then dive and explode', cd: 17 },
-      r: { name: 'EMP Pulse', desc: 'A shockwave that stuns and blasts everything near you', cd: 22 },
+    id: 'ai', name: 'Team Water', short: 'Water', color: 0x27A8E0, dark: 0x0C5E90, css: '#27A8E0', cssDark: '#0C5E90',
+    base: 'Citadel', hero: 'Tide', currency: 'pearls', abilities: {
+      q: { name: 'Ice Wall', desc: 'A line of freezing water that chills and damages anything crossing it', cd: 10 },
+      e: { name: 'Water Spirits', desc: 'Three homing water spirits hunt enemies, then burst on impact', cd: 17 },
+      r: { name: 'Tidal Wave', desc: 'A surge that stuns and blasts everything near you', cd: 22 },
     },
   },
 };
