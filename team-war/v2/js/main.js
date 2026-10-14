@@ -491,6 +491,206 @@ function updateArrows(g) {
   for (let i = n; i < arrows.length; i++) if (arrows[i].className !== 'arw') arrows[i].className = 'arw';
 }
 
+// ---------- online multiplayer (net.js talks to the game server, which runs match.js) ----------
+// Server first; if it does not answer within 5 s the team buttons start the solo run against bots instead.
+const net = new Net(serverUrl());
+const remote = new Map(); // hero id -> Hero view for every other hero in the match
+let pendingPlay = null;
+const NAME_KEY = 'hva2-name';
+const BOSS_OF = { human: 'Siege Giant', ai: 'Mainframe Titan' };
+const escHtml = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const tagName = (name, side) => `<b style="color:${TEAMS[side].css}">${escHtml(name)}</b>`;
+const teamName = (side) => tagName('Team ' + TEAMS[side].short, side);
+function savedName() { try { return localStorage.getItem(NAME_KEY) || localStorage.getItem('hva-name') || ''; } catch (e) { return ''; } }
+
+function play(t) {
+  audio.unlock();
+  if (net.status === 'online') joinOnline(t);
+  else if (net.status === 'connecting') { pendingPlay = t; ui.mpStatus('connecting'); }
+  else startRun(t);
+}
+function joinOnline(t) {
+  const name = cleanName(ui.mpName() || savedName());
+  try { localStorage.setItem(NAME_KEY, name); } catch (e) {}
+  if (ui.mp) ui.mp.inp.value = name;
+  team = t;
+  profile = meta.loadProfile(); profile.lastTeam = t; meta.saveProfile(profile);
+  game = null; online = { team: t };
+  net.join(name, t);
+  setHeroView(t, meta.skinFor(profile, t)); trail = meta.trailFor(profile, t);
+  fx.clear(); ui.clearTransient(); ui.setTeam(t, true); input.reset();
+  ui.setOnline(true); ui.roster(net.roster, 0, net.status);
+  audio.team = t; audio.setMusic(true, 1);
+  slowT = 0; endT = 0; simTime = 0;
+  mode = 'play'; ui.show(null);
+  document.getElementById('restartBtn').classList.add('hidden');
+  camKey = ''; frameCamera();
+  ui.banner('LIVE MATCH', `You are ${name} on Team ${TEAMS[t].short}. Destroy their ${TEAMS[other(t)].base.toLowerCase()}!`, TEAMS[t].css);
+}
+function leaveOnline() {
+  net.leave(); online = null;
+  for (const v of remote.values()) v.dispose(scene);
+  remote.clear();
+  ui.setOnline(false);
+  document.getElementById('restartBtn').classList.remove('hidden');
+  camKey = '';
+}
+net.on('status', (s) => {
+  ui.mpStatus(s, net.players, net.room);
+  if (pendingPlay && s !== 'connecting') { const t = pendingPlay; pendingPlay = null; if (mode === 'menu') play(t); }
+  if (s === 'offline' && online) { toMenu(); ui.toast('Lost the game server. Play a solo run, or try again in a moment.', 'bad'); }
+});
+net.on('roster', (r) => { ui.mpStatus(net.status, r.n, net.room); });
+net.on('joined', (d) => {
+  if (!online || d.side === online.team) return;
+  // that team was full: the server put us on the other side
+  online.team = team = d.side;
+  setHeroView(d.side, meta.skinFor(profile, d.side)); trail = meta.trailFor(profile, d.side);
+  ui.setTeam(d.side, true); audio.team = d.side; camKey = ''; frameCamera();
+  ui.toast(`Team ${TEAMS[other(d.side)].short} is full, so you joined Team ${TEAMS[d.side].short}.`, 'syn');
+});
+net.on('afk', () => { if (online) { toMenu(); ui.toast('You were idle for a while, so you left the match.', ''); } });
+
+function onlineStep(rdt) {
+  const v = net.view;
+  if (slowT > 0) { slowT = 0; ui.slowmo(false); } // the match never slows down for one player
+  const h = v.hero;
+  const inp = mode === 'play' && h && h.id && !h.dead ? buildInput(v) : { mx: 0, mz: 0, ax: h ? h.aimX : 0, az: h ? h.aimZ : 1, fire: false };
+  net.update(rdt, inp);
+  onNetEvents(v);
+  ambient(v, rdt);
+}
+function onNetEvents(v) {
+  const me = v.meId;
+  const near = (x, z) => Math.hypot(x - v.hero.x, z - v.hero.z) < 20;
+  for (const e of net.drainEvents()) {
+    const mine = !!me && e.id === me;
+    switch (e.type) {
+      case 'shot': {
+        if (mine) { onEvent(v, e, false); break; }
+        const rv = remote.get(e.id), hh = v.heroMap.get(e.id);
+        if (rv && hh && !hh.dead) fx.muzzle(rv.muzzle, SPARK[hh.side]);
+        break;
+      }
+      case 'hit': {
+        const u = v.unitMap.get(e.id); if (u) u.hitT = 0.11;
+        e.byHero = !!me && e.by === me;
+        onEvent(v, e, !e.byHero);
+        break;
+      }
+      case 'kill':
+        e.byHero = !!me && e.by === me; e.last = false;
+        onEvent(v, e, e.kind === 'boss' || (!e.byHero && !near(e.x, e.z)));
+        break;
+      case 'heroHurt':
+        if (mine) onEvent(v, { type: 'heroHurt', x: e.x, z: e.z, dmg: e.dmg }, false);
+        else {
+          const hh = v.heroMap.get(e.id);
+          fx.burst(e.x, 1.2, e.z, 5, hh ? SPARK[hh.side] : 0xFF4D4D, 7, 0.3, 0.14);
+          if (me && e.by === me) { fx.number(e.x, 2.8, e.z, Math.round(e.dmg), 'big'); lastHitT = realTime; audio.play('hit', { crit: false }); }
+        }
+        break;
+      case 'heroKill': {
+        const killer = e.k ? tagName(e.kn, other(e.side)) : null;
+        ui.feed(killer ? `${killer} took down ${tagName(e.name, e.side)}${e.shut ? ` · ended a ${e.shut} streak` : ''}` : `${tagName(e.name, e.side)} was taken down`);
+        fx.burst(e.x, 1, e.z, 36, SPARK[e.side], 14, 0.7, 0.22);
+        fx.chunks(e.x, 1, e.z, 12, DEBRIS[e.side], 8, 0.25);
+        fx.ring(e.x, e.z, 0.5, 6, 0.6, 0xFF5A5A);
+        if (mine) {
+          ui.banner('TAKEN DOWN', `by ${e.kn || 'the enemy'} · respawn in 4`, '#FF7A6B');
+          ui.heroHurt(40); audio.play('heroDown');
+        } else if (me && e.k === me) {
+          ui.callout(`You took down ${e.name}!`, '#FFC83D'); audio.play('bigKill');
+        } else if (near(e.x, e.z)) audio.play('kill');
+        break;
+      }
+      case 'heroRespawn': onEvent(v, e, !mine); break;
+      case 'dash': if (mine || near(e.x, e.z)) onEvent(v, e, !mine); break;
+      case 'ability': {
+        const hh = v.heroMap.get(e.id);
+        if (mine) onEvent(v, e, false);
+        else onEvent(v, { ...e, k: null }, !(hh && hh.side === v.team && near(e.x, e.z)));
+        break;
+      }
+      case 'slam': case 'boom': case 'telegraph': case 'burst': case 'block': case 'drop':
+        onEvent(v, e, !near(e.x, e.z));
+        break;
+      case 'bossSpawn':
+        if (e.side === v.foe) onEvent(v, e, false);
+        else { fx.ring(e.x, e.z, 1, 10, 0.8, 0xFFC83D); ui.toast(`Your ${BOSS_OF[e.side]} joins the fight!`, 'good'); }
+        ui.feed(`${teamName(e.side)}'s ${BOSS_OF[e.side]} entered the arena`);
+        break;
+      case 'bossWarn': ui.toast('⚠ Both bosses join in 5 seconds!', 'bad'); audio.play('warn'); break;
+      case 'bossDown':
+        ui.banner(`${BOSS_OF[e.side]} down!`, e.name ? `by ${e.name}` : '', '#FFC83D');
+        ui.feed(e.name ? `${tagName(e.name, other(e.side))} took down the ${BOSS_OF[e.side]}` : `The ${BOSS_OF[e.side]} fell`);
+        audio.setMusic(true, 1);
+        break;
+      case 'baseHit': {
+        const b = v.bases[e.side]; if (b) b.hitT = 0.2;
+        onEvent(v, e, false);
+        break;
+      }
+      case 'baseMile':
+        ui.feed(`${teamName(other(e.side))} hit the ${TEAMS[e.side].base} · ${e.pct}% left`);
+        if (e.side === v.team) ui.toast(`⚠ Your ${TEAMS[e.side].base.toLowerCase()} is down to ${e.pct}%!`, 'bad');
+        break;
+      case 'breach': onEvent(v, e, true); ui.feed(`${teamName(other(e.side))} destroyed the ${TEAMS[e.side].base}!`); break;
+      case 'turret': onEvent(v, e, e.side !== v.team); break;
+      case 'pickup': onEvent(v, e, !mine); break;
+      case 'synergy': if (mine) onEvent(v, e, false); break;
+      case 'levelUp': {
+        const hh = v.heroMap.get(e.id);
+        if (hh && !hh.dead) fx.ring(hh.x, hh.z, 0.4, 3, 0.5, 0xFFC83D);
+        if (mine) { ui.callout(`LEVEL ${e.level}!`, '#FFC83D'); }
+        break;
+      }
+      case 'upgrade': if (mine) { const u = UPG[e.up]; if (u) ui.toast(`${u.icon} ${u.name}`, ''); audio.play('upgrade'); } break;
+      case 'streak': if (mine) onEvent(v, { type: 'streak', n: e.n, name: e.name }, false); break;
+      case 'pstreak':
+        ui.feed(`${tagName(e.name, e.side)} ${escHtml(e.label)}`);
+        ui.callout(mine ? `You ${e.label.replace(/^is /, 'are ')}` : `${e.name} ${e.label}`, TEAMS[e.side].css);
+        audio.play('streak', { n: e.n });
+        break;
+      case 'twist': { const tw = TWISTS[e.twist]; if (tw) ui.toast(`★ ${tw.name}: ${tw.desc}`, 'syn'); break; }
+      case 'join': ui.feed(`${tagName(e.name, e.side)} joined ${teamName(e.side)}`); break;
+      case 'switch': ui.feed(`${tagName(e.name, e.side)} switched to ${teamName(e.side)}`); break;
+      case 'leave': ui.feed(`${tagName(e.name, e.side)} left the match`); break;
+      case 'matchEnd':
+        ui.cardBar(null); ui.showBoard(e, me, v.team);
+        audio.play(e.winner === v.team ? 'win' : 'lose'); audio.setMusic(false);
+        break;
+      case 'matchStart':
+        ui.hideBoard(); fx.clear(); audio.setMusic(true, 1);
+        ui.banner('NEW MATCH', `Destroy the ${TEAMS[v.foe].base.toLowerCase()} · 8 minutes`, '#fff');
+        break;
+    }
+  }
+}
+const _tag = new THREE.Vector3();
+function onlineViews(dt) {
+  const v = net.view, seen = new Set();
+  for (const h of v.heroes) {
+    if (h.id === v.meId) continue;
+    let rv = remote.get(h.id);
+    if (!rv || rv.team !== h.side) { if (rv) rv.dispose(scene); rv = new Hero(scene, h.side, null); remote.set(h.id, rv); }
+    rv.update(h, dt, realTime);
+    seen.add(h.id);
+  }
+  for (const [id, rv] of remote) if (!seen.has(id)) { rv.dispose(scene); remote.delete(id); }
+  // floating name tags above every hero
+  const tags = [], W = innerWidth, H = innerHeight;
+  if (mode !== 'menu') for (const h of v.heroes) {
+    if (h.dead) continue;
+    _tag.set(h.x, 3.6, h.z).project(camera);
+    if (_tag.z > 1 || _tag.x < -1.1 || _tag.x > 1.1 || _tag.y < -1.1 || _tag.y > 1.1) continue;
+    tags.push({ id: h.id, name: h.name || '…', side: h.side, sx: (_tag.x * 0.5 + 0.5) * W, sy: (-_tag.y * 0.5 + 0.5) * H, me: h.id === v.meId, hp: h.hp / (h.max || 1), dead: h.dead, lvl: h.level });
+  }
+  ui.nameTags(tags);
+  ui.roster(net.roster, v.meId, net.status);
+  ui.cardBar(v.ended ? null : v.offer, v.offerT, (i) => net.pick(i));
+}
+
 // ---------- frame ----------
 let frameMs = 16, adaptT = 0;
 function frame(rdt, doRender = true) {

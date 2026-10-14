@@ -3,7 +3,7 @@
 import { baseZ, fwd, KINDS } from './config.js';
 
 export function makeBot(skill = 0.7, rand = Math.random) {
-  const mem = { strafe: 1, strafeT: 0, jitter: 0, jitterT: 0, abilityT: 0, tgt: null, tgtT: 0 };
+  const mem = { strafe: 1, strafeT: 0, jitter: 0, jitterT: 0, abilityT: 0, tgt: null, tgtT: 0, lane: (rand() - 0.5) * 18 };
   return function botInput(g, dt = 1 / 60) {
     const h = g.hero;
     const inp = { mx: 0, mz: 0, ax: 0, az: 0, fire: false, dash: false, q: false, e: false, r: false, aimDist: 9 };
@@ -22,6 +22,15 @@ export function makeBot(skill = 0.7, rand = Math.random) {
       if (d < 9) near++;
       if (d < nearest) nearest = d;
     }
+    // multiplayer arena: enemy heroes are targets too (and the most important ones)
+    if (g.heroes) for (const o of g.heroes) {
+      if (o.side !== g.foe || o.dead) continue;
+      const d = Math.hypot(o.x - h.x, o.z - h.z);
+      const s = d - 5;
+      if (d < 22 && s < best) { best = s; tgt = o; }
+      if (d < 9) near++;
+      if (d < nearest) nearest = d;
+    }
     // humans take a moment to switch targets
     if (mem.tgt && !mem.tgt.dead && mem.tgtT > 0 && Math.hypot(mem.tgt.x - h.x, mem.tgt.z - h.z) < 24) tgt = mem.tgt;
     else { mem.tgt = tgt; mem.tgtT = 0.15 + (1 - skill) * 0.5; }
@@ -36,17 +45,27 @@ export function makeBot(skill = 0.7, rand = Math.random) {
       inp.ax = Math.sin(a); inp.az = Math.cos(a); inp.fire = d < 24; inp.aimDist = d;
     } else { inp.ax = 0; inp.az = F; }
 
+    // arena: with nothing to shoot, push up to the enemy base and shoot it from outside its turret range
+    const eb = g.bases[g.foe];
+    if (!tgt && g.arena) {
+      const d = Math.hypot(eb.x - h.x, eb.z - h.z);
+      const a = Math.atan2(eb.x - h.x, eb.z - h.z) + mem.jitter;
+      inp.ax = Math.sin(a); inp.az = Math.cos(a); inp.fire = d < 20; inp.aimDist = d;
+    }
     // movement: hold a line in front of our base, keep some distance from the closest enemy
     let gx = tgt ? tgt.x * 0.6 : 0;
     let gz = baseZ(g.team) + F * 12;
+    if (g.arena && !tgt) { gx = mem.lane; gz = eb.z - F * 16.5; }
     if (tgt) {
-      const keep = tgt.kind === 'boss' ? 10 : KINDS[tgt.kind].ranged ? 8 : 7.5;
+      const keep = tgt.type === 'hero' ? 9 : tgt.kind === 'boss' ? 10 : KINDS[tgt.kind].ranged ? 8 : 7.5;
       const dx = h.x - tgt.x, dz = h.z - tgt.z, d = Math.hypot(dx, dz) || 1;
       gx = tgt.x + (dx / d) * keep; gz = tgt.z + (dz / d) * keep;
       // never wander too far from our base when enemies are around
-      const lim = baseZ(g.team) + F * 26;
+      const lim = baseZ(g.team) + F * (g.arena ? 44 : 26);
       if ((gz - lim) * F > 0) gz = lim;
     }
+    // arena: badly hurt, fall back towards our base (the turret covers us)
+    if (g.arena && h.hp < h.max * 0.3) { gx = mem.lane * 0.5; gz = baseZ(g.team) + F * 8; }
     // pickups nearby are worth a detour
     for (const p of g.pickups) if (Math.hypot(p.x - h.x, p.z - h.z) < 9) { gx = p.x; gz = p.z; }
     let mx = gx - h.x, mz = gz - h.z;

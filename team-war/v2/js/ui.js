@@ -1,6 +1,7 @@
 // DOM side of the game: HUD, banners, callouts, toasts and the menu / upgrade / pause / end / armory screens.
 import { TEAMS, UPG, RARITY, STREAKS, MAX_WAVE, SHOP, SYNERGIES, TWISTS, xpForLevel, ULT_LEVEL, KINDS, other } from './config.js';
 import { currencyName } from './meta.js';
+import { MATCH } from './match.js';
 
 const $ = (s) => document.querySelector(s);
 const SHARE_URL = 'https://tirupathipodugu.github.io/ideas/team-war/v2/';
@@ -84,7 +85,10 @@ export class UI {
     this.style('fb', E.foeBase, 'width', (fb.hp / fb.max * 100).toFixed(1) + '%');
     this.set('mbt', E.myBaseTxt, 'textContent', fmt(mb.hp));
     this.set('fbt', E.foeBaseTxt, 'textContent', fb.shield ? 'SHIELDED' : fmt(fb.hp));
-    this.set('wave', E.waveTxt, 'innerHTML', `WAVE ${g.wave} <small>/ ${MAX_WAVE}</small>${g.mod ? ' <small>★</small>' : ''}`);
+    if (g.online) { // multiplayer: match clock + your level (the bar below is your XP)
+      const left = Math.max(0, MATCH.dur - g.T), mm = Math.floor(left / 60), ss = String(Math.floor(left % 60)).padStart(2, '0');
+      this.set('wave', E.waveTxt, 'innerHTML', `${mm}:${ss} <small>· LV ${g.wave}</small>`);
+    } else this.set('wave', E.waveTxt, 'innerHTML', `WAVE ${g.wave} <small>/ ${MAX_WAVE}</small>${g.mod ? ' <small>★</small>' : ''}`);
     const prog = g.waveTotal ? Math.min(1, g.waveDone / g.waveTotal) : 0;
     this.style('wp', E.waveProg, 'width', (prog * 100).toFixed(1) + '%');
     this.set('score', E.score, 'textContent', fmt(g.score));
@@ -98,7 +102,11 @@ export class UI {
     const next = STREAKS.find(([n]) => n > g.streak);
     if (g.streak >= 1 && g.streakT > 0 && next) goal = `${next[1].replace('!', '')} at ${next[0]} quick kills (${g.streak}/${next[0]})`;
     else if (g.mult < 8 && g.combo > 0) goal = `x${g.mult + 1} multiplier in ${5 - (g.combo % 5)} kills`;
-    else {
+    else if (g.online) {
+      const nb = g.nextBoss > 0 ? g.nextBoss - g.T : -1;
+      if (nb > 0 && nb < 60) goal = `Bosses join in ${Math.ceil(nb)}s`;
+      else if (g.offer) goal = 'Level up! Pick a card: 1 · 2 · 3';
+    } else {
       const nb = g.nextBossIn();
       if (nb === 0 && !g.boss && g.phase !== 'clear') goal = 'Boss wave!';
       else if (nb > 0) goal = `Boss in ${nb} wave${nb > 1 ? 's' : ''}`;
@@ -108,9 +116,9 @@ export class UI {
     const boss = g.boss;
     if (!!boss !== this.cache.boss) {
       this.cache.boss = !!boss; E.bossBar.classList.toggle('on', !!boss);
-      if (boss) E.bossName.textContent = (g.wave === MAX_WAVE ? 'Overlord ' : '') + BOSS_NAMES[g.foe];
+      if (boss) E.bossName.textContent = (g.wave === MAX_WAVE && !g.online ? 'Overlord ' : '') + BOSS_NAMES[g.foe];
     }
-    if (boss) { this.style('bf', E.bossFill, 'width', (boss.hp / boss.max * 100).toFixed(1) + '%'); this.set('bt', E.bossTxt, 'textContent', fmt(boss.hp)); }
+    if (boss) { this.style('bf', E.bossFill, 'width', (boss.hp / boss.max * 100).toFixed(1) + '%'); this.set('bt', E.bossTxt, 'textContent', g.online ? Math.round(boss.hp) + '%' : fmt(boss.hp)); }
     const warn = g.bossWarnT > 0 ? Math.ceil(g.bossWarnT) : 0;
     if (this.cache.warn !== warn) { this.cache.warn = warn; E.bossWarn.classList.toggle('on', warn > 0); E.bossWarn.textContent = warn > 0 ? `⚠ BOSS IN ${warn}` : ''; }
     // buffs
@@ -317,3 +325,223 @@ export class UI {
 }
 
 export { BOSS_NAMES, KINDS };
+
+// ---------- online (multiplayer): menu name + status, roster (bottom-right), feed (top-left), name tags,
+// level-up cards that never pause, and the end-of-match scoreboard. Styles live here so index.html stays untouched.
+const ESC = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const TEAM_CSS = { human: '#E8743B', ai: '#17A398' };
+const MP_CSS = `
+#mpBar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; flex-wrap: wrap; }
+#mpBar label { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 14px; color: var(--muted); flex: 1; min-width: 200px; }
+#mpName { flex: 1; min-width: 0; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.08); color: var(--ink);
+  font: inherit; font-weight: 800; font-size: 16px; padding: 0 12px; user-select: text; -webkit-user-select: text; }
+#mpName:focus { outline: 2px solid #fff; outline-offset: 1px; }
+.mpDot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #8A939B; margin-right: 6px; vertical-align: 1px; flex: none; }
+.mpDot.on { background: #6BE07A; box-shadow: 0 0 8px #6BE07A; } .mpDot.wait { background: #FFC83D; }
+#mpStatus { display: inline-flex; align-items: center; }
+#mpUi { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 5; }
+body.playing #mpUi { display: block; }
+#mpRoster { position: absolute; right: calc(16px + var(--safe-r)); bottom: calc(16px + var(--safe-b)); width: 236px; pointer-events: auto;
+  font-size: 13px; padding: 8px 10px 6px; border-radius: 12px; }
+#mpRoster .hd { display: flex; align-items: center; gap: 4px; font-weight: 800; font-size: 13px; cursor: pointer; background: none; border: 0; padding: 2px 0 4px; width: 100%; text-align: left; color: var(--ink); }
+#mpRoster .hd .car { margin-left: auto; color: var(--muted); font-size: 11px; }
+#mpRoster .rows { display: flex; flex-direction: column; gap: 2px; max-height: 40vh; overflow: hidden; }
+#mpRoster.closed .rows { display: none; }
+#mpRoster .row { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 7px; white-space: nowrap; }
+#mpRoster .row.me { background: rgba(255,200,61,.18); outline: 1px solid rgba(255,200,61,.55); }
+#mpRoster .row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+#mpRoster .row.bot .nm { color: var(--muted); font-weight: 600; }
+#mpRoster .row .you { font-size: 10px; font-weight: 900; color: #1b1b1b; background: var(--gold); border-radius: 5px; padding: 1px 4px; }
+#mpRoster .row .kd { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 800; }
+#mpRoster .row .kd small { color: var(--muted); font-weight: 600; }
+#mpRoster .more { color: var(--muted); font-size: 12px; padding: 2px 6px; }
+#mpFeed { position: absolute; left: calc(16px + var(--safe-l)); top: calc(104px + var(--safe-t)); display: flex; flex-direction: column; gap: 4px; width: min(60vw, 340px); }
+#mpFeed div { font-size: 13px; font-weight: 700; padding: 4px 9px; border-radius: 8px; background: rgba(13,17,23,.66); width: fit-content; max-width: 100%;
+  animation: mpIn .25s ease-out; transition: opacity .6s; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+#mpFeed div.old { opacity: 0; }
+#mpFeed b { font-weight: 900; }
+@keyframes mpIn { from { transform: translateX(-12px); opacity: 0; } }
+body.online #toasts { top: calc(214px + var(--safe-t)); }
+body.online.touch #toasts { top: calc(250px + var(--safe-t)); }
+body.online #hintR { display: none; }
+#mpTags { position: absolute; inset: 0; overflow: hidden; }
+.mpTag { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; will-change: transform; }
+.mpTag span { font-size: 12px; font-weight: 900; color: #fff; padding: 1px 6px; border-radius: 6px; background: rgba(0,0,0,.45); white-space: nowrap;
+  border-bottom: 2px solid var(--tc); text-shadow: 0 1px 2px #000; }
+.mpTag span em { font-style: normal; color: var(--tc); margin-right: 3px; font-size: 10px; }
+.mpTag i { display: block; width: 44px; height: 4px; border-radius: 2px; background: rgba(0,0,0,.55); overflow: hidden; }
+.mpTag i b { display: block; height: 100%; background: var(--tc); }
+.mpTag.me span { background: rgba(255,200,61,.85); color: #1b1b1b; text-shadow: none; }
+.mpTag.dead { opacity: .45; }
+#mpCards { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(96px + var(--safe-b)); display: none; gap: 8px; pointer-events: auto; align-items: stretch; }
+#mpCards.on { display: flex; }
+#mpCards .lead { position: absolute; left: 0; right: 0; top: -22px; text-align: center; font-size: 13px; font-weight: 900; color: var(--gold); text-shadow: 0 1px 3px #000; }
+#mpCards .tm { position: absolute; left: 0; bottom: -7px; height: 3px; background: var(--gold); border-radius: 2px; transition: width .2s linear; }
+#mpCards button { width: 150px; padding: 8px 10px; border-radius: 12px; border: 2px solid var(--rc); background: rgba(13,17,23,.86); color: var(--ink);
+  text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; font: inherit; }
+#mpCards button:hover { background: rgba(40,46,56,.95); }
+#mpCards .k { font-size: 11px; font-weight: 900; color: var(--muted); }
+#mpCards .nm { font-weight: 900; font-size: 14px; } #mpCards .ds { font-size: 11px; color: var(--muted); line-height: 1.25; }
+#mpCards .syn { font-size: 10px; font-weight: 900; color: var(--gold); }
+body.touch #mpCards { bottom: calc(10px + var(--safe-b)); }
+body.touch #mpCards button { width: 112px; padding: 6px 8px; } body.touch #mpCards .ds { display: none; }
+#mpBoard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(92vw, 520px); padding: 18px 20px; display: none; pointer-events: none; text-align: center; }
+#mpBoard.on { display: block; }
+#mpBoard h2 { margin: 0 0 4px; font-size: 34px; letter-spacing: .02em; }
+#mpBoard .why { color: var(--muted); font-weight: 700; margin-bottom: 10px; }
+#mpBoard .mvp { font-weight: 900; color: var(--gold); margin-bottom: 10px; font-size: 16px; }
+#mpBoard table { width: 100%; border-collapse: collapse; font-size: 14px; }
+#mpBoard td, #mpBoard th { padding: 4px 6px; text-align: right; white-space: nowrap; } #mpBoard th { color: var(--muted); font-size: 12px; }
+#mpBoard td:nth-child(2), #mpBoard th:nth-child(2) { text-align: left; } #mpBoard tr.me td { background: rgba(255,200,61,.16); }
+#mpBoard .next { margin-top: 10px; color: var(--muted); font-weight: 800; }
+@media (pointer: coarse), (max-width: 720px) {
+  #mpRoster { width: 190px; right: calc(8px + var(--safe-r)); bottom: calc(8px + var(--safe-b)); padding: 5px 8px 4px; font-size: 12px; }
+  #mpRoster .rows { max-height: 140px; }
+  #mpFeed { top: calc(118px + var(--safe-t)); } #mpFeed div { font-size: 12px; }
+}
+@media (max-width: 560px) { /* the HUD wraps to two rows here: feed and toasts go below it */
+  #mpFeed { top: calc(192px + var(--safe-t)); width: min(56vw, 300px); }
+  body.online #toasts, body.online.touch #toasts { top: calc(300px + var(--safe-t)); }
+}
+@media (max-height: 500px) and (orientation: landscape) { #mpRoster .rows { max-height: 118px; } #mpFeed { top: calc(70px + var(--safe-t)); width: min(44vw, 300px); } }
+`;
+
+Object.assign(UI.prototype, {
+  mountOnline({ name, onName }) {
+    if (this.mp) return;
+    const st = document.createElement('style'); st.textContent = MP_CSS; document.head.appendChild(st);
+    const bar = document.createElement('div');
+    bar.id = 'mpBar'; bar.className = 'panel';
+    bar.innerHTML = '<label for="mpName">Your name <input id="mpName" maxlength="14" autocomplete="nickname" spellcheck="false" placeholder="Player"></label><span class="chip" id="mpStatus"><i class="mpDot wait"></i>Connecting…</span>';
+    const prof = $('#menu .profile');
+    if (prof) prof.after(bar); else $('#menu .wrap').prepend(bar);
+    const inp = bar.querySelector('#mpName');
+    inp.value = name || '';
+    inp.addEventListener('input', () => onName(inp.value));
+    inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') inp.blur(); });
+    const ui = document.createElement('div');
+    ui.id = 'mpUi';
+    ui.innerHTML = '<div id="mpTags" aria-hidden="true"></div><div id="mpFeed" aria-live="polite"></div><div id="mpCards" role="group" aria-label="Level up: pick an upgrade"></div>' +
+      '<div id="mpBoard" class="panel" aria-live="polite"></div><div id="mpRoster" class="panel" aria-label="Players in this match"><button class="hd" type="button"></button><div class="rows"></div></div>';
+    document.body.appendChild(ui);
+    const roster = ui.querySelector('#mpRoster');
+    if (matchMedia('(pointer: coarse)').matches || innerWidth <= 720) roster.classList.add('closed');
+    roster.querySelector('.hd').addEventListener('pointerdown', (e) => e.stopPropagation());
+    roster.querySelector('.hd').addEventListener('click', () => { roster.classList.toggle('closed'); this.mpRosterKey = ''; if (this.mpLast) this.roster(...this.mpLast); });
+    this.mp = { bar, inp, ui, roster, hd: roster.querySelector('.hd'), rows: roster.querySelector('.rows'), feed: ui.querySelector('#mpFeed'),
+      tags: ui.querySelector('#mpTags'), cards: ui.querySelector('#mpCards'), board: ui.querySelector('#mpBoard'), tagEls: new Map() };
+  },
+  mpName() { return this.mp ? this.mp.inp.value : ''; },
+  setOnline(on) {
+    document.body.classList.toggle('online', !!on);
+    if (!on) { this.nameTags([]); this.cardBar(null); this.hideBoard(); if (this.mp) this.mp.feed.innerHTML = ''; }
+  },
+  // status: 'connecting' | 'online' | 'offline'
+  mpStatus(status, players, room) {
+    if (!this.mp) return;
+    const el = $('#mpStatus');
+    const txt = status === 'online' ? `Online · ${players} player${players === 1 ? '' : 's'} in room ${room}` : status === 'offline' ? 'Offline · bots' : 'Connecting…';
+    el.innerHTML = `<i class="mpDot ${status === 'online' ? 'on' : status === 'offline' ? '' : 'wait'}"></i>${txt}`;
+    el.title = status === 'offline' ? 'The game server did not answer, so you play a solo run against bots.' : '';
+  },
+  // r: roster message from the server (or null when offline). myId: your hero id.
+  roster(r, myId, status) {
+    if (!this.mp) return;
+    this.mpLast = [r, myId, status];
+    const open = !this.mp.roster.classList.contains('closed');
+    let head, rows = '';
+    if (status !== 'online' || !r) {
+      head = `<i class="mpDot ${status === 'offline' || status === 'solo' ? '' : 'wait'}"></i>${status === 'offline' ? 'Offline · bots' : status === 'solo' ? 'Solo run · bots' : 'Connecting…'}`;
+      if (status === 'offline' || status === 'solo') rows = '<div class="row me"><i class="mpDot" style="background:var(--team);box-shadow:none"></i><span class="nm">Solo run</span><span class="you">YOU</span></div>';
+    } else {
+      const list = r.p.slice().sort((a, b) => (b[0] === myId) - (a[0] === myId) || b[3] - a[3] || a[4] - b[4]);
+      head = `<i class="mpDot on"></i>Online · ${r.n} player${r.n === 1 ? '' : 's'}`;
+      const max = 7, shown = list.slice(0, max);
+      for (const p of shown) {
+        const side = p[2] === 0 ? 'human' : 'ai', me = p[0] === myId;
+        rows += `<div class="row${me ? ' me' : ''}${p[6] ? ' bot' : ''}"><i class="mpDot" style="background:${TEAM_CSS[side]};box-shadow:none"></i><span class="nm">${ESC(p[1])}</span>${me ? '<span class="you">YOU</span>' : ''}<span class="kd">${p[3]}<small>/${p[4]}</small></span></div>`;
+      }
+      if (list.length > max) rows += `<div class="more">+${list.length - max} more</div>`;
+    }
+    const key = head + rows + open;
+    if (key === this.mpRosterKey) return;
+    this.mpRosterKey = key;
+    this.mp.hd.innerHTML = head + `<span class="car">${open ? 'K/D ▾' : '▴'}</span>`;
+    this.mp.hd.setAttribute('aria-expanded', open ? 'true' : 'false');
+    this.mp.rows.innerHTML = rows;
+  },
+  feed(html) {
+    if (!this.mp) return;
+    const d = document.createElement('div'); d.innerHTML = html;
+    const f = this.mp.feed;
+    f.appendChild(d);
+    while (f.children.length > 5) f.firstChild.remove();
+    setTimeout(() => d.classList.add('old'), 6000);
+    setTimeout(() => d.remove(), 6700);
+  },
+  // list: [{id, name, side, sx, sy, me, hp (0..1), dead, lvl}] in screen pixels
+  nameTags(list) {
+    if (!this.mp) return;
+    const m = this.mp.tagEls, seen = new Set();
+    for (const t of list) {
+      let el = m.get(t.id);
+      if (!el) {
+        el = document.createElement('div'); el.className = 'mpTag';
+        el.innerHTML = '<span></span><i><b></b></i>';
+        this.mp.tags.appendChild(el); m.set(t.id, el); el._k = '';
+      }
+      seen.add(t.id);
+      const k = t.name + t.side + t.me + t.dead + t.lvl;
+      if (el._k !== k) {
+        el._k = k;
+        el.className = 'mpTag' + (t.me ? ' me' : '') + (t.dead ? ' dead' : '');
+        el.style.setProperty('--tc', TEAM_CSS[t.side]);
+        el.firstChild.innerHTML = `<em>${t.lvl}</em>${ESC(t.me ? 'You' : t.name)}`;
+      }
+      const w = Math.round(Math.max(0, Math.min(1, t.hp)) * 100);
+      if (el._w !== w) { el._w = w; el.lastChild.firstChild.style.width = w + '%'; }
+      el.style.transform = `translate(${t.sx.toFixed(0)}px, ${t.sy.toFixed(0)}px) translate(-50%, -100%)`;
+    }
+    for (const [id, el] of m) if (!seen.has(id)) { el.remove(); m.delete(id); }
+  },
+  // offer: [{id, level, synergy}] or null. Never pauses: pick with 1/2/3 or a tap; auto-picks when time runs out.
+  cardBar(offer, secs, onPick) {
+    if (!this.mp) return;
+    const c = this.mp.cards;
+    const key = offer ? offer.map((o) => o.id + o.level).join(',') : '';
+    if (key !== this.mpCardKey) {
+      this.mpCardKey = key;
+      c.classList.toggle('on', !!offer);
+      c.innerHTML = '';
+      if (offer) {
+        const lead = document.createElement('div'); lead.className = 'lead'; lead.textContent = 'LEVEL UP! Pick one · 1 · 2 · 3'; c.appendChild(lead);
+        offer.forEach((o, i) => {
+          const u = UPG[o.id], R = RARITY[u.r];
+          const b = document.createElement('button'); b.type = 'button'; b.style.setProperty('--rc', R.css);
+          b.innerHTML = `<span class="k">${i + 1} · ${u.icon} ${R.name}${o.level ? ' · Lv ' + (o.level + 1) : ''}</span><span class="nm">${u.name}</span><span class="ds">${o.id === 'repair' ? 'Repair 20% of your base' : u.desc}</span>${o.synergy ? `<span class="syn">SYNERGY: ${ESC(o.synergy)}</span>` : ''}`;
+          b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); onPick(i); });
+          c.appendChild(b);
+        });
+        const tm = document.createElement('i'); tm.className = 'tm'; c.appendChild(tm);
+        this.audio.play('level');
+      }
+    }
+    if (offer) { const tm = c.querySelector('.tm'); if (tm) tm.style.width = (Math.max(0, Math.min(1, secs / MATCH.offerTime)) * 100).toFixed(1) + '%'; }
+  },
+  showBoard(e, myId, myTeam) {
+    if (!this.mp) return;
+    const won = e.winner === myTeam, draw = e.winner === 'draw';
+    const title = draw ? 'Draw!' : won ? 'Victory!' : 'Defeat';
+    const why = e.reason === 'base' ? `Team ${TEAMS[e.winner].short} destroyed the ${TEAMS[other(e.winner)].base.toLowerCase()}.`
+      : draw ? 'Time is up and both bases are even.' : `Time is up. Team ${TEAMS[e.winner].short} kept more of its base.`;
+    const rows = e.board.slice(0, 12).map((p) => `<tr class="${p[0] === myId ? 'me' : ''}"><td><i class="mpDot" style="background:${TEAM_CSS[p[2]]};box-shadow:none"></i></td><td>${ESC(p[1])}${p[0] === myId ? ' (you)' : ''}</td><td>${p[3]}</td><td>${p[4]}</td><td>${p[5]}</td><td>${p[6]}</td></tr>`).join('');
+    this.mp.board.innerHTML = `<h2 style="color:${draw ? '#fff' : won ? 'var(--gold)' : '#FF7A6B'}">${title}</h2><div class="why">${why}</div>` +
+      (e.mvp ? `<div class="mvp">★ MVP: ${ESC(e.mvp.name)} (Team ${TEAMS[e.mvp.side].short})</div>` : '') +
+      `<table><tr><th></th><th>Player</th><th>Kills</th><th>Deaths</th><th>Lv</th><th>Score</th></tr>${rows}</table><div class="next" id="mpNext">Next match in ${e.next || 8}…</div>`;
+    this.mp.board.classList.add('on');
+    clearInterval(this.boardTimer);
+    let n = e.next || 8;
+    this.boardTimer = setInterval(() => { n--; const el = $('#mpNext'); if (el) el.textContent = n > 0 ? `Next match in ${n}…` : 'Starting…'; if (n <= 0) clearInterval(this.boardTimer); }, 1000);
+  },
+  hideBoard() { if (this.mp) { this.mp.board.classList.remove('on'); clearInterval(this.boardTimer); } },
+});

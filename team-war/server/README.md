@@ -52,3 +52,43 @@ From developers.cloudflare.com (Durable Objects pricing and limits pages):
 - 100,000 Worker requests a day (each player joining a room is one).
 - Free plan Durable Objects must use SQLite storage (`new_sqlite_classes` in `wrangler.toml`, already set).
 - When a daily limit runs out, new requests fail until 00:00 UTC; the page then falls back to PeerJS / bots.
+
+## Human vs AI 2.0 rooms (`/v2/room/1` … `/v2/room/20`)
+
+The same Worker also runs the 2.0 hero arena: a second Durable Object class, `GameRoomV2` (`room-v2.js`), runs
+`../v2/js/match.js` (the same rules file the page imports) about 30 times a second. Players send only inputs; the room
+sends a snapshot about 15 times a second and the player list about once a second. 12 players per room (a 13th is told
+"full" and the page tries the next room); bot heroes ("Bot · Nova" …) fill a side that has fewer players. A match ends
+when a base falls or after 8 minutes, shows the scoreboard for 8 seconds, then a new match starts. An empty room
+forgets its match and costs nothing. v1 rooms (`/room/N`) are unchanged.
+
+### Deploy the 2.0 rooms (exact steps)
+
+```
+cd team-war/server
+npm install
+npx wrangler deploy
+```
+
+That is all: `wrangler.toml` already has the `GAME_ROOM_V2` binding and the new migration tag `v2`
+(`new_sqlite_classes = ["GameRoomV2"]`). Keep the old `v1` migration exactly as it is. Redeploy whenever
+`room-v2.js` or anything in `../v2/js/` that the server imports changes (`match.js`, `sim.js`, `bot.js`, `config.js`).
+
+Check it: `node test-v2.mjs wss://human-vs-ai.tirupathi-podugu.workers.dev` (Node 22+). Checks that need the
+local test switch are skipped against the live server.
+
+The page (`../v2/index.html`) connects to `wss://human-vs-ai.tirupathi-podugu.workers.dev/v2/room/1` by default (see
+`DEFAULT_SERVER` in `../v2/js/net.js`). If it does not answer within 5 seconds, the team buttons start the offline solo
+run against bots. Add `?server=local` to the page address to use a local `wrangler dev` instead, or `?server=off` to
+force offline.
+
+### Test 2.0 locally
+
+```
+cd team-war/server
+npx wrangler dev --local --var V2_TEST:1
+node test-v2.mjs
+```
+
+`V2_TEST` turns on test-only messages (fast-forward the match clock, clear bots, set base HP) that `test-v2.mjs` uses.
+It is never set on the deployed Worker, so the live server ignores those messages.

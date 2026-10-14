@@ -1,13 +1,24 @@
-# Human vs AI game server (Cloudflare Workers + one Durable Object class).
+# Human vs AI game server (Cloudflare Workers + two Durable Object classes).
 name = "human-vs-ai"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
+# v1 rooms (/room/N)
 [[durable_objects.bindings]]
 name = "GAME_ROOM"
 class_name = "GameRoom"
+
+# Human vs AI 2.0 rooms (/v2/room/N)
+[[durable_objects.bindings]]
+name = "GAME_ROOM_V2"
+class_name = "GameRoomV2"
 
 # SQLite-backed Durable Objects are the kind available on the Workers Free plan.
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["GameRoom"]
+
+# A new class needs its own migration tag (keep "v1" above exactly as it was deployed).
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["GameRoomV2"]

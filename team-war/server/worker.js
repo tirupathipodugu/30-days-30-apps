@@ -3,6 +3,8 @@
 //   server -> player: {t:'hi', id}, {t:'full'}, {t:'s', ...snapshot} about 10 times a second
 //   player -> server: {t:'join', name, team}, {t:'team', name, team}, {t:'a', d, u, v}, {t:'send'}
 import '../engine.js';
+import { GameRoomV2 } from './room-v2.js';
+export { GameRoomV2 };
 
 const E = globalThis.HVAEngine;
 const MAX_PLAYERS = 40;        // sockets per room; the 41st gets {t:'full'} and the page tries the next room
@@ -16,9 +18,17 @@ const KICK_PER_SEC = 200;      // far above it, the socket is closed
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Human vs AI 2.0 (the 3D hero arena) has its own rooms: /v2/room/1 .. /v2/room/20
+    const m2 = url.pathname.match(/^\/v2\/room\/(\d{1,3})\/?$/);
+    if (m2) {
+      const n = Number(m2[1]);
+      if (n < 1 || n > MAX_ROOMS) return new Response('No such room', { status: 404 });
+      if (request.headers.get('Upgrade') !== 'websocket') return new Response('Expected a WebSocket', { status: 426 });
+      return env.GAME_ROOM_V2.get(env.GAME_ROOM_V2.idFromName('v2-room-' + n)).fetch(request);
+    }
     const m = url.pathname.match(/^\/room\/(\d{1,3})\/?$/);
     if (!m) {
-      return new Response('Human vs AI game server. Connect a WebSocket to /room/1', {
+      return new Response('Human vs AI game server. Connect a WebSocket to /room/1 (v1) or /v2/room/1 (2.0)', {
         status: url.pathname === '/' ? 200 : 404, headers: { 'content-type': 'text/plain' },
       });
     }

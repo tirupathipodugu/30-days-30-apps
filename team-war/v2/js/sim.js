@@ -21,14 +21,14 @@ const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const len = (x, z) => Math.sqrt(x * x + z * z);
 
 // Returns the parameter t (0..1) where segment p0->p1 first comes within r of (cx,cz), or -1.
-function segCircle(x0, z0, x1, z1, cx, cz, r) {
+export function segCircle(x0, z0, x1, z1, cx, cz, r) {
   const dx = x1 - x0, dz = z1 - z0;
   const l2 = dx * dx + dz * dz || 1e-9;
   const t = clamp(((cx - x0) * dx + (cz - z0) * dz) / l2, 0, 1);
   const px = x0 + dx * t - cx, pz = z0 + dz * t - cz;
   return px * px + pz * pz <= r * r ? t : -1;
 }
-function segSeg(ax, az, bx, bz, cx, cz, dx, dz) {
+export function segSeg(ax, az, bx, bz, cx, cz, dx, dz) {
   const rx = bx - ax, rz = bz - az, sx = dx - cx, sz = dz - cz;
   const den = rx * sz - rz * sx;
   if (Math.abs(den) < 1e-9) return false;
