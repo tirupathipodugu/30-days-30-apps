@@ -1,18 +1,26 @@
 // FIRE vs WATER arena (internal team keys stay 'human' = Fire at +z, 'ai' = Water at -z).
-// Stylised-realistic, all procedural: basalt + flowing lava on the Fire half, rippling ice-water on the
-// Water half, clashing steam down the middle, an obsidian fortress and a coral/ice citadel.
-// Elemental motion is done with scrolling emissive/normal shaders and pooled point particles — not a real
-// fluid sim — so it reads believable from the fixed camera without a GPU-heavy simulation.
+// The play surface is a clean translucent GLASS island floating in a large expanse of realistic moving WATER
+// (three.js Water.js: Gerstner-ish normal-map waves + planar reflection + fresnel), with a glowing VOLCANIC
+// LAVA layer beneath the water. The lava level + heat track who's winning (fire base healthier -> lava rises
+// and glows hotter; water ahead -> it sinks and dims), read live from the two bases' HP in update().
+// Honest limits: the water is a wave shader with a faked (fresnel) sky reflection, not a true planar mirror or
+// a fluid sim; the lava "glowing up through the water" is a bright emissive layer read through a semi-transparent
+// water surface, not volumetric light. (three.js Water.js stays vendored; see makeWater for why it isn't used.)
+// An obsidian fortress (+z) and a coral/ice citadel (-z) keep the Fire-vs-Water sides readable from the fixed camera.
 import * as THREE from 'three';
+// three.js Water.js stays vendored at vendor/three/addons/objects/Water.js (see makeWater's note on why the
+// sea is a custom wave shader instead of the planar-reflection ocean under this fixed warm-sky camera).
 import { toon, glowMat, additive, GEO, Baker, M4, TIME, GLOW, contactShadowMat, SHADOW_PLANE } from './gfx.js';
 import { ARENA } from './config.js';
 import { mulberry32 } from './sim.js';
 
 const W = ARENA.halfW, Lh = ARENA.halfL, BZ = ARENA.baseZ;
-const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-function vnoise(x, z) {
-  return (Math.sin(x * 0.21 + Math.sin(z * 0.13) * 2) + Math.sin(z * 0.17 + Math.cos(x * 0.11) * 2) + Math.sin((x + z) * 0.37) * 0.5) / 2.5;
-}
+// The glass PLAY PLATFORM hugs the play area (units move within x±W, z±Lh); its TOP surface stays at world
+// y = 0 — the same plane entities.js renders units on. Water + lava live BELOW it (never move the play plane).
+const GLASS_W = 2 * W + 1, GLASS_L = 2 * Lh + 1;         // 35 x 69 — trimmed tight to the play area
+const GLASS_TOP = 0, GLASS_THICK = 0.5;                  // slab top at y=0, a little visible thickness below
+const WATER_Y = -1.9;                                    // sea surface sits below the floating glass island
+const LAVA_MID = -4.7, LAVA_AMP = 2.7;                   // lava rests mid-deep; rises toward the surface (fire ahead) / sinks (water ahead)
 
 // palettes — focused 5-ish colours per side with one mood anchor (fire = warm amber, water = cool teal) and
 // a real value range (clear darks + a few brights), not muddy equal mid-tones.
@@ -20,244 +28,159 @@ const FIRE = { rock: 0x33231F, rockD: 0x1C1416, rockL: 0x4A342C, obsid: 0x281C26
 // water pulled down from near-white into readable teal mid-tones so forms read and the half stops looking washed out
 const WATER = { ice: 0x8FC8E6, iceD: 0x568FB2, deep: 0x0C3C5C, surf: 0x1C7FB0, foam: 0xCDEBF5, coral: 0x27B4CC, crystal: 0x8FE8F2 };
 
-// ---------------- arena floor canvas (basalt | ice) + a lava crack mask ----------------
-function floorTexture(maxAniso) {
-  const FW = 36, FL = 72, k = 30;
-  const c = document.createElement('canvas'); c.width = FW * k; c.height = FL * k;
-  const g = c.getContext('2d');
-  const X = (x) => (x + FW / 2) * k, Z = (z) => (z + FL / 2) * k;
-  const R = mulberry32(7);
-  // lava crack mask: R = crack intensity, G = distance along the crack (for flow), B = hot node
-  const MK = 16, mc = document.createElement('canvas'); mc.width = FW * MK; mc.height = (FL / 2 + 2) * MK;
-  const mg = mc.getContext('2d'); mg.fillStyle = '#000'; mg.fillRect(0, 0, mc.width, mc.height); mg.lineCap = 'round';
-  const MX = (x) => (x + FW / 2) * MK, MZ = (z) => (z + 1) * MK; // mask covers z in [-1, 37]
-
-  // ---- FIRE half (z > 0): dark cracked basalt ----
-  g.fillStyle = '#1C1416'; g.fillRect(0, Z(-1), c.width, c.height - Z(-1));
-  for (let i = 0; i < 1400; i++) { // basalt mottling + cooled lava patches
-    const x = R() * c.width, y = Z(-1) + R() * (c.height - Z(-1));
-    const v = R();
-    g.fillStyle = v < 0.5 ? 'rgba(10,8,9,0.5)' : v < 0.8 ? 'rgba(52,38,34,0.4)' : 'rgba(80,40,26,0.25)';
-    g.beginPath(); g.ellipse(x, y, 6 + R() * 30, 5 + R() * 20, R() * 3, 0, 7); g.fill();
-  }
-  for (let i = 0; i < 40; i++) { // scorch rings where lava has pooled
-    const x = X((R() - 0.5) * 30), y = Z(2 + R() * 32), r = 20 + R() * 60;
-    const rg = g.createRadialGradient(x, y, 0, x, y, r);
-    rg.addColorStop(0, 'rgba(90,30,10,0.35)'); rg.addColorStop(0.7, 'rgba(40,16,10,0.2)'); rg.addColorStop(1, 'rgba(40,16,10,0)');
-    g.fillStyle = rg; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
-  }
-  // a lava channel network, painted dim on the floor and bright+flowing in the mask
-  function crack(x, z, len, width, segs) {
-    let px = x, pz = z, ang = R() * 7, dist = R() * 4;
-    g.lineWidth = width * k; g.strokeStyle = 'rgba(70,24,8,0.6)';
-    g.beginPath(); g.moveTo(X(px), Z(pz));
-    mg.lineWidth = width * MK * 0.7;
-    for (let s = 0; s < segs; s++) {
-      ang += (R() - 0.5) * 1.1;
-      const nx = px + Math.cos(ang) * len, nz = pz + Math.sin(ang) * len;
-      g.lineTo(X(nx), Z(nz));
-      const l = Math.hypot(nx - px, nz - pz);
-      const lg = mg.createLinearGradient(MX(px), MZ(pz), MX(nx) + 0.01, MZ(nz) + 0.01);
-      const steps = 6;
-      for (let q = 0; q <= steps; q++) { const d = ((dist + l * q / steps) / 5) % 1; lg.addColorStop(q / steps, `rgb(255,${Math.round(d * 255)},0)`); }
-      mg.strokeStyle = lg; mg.beginPath(); mg.moveTo(MX(px), MZ(pz)); mg.lineTo(MX(nx), MZ(nz)); mg.stroke();
-      dist += l; px = nx; pz = nz;
-    }
-    g.stroke();
-    mg.fillStyle = 'rgb(255,128,255)'; mg.beginPath(); mg.arc(MX(px), MZ(pz), width * MK * 1.1, 0, 7); mg.fill();
-  }
-  for (let i = 0; i < 16; i++) crack(-W + 1 + R() * (2 * W - 2), 1 + R() * (Lh - 3), 2.2 + R() * 1.6, 0.18 + R() * 0.22, 4 + (R() * 3 | 0));
-  // a glowing channel straight down from the fortress gate
-  crack(0, BZ - 5, 2.6, 0.5, 11);
-
-  // ---- WATER half (z < 0): rippled ice, mid-toned teal (not near-white) so it carries value contrast ----
-  g.fillStyle = '#6FA6C2'; g.fillRect(0, 0, c.width, Z(1));
-  { const lg = g.createLinearGradient(0, Z(-6), 0, Z(2)); // shoreline where ice meets basalt
-    lg.addColorStop(0, '#6FA6C2'); lg.addColorStop(0.5, '#5E8494'); lg.addColorStop(1, '#3B2E2A');
-    g.fillStyle = lg; g.fillRect(0, Z(-6), c.width, Z(2) - Z(-6)); }
-  for (let i = 0; i < 1600; i++) { // ice sheen + deeper patches (fewer blown-out whites, more deep teal)
-    const x = R() * c.width, y = Z(-Lh) + R() * (Z(1) - Z(-Lh));
-    const v = R();
-    g.fillStyle = v < 0.5 ? 'rgba(80,150,180,0.26)' : v < 0.82 ? 'rgba(205,235,248,0.16)' : 'rgba(20,86,124,0.3)';
-    g.beginPath(); g.ellipse(x, y, 8 + R() * 34, 5 + R() * 18, R() * 3, 0, 7); g.fill();
-  }
-  g.lineWidth = 2.2; g.strokeStyle = 'rgba(225,242,250,0.32)'; // ice cracks
-  for (let i = 0; i < 90; i++) {
-    let x = (R() - 0.5) * FW, z = -Lh + R() * (Lh + 1), ang = R() * 7;
-    g.beginPath(); g.moveTo(X(x), Z(z));
-    for (let s = 0; s < 3; s++) { ang += (R() - 0.5) * 1.3; x += Math.cos(ang) * (1.5 + R() * 2.5); z += Math.sin(ang) * (1.5 + R() * 2.5); g.lineTo(X(x), Z(z)); }
-    g.stroke();
-  }
-  g.strokeStyle = 'rgba(180,230,245,0.3)'; g.lineWidth = 6; // broad caustic hints
-  for (let i = 0; i < 40; i++) { const x = R() * c.width, y = Z(-Lh) + R() * (Z(0) - Z(-Lh)); g.beginPath(); g.ellipse(x, y, 30 + R() * 50, 18 + R() * 30, R() * 3, 0, Math.PI * 1.4); g.stroke(); }
-
-  // centre clash line + base zones
-  g.strokeStyle = 'rgba(255,230,200,0.5)'; g.lineWidth = 7;
-  g.beginPath(); g.arc(X(0), Z(0), 5 * k, 0, 7); g.stroke();
-  for (const [z, col] of [[BZ, '255,120,40'], [-BZ, '120,220,255']]) {
-    const rg = g.createRadialGradient(X(0), Z(z), 4 * k, X(0), Z(z), 10 * k);
-    rg.addColorStop(0, `rgba(${col},0.0)`); rg.addColorStop(0.8, `rgba(${col},0.28)`); rg.addColorStop(1, `rgba(${col},0)`);
-    g.fillStyle = rg; g.fillRect(X(-12), Z(z - 11), 24 * k, 22 * k);
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
-  const mask = new THREE.CanvasTexture(mc); mask.anisotropy = maxAniso;
-  return { tex, mask };
-}
-
-// flowing lava glow over the Fire half, driven by the crack mask
-function lavaOverlay(mask) {
-  const m = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uTime: TIME, uMask: { value: mask } },
-    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform float uTime; uniform sampler2D uMask; varying vec2 vUv;
-      void main(){
-        vec4 t = texture2D(uMask, vUv);
-        float crack = t.r;
-        float flow = fract(t.g - uTime * 0.18);
-        float pulse = smoothstep(0.55, 1.0, flow) * (0.6 + 0.4 * sin(uTime * 2.0 + t.g * 30.0));
-        float node = t.b * (0.7 + 0.3 * sin(uTime * 4.0 + vUv.x * 60.0));
-        // calmer veins: lower heat so the lava network reads as a few molten seams, not a loud glowing web
-        float heat = crack * (0.34 + pulse * 1.05) + node * 1.5;
-        vec3 col = mix(vec3(1.4, 0.22, 0.03), vec3(1.75, 1.0, 0.22), smoothstep(0.6, 1.8, heat));
-        gl_FragColor = vec4(col * heat, 1.0);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  });
-  const p = new THREE.Mesh(new THREE.PlaneGeometry(36, 38).rotateX(-Math.PI / 2), m);
-  p.position.set(0, 0.03, 18); p.renderOrder = 1; // z in [-1, 37]
-  return p;
-}
-
-// a thin animated water sheen + caustics + foam over the ice half (keeps characters readable)
-function waterOverlay() {
-  const m = new THREE.ShaderMaterial({
+// ---------------- the realistic moving water expanse ----------------
+// NOTE ON APPROACH: three.js Water.js (the planar-reflection ocean) is vendored under
+// vendor/three/addons/objects/Water.js, but from this fixed, low, grazing camera its surface mirrors the
+// arena's warm hazy SKY almost completely (fresnel reflectance -> 1 at grazing angles), so the sea read as a
+// flat warm "sheet" of sand rather than water, and the only clean fix needed editing the vendored shader
+// (which broke its compile). So the sea here is a custom wave shader we fully control: big Gerstner-ish swell
+// for a moving silhouette, analytic ripple normals, cool fresnel SKY reflection (so it reads blue under the
+// warm sky), bright sun glints, crest + shoreline foam, distance fog into the horizon, and a semi-transparent
+// body so the lava glow below rises up through it. Honest limit: this is a shader surface with faked sky
+// reflection — not a true planar mirror of the scene, and not a real fluid simulation.
+const SEA = 620; // big enough to run past the horizon fog from the fixed camera
+function makeWater(detail, sunDir) {
+  const seg = Math.max(64, Math.round(190 * detail));
+  const geo = new THREE.PlaneGeometry(SEA, SEA, seg, seg).rotateX(-Math.PI / 2);
+  const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false,
-    uniforms: { uTime: TIME },
-    vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
-    fragmentShader: `uniform float uTime; varying vec3 vW;
-      float h(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
-      float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
+    uniforms: {
+      uTime: TIME, uSun: { value: sunDir.clone() }, uHeat: { value: 0.5 },
+      uHorizon: { value: new THREE.Color(0xE9DCC6) }, // matches look.js HAZE so the far sea melts into the sky
+    },
+    vertexShader: `uniform float uTime; varying vec3 vW;
+      // big swell only, for the moving silhouette (fine ripples are done per-pixel in the fragment)
+      float swell(vec2 p){
+        return sin(p.x * 0.12 + uTime * 0.8) * 0.42
+             + sin(dot(p, vec2(0.30, 0.95)) * 0.16 + uTime * 0.7) * 0.30
+             + sin(dot(p, vec2(-0.6, 0.8)) * 0.27 + uTime * 1.05) * 0.16;
+      }
       void main(){
-        vec2 q = vW.xz * 0.5;
-        // moving caustic web
-        float a = n(q + vec2(0.0, uTime * 0.25));
-        float b = n(q * 1.9 - vec2(uTime * 0.18, 0.0));
-        float caustic = pow(smoothstep(0.6, 0.98, a) + smoothstep(0.64, 1.0, b), 1.5) * 0.6;
-        // foam at the centre clash line and near the base
-        float foam = smoothstep(2.2, 0.0, abs(vW.z)) * (0.5 + 0.5 * n(q * 3.0 + uTime * 0.6));
-        foam += smoothstep(8.0, 4.0, abs(vW.z + ${BZ.toFixed(1)})) * 0.3 * n(q * 2.0 - uTime * 0.4);
-        float alpha = caustic * 0.12 + foam * 0.34;
-        vec3 col = mix(vec3(0.42, 0.74, 0.92), vec3(0.92, 0.98, 1.0), foam);
-        gl_FragColor = vec4(col * (caustic * 0.55 + foam * 1.0), clamp(alpha, 0.0, 0.55));
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        w.y += swell(w.xz);
+        vW = w.xyz;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: `uniform float uTime, uHeat; uniform vec3 uSun, uHorizon; varying vec3 vW;
+      // height field (swell + ripples) and its analytic gradient -> crisp normals independent of mesh density
+      void waves(vec2 p, out float h, out vec2 grad){
+        h = 0.0; grad = vec2(0.0);
+        // d (direction), par = (freq, speed, amp)
+        vec2 defs[5]; vec3 par[5];
+        defs[0]=vec2( 1.0,  0.0); par[0]=vec3(0.12, 0.8, 0.42);
+        defs[1]=vec2( 0.30, 0.95);par[1]=vec3(0.16, 0.7, 0.30);
+        defs[2]=vec2(-0.60, 0.80);par[2]=vec3(0.27, 1.05,0.16);
+        defs[3]=vec2( 0.90,-0.30);par[3]=vec3(0.52, 1.5, 0.08);
+        defs[4]=vec2( 0.15, 1.00);par[4]=vec3(0.95, 2.1, 0.045);
+        for(int i=0;i<5;i++){
+          vec2 d = normalize(defs[i]); float wv=par[i].x, sp=par[i].y, a=par[i].z;
+          float ph = dot(d,p)*wv + uTime*sp;
+          h += sin(ph)*a;
+          grad += d*(wv*a*cos(ph));
+        }
+      }
+      void main(){
+        float h; vec2 grad; waves(vW.xz, h, grad);
+        vec3 N = normalize(vec3(-grad.x * 2.3, 1.0, -grad.y * 2.3));
+        vec3 V = normalize(cameraPosition - vW);
+        float ndv = max(dot(N, V), 0.0);
+        float fres = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
+        // SATURATED cool sky reflection (not near-white) so the blue survives the scene's warm grade & reads as water
+        vec3 r = reflect(-V, N); float ry = clamp(r.y, 0.0, 1.0);
+        vec3 skyRefl = mix(vec3(0.30, 0.52, 0.74), vec3(0.08, 0.28, 0.58), ry); // saturated horizon -> deep zenith blue
+        // body colour: deep blue rising to a brighter teal on the wave faces
+        vec3 body = mix(vec3(0.02, 0.13, 0.24), vec3(0.05, 0.33, 0.50), smoothstep(-0.4, 0.5, h));
+        vec3 col = mix(body, skyRefl, fres * 0.72);
+        // sun glints that sparkle on the ripple crests
+        vec3 Rs = reflect(-normalize(uSun), N);
+        float spec = pow(max(dot(V, Rs), 0.0), 130.0);
+        col += vec3(1.0, 0.95, 0.82) * spec * 3.0;
+        // foam: on the highest crests + a soft ring hugging the glass island's footprint
+        float crest = smoothstep(0.34, 0.62, h);
+        float ex = abs(vW.x) - ${(GLASS_W / 2).toFixed(2)}, ez = abs(vW.z) - ${(GLASS_L / 2).toFixed(2)};
+        float edge = max(ex, ez);
+        float shore = smoothstep(2.2, 0.0, max(edge, 0.0)) * step(0.0, edge);
+        float foam = clamp(crest * 0.7 + shore * (0.55 + 0.45 * sin(vW.x * 3.0 + vW.z * 3.0 - uTime * 2.0)), 0.0, 1.0);
+        col = mix(col, vec3(0.95, 0.98, 1.0), foam * 0.85);
+        // thin the water where the lava is hot so the molten glow rises through; opaque + blue when it's cold
+        float alpha = clamp(mix(0.86, 0.62, uHeat) + fres * 0.1 + foam * 0.35, 0.4, 0.96);
+        // distance haze: far sea melts into the sky horizon colour
+        float fog = smoothstep(130.0, 320.0, length(cameraPosition - vW));
+        col = mix(col, uHorizon, fog);
+        // output LINEAR; the composer's OutputPass applies tone-map + sRGB once (adding the in-shader includes
+        // here double-processed the colour and washed the sea out to cream, so they are deliberately omitted)
+        gl_FragColor = vec4(col, alpha);
       }`,
   });
-  const p = new THREE.Mesh(new THREE.PlaneGeometry(36, 38).rotateX(-Math.PI / 2), m);
-  p.position.set(0, 0.04, -18); p.renderOrder = 1; // z in [-37, 1]
-  return p;
+  const m = new THREE.Mesh(geo, mat); m.position.y = WATER_Y; m.renderOrder = 1;
+  return { mesh: m, mat };
 }
 
-// ---------------- big outer surfaces: ocean (water side) + lava lake (fire side) ----------------
-function oceanSurface() {
-  const geo = new THREE.PlaneGeometry(260, 150, 80, 48).rotateX(-Math.PI / 2);
+// ---------------- the volcanic lava layer beneath the water ----------------
+// An emissive flowing-crust shader. position.y and uHeat are driven in update() by the fire/water advantage,
+// so the lava visibly RISES + glows hotter when Fire is ahead and SINKS + dims when Water is ahead.
+function makeLava() {
   const mat = new THREE.ShaderMaterial({
-    transparent: true,
-    uniforms: { uTime: TIME },
-    vertexShader: `uniform float uTime; varying vec3 vW; varying float vH;
-      void main(){
-        vec3 p = position;
-        // a couple of Gerstner-ish waves
-        float w1 = sin(p.x * 0.18 + uTime * 1.1) * 0.5;
-        float w2 = sin((p.z * 0.14 - p.x * 0.06) + uTime * 0.8) * 0.4;
-        float w3 = sin((p.x * 0.4 + p.z * 0.3) + uTime * 1.9) * 0.12;
-        p.y += w1 + w2 + w3; vH = w1 + w2 + w3;
-        vec4 wld = modelMatrix * vec4(p, 1.0); vW = wld.xyz;
-        gl_Position = projectionMatrix * viewMatrix * wld;
-      }`,
-    fragmentShader: `uniform float uTime; varying vec3 vW; varying float vH;
-      void main(){
-        vec3 deep = vec3(0.03, 0.18, 0.30), shallow = vec3(0.12, 0.52, 0.66);
-        vec3 col = mix(deep, shallow, smoothstep(-0.6, 0.6, vH));
-        float crest = smoothstep(0.55, 0.95, vH);
-        col = mix(col, vec3(0.9, 0.98, 1.0), crest * 0.7);               // white caps
-        // faint broad glints only on the crests (no regular dot lattice)
-        col += vec3(0.6, 0.85, 1.0) * crest * 0.2;
-        gl_FragColor = vec4(col, 0.94);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  });
-  const m = new THREE.Mesh(geo, mat); m.position.set(0, -0.35, -Lh - 48); m.renderOrder = 0;
-  return m;
-}
-function lavaLake() {
-  const mat = new THREE.ShaderMaterial({
-    uniforms: { uTime: TIME },
-    vertexShader: 'varying vec2 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xz; gl_Position = projectionMatrix * viewMatrix * w; }',
-    fragmentShader: `uniform float uTime; varying vec2 vW;
+    uniforms: { uTime: TIME, uHeat: { value: 0.5 } },
+    vertexShader: 'varying vec2 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xz; gl_Position = projectionMatrix * viewMatrix * w; }',
+    fragmentShader: `uniform float uTime, uHeat; varying vec2 vW;
       float h(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
       float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
+      float fbm(vec2 p){ return n(p)*0.6 + n(p*2.1 + 7.0)*0.3 + n(p*4.3 - 3.0)*0.1; }
       void main(){
-        vec2 q = vW * 0.12;
-        float f = n(q + vec2(0.0, uTime * 0.05)) * 0.6 + n(q * 2.3 - uTime * 0.03) * 0.4;
-        // dark cooled crust broken by bright molten veins
-        float vein = smoothstep(0.52, 0.42, abs(f - 0.5));
-        vec3 crust = vec3(0.09, 0.05, 0.05);
-        vec3 molten = mix(vec3(1.8, 0.4, 0.05), vec3(2.0, 1.2, 0.3), smoothstep(0.0, 0.3, f));
-        vec3 col = mix(crust, molten, vein);
+        vec2 q = vW * 0.09;
+        float flow = uTime * 0.05;
+        float f = fbm(q + vec2(0.0, flow)) * 0.6 + fbm(q * 2.3 - vec2(flow * 0.7, 0.0)) * 0.4;
+        float vein = smoothstep(0.5, 0.38, abs(f - 0.5));            // molten seams between cooled crust
+        float hot = smoothstep(0.32, 1.0, uHeat);                    // seams only really light up as Fire pulls ahead
+        float pulse = 0.7 + 0.3 * sin(uTime * 1.6 + f * 22.0);
+        // mostly DARK basalt crust (so the sea stays cool when neutral/Water-ahead), lit by orange seams
+        vec3 crust = vec3(0.018, 0.008, 0.006) + vec3(0.05, 0.018, 0.012) * uHeat;
+        vec3 molten = mix(vec3(1.3, 0.32, 0.05), vec3(2.3, 1.05, 0.28), uHeat);
+        vec3 col = crust + molten * (vein * (0.18 + 0.82 * hot) * pulse);
+        col += molten * pow(vein, 3.0) * hot * 0.6;                  // white-hot cores for the bloom to grab
+        // output LINEAR; the composer's OutputPass does tone-map + sRGB once (no in-shader includes = no double grade)
         gl_FragColor = vec4(col, 1.0);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
       }`,
   });
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(260, 150).rotateX(-Math.PI / 2), mat);
-  m.position.set(0, -0.3, Lh + 48); m.renderOrder = 0;
-  return m;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(SEA, SEA).rotateX(-Math.PI / 2), mat);
+  m.position.y = LAVA_MID; m.renderOrder = -2;
+  return { mesh: m, mat };
 }
 
-// ---------------- terrain (rolling basalt on fire side, low seabed on water side) ----------------
-function buildTerrain(scene, G) {
-  const geo = new THREE.PlaneGeometry(260, 260, 96, 96).rotateX(-Math.PI / 2);
-  const p = geo.attributes.position, cols = new Float32Array(p.count * 3), c = new THREE.Color(), c2 = new THREE.Color();
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), z = p.getZ(i);
-    const ax = Math.abs(x), inRect = ax < W + 2.3 && Math.abs(z) < Lh + 2.3;
-    const fire = smooth(-6, 4, z);
-    let h = 0;
-    if (!inRect) {
-      const edge = smooth(W + 2, W + 16, Math.max(ax, Math.abs(z) - Lh + W));
-      h = (vnoise(x * 0.8, z * 0.8) * 0.9 + 0.5) * edge * 3.2 * fire; // fire hills
-      h -= (1 - fire) * 1.6;                                          // water side sinks (seabed, under the ocean)
-    }
-    p.setY(i, h - 0.05);
-    const n = vnoise(x * 1.7, z * 1.7);
-    c.setRGB(0.14 + n * 0.04, 0.09 + n * 0.02, 0.09 + n * 0.02, THREE.SRGBColorSpace);       // basalt
-    if (h > 1.2) c.lerp(c2.setRGB(0.26, 0.18, 0.16, THREE.SRGBColorSpace), Math.min(1, (h - 1.2) * 0.4));
-    c2.setRGB(0.05, 0.12, 0.16, THREE.SRGBColorSpace);                                        // seabed
-    c.lerp(c2, 1 - fire);
-    cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
+// ---------------- the clean glass play platform (units stand/move on its top face at y = 0) ----------------
+// Mostly-clear so you read the water + lava below, with a bright fresnel sheen and a slim two-tone edge
+// (fire on +z, water on -z) that frames the island and keeps the Fire/Water sides legible. Kept deliberately
+// clean — no busy surface texture — so the game stays easy to read and ability FX on the glass pop.
+function glassIsland(G) {
+  // deliberately low-sheen so the sea + lava below read clearly through it: a faint cool tint with only a
+  // light edge-on fresnel glint (a strong clearcoat mirror washed the blue water out to pale grey at the
+  // grazing fixed camera). The glowing rim is what frames it as a solid glass platform.
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: 0xcdeefb, metalness: 0.0, roughness: 0.2,
+    transparent: true, opacity: 0.1,
+    clearcoat: 0.35, clearcoatRoughness: 0.2, ior: 1.3, reflectivity: 0.12,
+    envMapIntensity: 0.25, side: THREE.DoubleSide, depthWrite: false,
+  });
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(GLASS_W, GLASS_THICK, GLASS_L), mat);
+  slab.position.set(0, GLASS_TOP - GLASS_THICK / 2, 0);
+  slab.receiveShadow = true; slab.renderOrder = 2;
+
+  // slim glowing rim just above the top face: fire-orange on the +z half, water-cyan on the -z half.
+  const y = GLASS_TOP + 0.03, hw = GLASS_W / 2, hl = GLASS_L / 2, t = 0.16;
+  for (const sx of [-1, 1]) {
+    G.add(GEO.box, FIRE.lava, M4(sx * hw, y, hl / 2, [t, 0.08, hl]), { boost: GLOW * 0.7 });     // +z long edge (fire)
+    G.add(GEO.box, WATER.crystal, M4(sx * hw, y, -hl / 2, [t, 0.08, hl]), { boost: GLOW * 0.7 }); // -z long edge (water)
   }
-  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-  geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, toon(0xffffff, 0, { vertexColors: true })); m.receiveShadow = true;
-  scene.add(m);
-  // a few glowing lava veins running through the far basalt
-  const R = mulberry32(13);
-  for (let i = 0; i < 22; i++) {
-    const side = R() < 0.5 ? -1 : 1; let x = side * (W + 6 + R() * 40), z = 6 + R() * 58, ang = R() * 7;
-    for (let s = 0; s < 4; s++) {
-      const nx = x + Math.cos(ang) * (2 + R() * 3), nz = z + Math.sin(ang) * (2 + R() * 3);
-      const yy = (terrainHeightApprox(x) + terrainHeightApprox(nx)) / 2;
-      G.add(GEO.box, FIRE.lava, M4((x + nx) / 2, yy + 0.08, (z + nz) / 2, [0.25, 0.05, Math.hypot(nx - x, nz - z)], [0, Math.atan2(nx - x, nz - z), 0]), { boost: GLOW * 0.8 });
-      x = nx; z = nz; ang += (R() - 0.5);
-    }
-  }
+  G.add(GEO.box, FIRE.lava, M4(0, y, hl, [GLASS_W, 0.08, t]), { boost: GLOW * 0.7 });              // +z end cap (fire)
+  G.add(GEO.box, WATER.crystal, M4(0, y, -hl, [GLASS_W, 0.08, t]), { boost: GLOW * 0.7 });         // -z end cap (water)
+  G.add(GEO.box, 0xEFF6FF, M4(0, y + 0.01, 0, [GLASS_W, 0.07, 0.18]), { boost: GLOW * 0.5 });      // bright neutral clash line
+  return slab;
 }
-function terrainHeightApprox(x) { const ax = Math.abs(x); return ax < W + 2 ? 0 : (vnoise(x * 0.8, 30) * 0.9 + 0.5) * smooth(W + 2, W + 16, ax) * 3.2; }
+
+// The old solid basalt/seabed terrain is gone — the glass island now floats in open water, so the background
+// set pieces (volcanoes, icebergs) rise straight out of the sea at the water line.
+function terrainHeightApprox() { return WATER_Y; }
 
 // ---------------- rising/falling particles: embers (fire) and mist/spray (water) + clash steam ----------------
 function motes(scene, count, box, color, size, rise, fade) {
@@ -456,7 +379,7 @@ function buildVolcano(B, G, x, z) {
   return crater;
 }
 function buildIceberg(B, G, x, z) {
-  const y = -1.0;
+  const y = WATER_Y - 0.6;
   B.add(GEO.octa, WATER.ice, M4(x, y + 5, z, [10, 11, 9], [0.2, 0.6, 0.1]), { flat: true, jitter: 0.25 });
   B.add(GEO.octa, WATER.iceD, M4(x + 6, y + 3, z + 3, [6, 7, 6], [0.1, 1.2, 0.2]), { flat: true, jitter: 0.25 });
   G.add(GEO.box, WATER.crystal, M4(x, y + 8, z, [0.3, 5, 0.3]), { boost: GLOW * 0.5 });
@@ -539,13 +462,13 @@ function domeMaterial(color) {
 }
 
 export function buildWorld(scene, renderer, cover, detail = 1) {
-  const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const B = new Baker(), G = new Baker(), S = new Baker();
-  buildTerrain(scene, G);
-  const ft = floorTexture(maxAniso);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(36, 72).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: ft.tex }));
-  floor.receiveShadow = true; scene.add(floor);
-  scene.add(lavaOverlay(ft.mask), waterOverlay(), oceanSurface(), lavaLake());
+  // sun direction must match look.js's key light (34, 40, 30) so the water's sun glints land believably.
+  const sunDir = new THREE.Vector3(34, 40, 30).normalize();
+  const lava = makeLava();                 // glowing volcanic layer at the bottom
+  const water = makeWater(detail, sunDir); // realistic moving sea above it
+  const glass = glassIsland(G);            // clean translucent play platform at y = 0 (rim is baked into G)
+  scene.add(lava.mesh, water.mesh, glass);
 
   buildWalls(B, G, S);
   buildCover(B, G, S, cover);
@@ -603,11 +526,27 @@ export function buildWorld(scene, renderer, cover, detail = 1) {
     scene.add(dome); b.dome = dome;
   }
 
-  let t = 0;
+  let t = 0, lavaY = LAVA_MID, lavaHeat = 0.5;
   return {
     bases,
     update(dt, game, turretAims) {
       t += dt; TIME.value = t;
+      // Lava level + heat track who's winning. fireAdvantage in [-1, 1]: +1 = Fire base much healthier
+      // (lava RISES toward the surface and glows hot), -1 = Water ahead (lava SINKS and dims). Both full = neutral.
+      let targetY = LAVA_MID, targetHeat = 0.5;
+      if (game && game.bases) {
+        const fb = game.bases.human, wb = game.bases.ai;
+        const fFrac = fb ? fb.hp / (fb.max || 1) : 1, wFrac = wb ? wb.hp / (wb.max || 1) : 1;
+        const fireAdvantage = Math.max(-1, Math.min(1, fFrac - wFrac));
+        targetY = LAVA_MID + fireAdvantage * LAVA_AMP;
+        targetHeat = Math.max(0, Math.min(1, 0.5 + fireAdvantage * 0.5));
+      }
+      const ease = Math.min(1, dt * 1.1);     // smooth, cinematic rise/fall — no popping
+      lavaY += (targetY - lavaY) * ease; lavaHeat += (targetHeat - lavaHeat) * ease;
+      lava.mesh.position.y = lavaY; lava.mat.uniforms.uHeat.value = lavaHeat;
+      // feed the lava heat to the water so it thins (molten glow rises through) when Fire leads and stays a
+      // bright opaque blue (hiding the cold dark lava) when Water leads. Waves animate off the shared TIME.
+      water.mat.uniforms.uHeat.value = lavaHeat;
       volcano.children[0] && (volcano.rotation.y = t * 0.1);
       citadel.rings[0].rotation.x = Math.sin(t * 0.6) * 0.3; citadel.rings[0].rotation.z = t * 0.6;
       citadel.rings[1].rotation.x = t * 0.9; citadel.rings[1].rotation.z = Math.cos(t) * 0.3;
