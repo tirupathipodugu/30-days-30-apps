@@ -130,6 +130,8 @@ function skyFrom(colors, labels, names, gw, gh) {
   let s = [0, 0, 0], n = 0;
   for (let i = 0; i < gw * gh; i++) if (labels[i] >= 0 && names[labels[i]] === 'sky') { s[0] += colors[i * 3]; s[1] += colors[i * 3 + 1]; s[2] += colors[i * 3 + 2]; n++; }
   skyTint = n > 30 ? new THREE.Color(s[0] / n / 255, s[1] / n / 255, s[2] / n / 255) : null;
+  // A grey or white (overcast) sky looks flat: nudge it toward a clear block-game blue.
+  if (skyTint) { const hsl = {}; skyTint.getHSL(hsl); if (hsl.s < 0.25) skyTint.lerp(new THREE.Color(0x6aa8e8), 0.6); }
   const c = skyTint ? skyTint.clone().lerp(new THREE.Color(1, 1, 1), 0.35) : SKY.clone();
   scene.background = c; scene.fog.color = c;
 }
@@ -169,6 +171,26 @@ function buildWorld(colors, depth, labels, names, gw, gh) {
       }
     }
     bounds.min.y = Math.min(bounds.min.y, fy - 2);
+    // Trees get a trunk: a log column from the grass up to the bottom of their leaves.
+    const trees = new Map();
+    for (const v of voxels) if (v.type === 'leaves' && (v.name === 'tree' || v.name === 'palm')) {
+      const k = v.group || `${Math.round(v.x / 12)},${Math.round(v.z / 12)}`;
+      if (!trees.has(k)) trees.set(k, []);
+      trees.get(k).push(v);
+    }
+    for (const leaves of trees.values()) {
+      if (leaves.length < 30) continue;
+      const cx = Math.round(leaves.reduce((s, v) => s + v.x, 0) / leaves.length);
+      const cz = Math.round(leaves.reduce((s, v) => s + v.z, 0) / leaves.length);
+      const low = Math.min(...leaves.map((v) => v.y));
+      const thick = leaves.length > 400 ? 2 : 1;
+      for (let y = fy + 1; y < low + 2; y++) for (let dx = 0; dx < thick; dx++) for (let dz = 0; dz < thick; dz++) {
+        const k = `${cx + dx},${y},${cz + dz}`;
+        if (taken.has(k)) continue;
+        taken.add(k);
+        voxels.push({ x: cx + dx, y, z: cz + dz, type: 'log', color: TYPES.log.tint, group: leaves[0].group });
+      }
+    }
   }
   const blocks = voxels.map((v) => ({ ...v, rise: (bounds.max.y - v.y) / span, gone: false }));
   shadeByNeighbours(blocks);
@@ -298,7 +320,7 @@ canvas.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); 
 canvas.addEventListener('wheel', (e) => { if (walk.on) return; e.preventDefault(); orbit.dist = Math.min(300, Math.max(6, orbit.dist * (1 + e.deltaY * 0.001))); orbit.idle = -1e9; placeCamera(); }, { passive: false });
 
 let placeType = 'planks';
-const HOTBAR = ['planks', 'stone', 'brick', 'glass', 'leaves', 'wool', 'glow', 'sand', 'water'];
+const HOTBAR = ['planks', 'log', 'stone', 'brick', 'glass', 'leaves', 'wool', 'glow', 'water'];
 const colorFor = (type) => (TYPES[type].dye ? [0.92, 0.92, 0.9] : TYPES[type].tint);
 function breakBlock(b) { b.gone = true; writeBlock(b); b.mesh.instanceMatrix.needsUpdate = true; crunch(b.type); }
 function placeBlock({ b, h }) {

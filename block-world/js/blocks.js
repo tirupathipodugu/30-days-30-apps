@@ -17,6 +17,7 @@ export const TYPES = {
   dirt:    { tint: [0.56, 0.4, 0.27], fixed: true },
   sand:    { tint: [0.88, 0.81, 0.58], fixed: true },
   stone:   { tint: [0.57, 0.57, 0.58], fixed: true },
+  log:     { tint: [0.45, 0.33, 0.21] },
   glass:   { tint: [0.88, 0.96, 1.0], transparent: 0.5 },
   water:   { tint: [0.24, 0.45, 0.9], transparent: 0.35, fixed: true },
   iron:    { tint: [0.84, 0.85, 0.88] },
@@ -112,6 +113,10 @@ function paint(name) {
         g.fillStyle = grey(120); for (let i = 0; i < 10; i++) g.fillRect(Math.floor(r() * 15), Math.floor(r() * 15), 2, 1);
         break;
       case 'sand': speckle(g, 225, 40); break;
+      case 'log':
+        for (let x = 0; x < 16; x++) { const v = 170 + (x % 4 === 0 ? -50 : 0) + (r() - 0.5) * 40; for (let y = 0; y < 16; y++) { g.fillStyle = grey(Math.round(v + (r() - 0.5) * 24)); g.fillRect(x, y, 1, 1); } }
+        g.fillStyle = grey(110); for (let i = 0; i < 6; i++) g.fillRect(Math.floor(r() * 16), Math.floor(r() * 14), 1, 3);
+        break;
       case 'stone':
         speckle(g, 200, 34, 2);
         g.fillStyle = grey(132);

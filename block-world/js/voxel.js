@@ -179,14 +179,16 @@ export function voxelize({ colors, depth, labels, names, gw, gh, across = 48, so
   // Build voxels; give objects some body by filling a little way back from the visible face.
   const voxels = [];
   const seen = new Set();
+  let curName = null;
   const add = (x, y, z, type, color, group) => {
     const k = `${x},${y},${z}`;
     if (seen.has(k)) return;
     seen.add(k);
-    voxels.push({ x, y, z, type, color, group });
+    voxels.push({ x, y, z, type, color, group, name: curName });
   };
   for (const c of cells.values()) {
     const type = top(c);
+    curName = c.lab >= 0 ? names[c.lab] : null;
     const avg = [c.rgb[0] / c.n / 255, c.rgb[1] / c.n / 255, c.rgb[2] / c.n / 255];
     const spec = TYPES[type];
     let color;
