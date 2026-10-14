@@ -163,13 +163,14 @@ function buildWater(scene) {
         vec2 q = vec2(vW.x * 1.3, vW.z * 0.45 + uTime * 1.4 * side);
         float f = n(q * 1.7) * 0.6 + n(q * 4.1 + 3.0) * 0.4;
         vec3 deep = mix(vec3(0.10, 0.42, 0.55), vec3(0.03, 0.14, 0.22), tech);
-        vec3 shallow = mix(vec3(0.36, 0.78, 0.80), vec3(0.10, 0.65, 0.70), tech);
+        vec3 shallow = mix(vec3(0.36, 0.78, 0.80), vec3(0.04, 0.24, 0.30), tech);
         vec3 col = mix(deep, shallow, smoothstep(0.4, 2.4, d));
         float streak = smoothstep(0.72, 0.9, f);
         col += vec3(0.9, 0.97, 1.0) * streak * 0.55 * (1.0 - tech);
-        col += vec3(0.3, 1.6, 1.5) * streak * 1.4 * tech; // the coolant canal glows
+        col += vec3(0.3, 1.6, 1.5) * streak * 1.1 * tech; // the coolant canal glows
         float edge = smoothstep(1.5, 2.3, d);
         col = mix(col, vec3(0.95, 0.98, 1.0), edge * 0.5 * (1.0 - tech));
+        col = mix(col, vec3(0.2, 0.9, 0.85), edge * 0.35 * tech);
         gl_FragColor = vec4(col, 0.86 - edge * 0.4);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -188,7 +189,7 @@ function grassGeometry() {
   const P = [], C = [], A = [];
   const GB = new THREE.Color(0x3F7A2C).toArray(), GT = new THREE.Color(0xA6D46A).toArray();
   const R = mulberry32(3);
-  for (let b = 0; b < 7; b++) {
+  for (let b = 0; b < 5; b++) {
     const a = R() * Math.PI * 2, r = R() * 0.3, x = Math.cos(a) * r, z = Math.sin(a) * r;
     const w = 0.05 + R() * 0.04, h = 0.18 + R() * 0.24, lean = (R() - 0.5) * 0.35, ry = R() * Math.PI;
     const cx = Math.cos(ry) * w, cz = Math.sin(ry) * w;
@@ -277,18 +278,29 @@ function buildPlaza(scene, B, G, S) {
       tiles.push({ x: cx, z: cz, y: -0.12 + (blend > 0.2 ? R() * 0.1 : 0), tilt, v: 0.85 + R() * 0.25 });
     }
   }
+  // a walkway strip between the arena wall and the canal
+  for (const sx of [-1, 1]) for (let z = -Lh - 2; z < 2; z += T) {
+    const blend = smooth(-9, 2, z + T / 2);
+    if (R() < blend) continue;
+    tiles.push({ x: sx * (W + 2.45), z: z + T / 2, y: -0.12, tilt: 0, v: 0.8 + R() * 0.2, w: 3.3 });
+  }
   const im = new THREE.InstancedMesh(GEO.rboxS, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, metalness: 0.15 }), tiles.length);
   const m = new THREE.Matrix4(), c = new THREE.Color();
   tiles.forEach((t, i) => {
-    im.setMatrixAt(i, M4(t.x, t.y, t.z, [T - 0.18, 0.3, T - 0.18], [t.tilt, 0, t.tilt * 0.6], m));
+    im.setMatrixAt(i, M4(t.x, t.y, t.z, [t.w || T - 0.18, 0.3, T - 0.18], [t.tilt, 0, t.tilt * 0.6], m));
     im.setColorAt(i, c.setRGB(0.24 * t.v, 0.29 * t.v, 0.35 * t.v, THREE.SRGBColorSpace));
   });
   im.receiveShadow = true;
   scene.add(im);
   // glowing grid seams beneath the tiles
-  const glow = new THREE.Mesh(new THREE.PlaneGeometry(140, 94).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x2BD9C6).multiplyScalar(0.55) }));
-  glow.position.set(0, -0.2, -43);
-  scene.add(glow);
+  const gmat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x2BD9C6).multiplyScalar(0.55) });
+  const gx = [-70, -RIVER_X - 3.7, -W - 0.2, W + 0.2, RIVER_X + 3.7, 70]; // only under tiled ground, not the canals
+  for (let i = 0; i < gx.length; i += 2) {
+    const w = gx[i + 1] - gx[i];
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(w, 94).rotateX(-Math.PI / 2), gmat);
+    glow.position.set((gx[i] + gx[i + 1]) / 2, -0.2, -43);
+    scene.add(glow);
+  }
   // cable trenches with travelling light pulses, running from the plaza edge toward the citadel
   const trench = new THREE.ShaderMaterial({
     uniforms: { uTime: TIME },
@@ -449,7 +461,8 @@ function buildCover(B, F, G, S, cover) {
     if (c.k === 'rock') {
       if (human) {
         B.add(GEO.blob, 0xB8AE9B, M4(c.x, c.r * 0.5, c.z, [c.r * 2.1, c.r * 1.5, c.r * 1.9], [R() * 0.3, R() * 6, 0]), { flat: true, jitter: 0.25 });
-        B.add(GEO.blob, 0x82B256, M4(c.x, c.r * 1.12, c.z, [c.r * 1.6, c.r * 0.42, c.r * 1.4], [0, R() * 6, 0]), { flat: true, jitter: 0.2 });
+        B.add(GEO.blob, 0xA89E8A, M4(c.x - c.r * 0.5, c.r * 0.9, c.z + c.r * 0.3, [c.r * 1.2, c.r * 1.1, c.r * 1.1], [R(), R() * 6, 0]), { flat: true, jitter: 0.25 });
+        B.add(GEO.blob, 0x7FAE4F, M4(c.x + c.r * 0.2, c.r * 1.15, c.z - c.r * 0.1, [c.r * 0.7, c.r * 0.22, c.r * 0.6], [0, R() * 6, 0.2]), { flat: true, jitter: 0.2 });
         B.add(GEO.blob, 0xA2977F, M4(c.x + c.r * 0.9, 0.3, c.z - c.r * 0.6, [0.9, 0.65, 0.8], [0, R() * 6, 0]), { flat: true, jitter: 0.2 });
         for (let k = 0; k < 4; k++) F.add(GEO.blob, 0x6FB357, M4(c.x + (R() - 0.5) * c.r * 2.4, 0.25, c.z + (R() - 0.5) * c.r * 2.4, 0.5 + R() * 0.3), { aw: 'y', awScale: 0.2 });
       } else {
@@ -576,7 +589,8 @@ function buildCitadel(B, G, S) {
   const blocks = [[0, 1.9, 0, 6.2, 2.6, 5.2], [0, 4.5, -0.2, 4.8, 2.7, 4.0], [0, 7.0, -0.3, 3.6, 2.4, 3.0]];
   for (const [x, y, z, w, h, d] of blocks) {
     S.add(GEO.rbox, 0x22303B, M4(x, y, z0 + z, [w, h, d]));
-    G.add(GEO.box, 0x6FFFEA, M4(x, y + h / 2 - 0.12, z0 + z, [w + 0.04, 0.07, d + 0.04]), { boost: GLOW });
+    for (const sz of [-1, 1]) G.add(GEO.box, 0x6FFFEA, M4(x, y + h / 2 - 0.14, z0 + z + sz * (d / 2 + 0.01), [w * 0.86, 0.06, 0.03]), { boost: GLOW });
+    for (const sx of [-1, 1]) G.add(GEO.box, 0x6FFFEA, M4(x + sx * (w / 2 + 0.01), y + h / 2 - 0.14, z0 + z, [0.03, 0.06, d * 0.86]), { boost: GLOW });
     for (let k = 0; k < Math.floor(h / 0.5); k++) {
       const yy = y - h / 2 + 0.4 + k * 0.45;
       G.add(GEO.box, k % 3 === 1 ? 0xFFB070 : 0x6FFFEA, M4(x - w * 0.25, yy, z0 + z + d / 2 + 0.02, [w * 0.35, 0.06, 0.03]), { boost: GLOW * 0.8 });

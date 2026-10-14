@@ -414,6 +414,7 @@ function onEvent(g, e, quiet) {
       if (!quiet) {
         endT = 1.8; slowT = slowMax = 1.6; ui.slowmo(true);
         audio.play(e.type); audio.setMusic(false);
+        if (e.type === 'win') fx.fireworks(14);
         if (e.type === 'lose' && e.reason === 'base') {
           const b = g.bases[me];
           for (let k = 0; k < 6; k++) setTimeout(() => { fx.burst(b.x + (Math.random() - 0.5) * 8, 4, b.z, 24, 0xFFB04D, 12, 0.6, 0.25); fx.puff(b.x, 4, b.z, 6, 0x555050, 2, 4, 1.4); audio.play('boom'); }, k * 150);

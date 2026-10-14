@@ -48,6 +48,12 @@ class Pool {
       switch (this.mode[i]) {
         case 1: sc = this.size[i] * (k > 0.8 ? (1 - k) / 0.2 : 1) * (0.4 + 0.6 * Math.sqrt(k)) * (1.6 - k * 0.6); break; // puff: pop then shrink
         case 2: sc = this.size[i] * Math.min(1, k * 4); break; // debris: hold then vanish
+        case 3: { // confetti: flutters side to side as it drifts down
+          sc = this.size[i] * Math.min(1, k * 3);
+          const w = Math.sin(this.life[i] * 9 + i) * 2.2;
+          p[i * 3] += w * dt; p[i * 3 + 2] += Math.cos(this.life[i] * 7 + i) * 1.6 * dt;
+          break;
+        }
         default: sc = this.size[i] * k;
       }
       _e.set(this.rot[i * 3], this.rot[i * 3 + 1], 0); _q.setFromEuler(_e);
@@ -56,7 +62,8 @@ class Pool {
         const sp = Math.hypot(vx, vy, vz) || 1;
         _q.setFromUnitVectors(_v.set(0, 0, 1), _s.set(vx / sp, vy / sp, vz / sp));
         _s.set(sc, sc, sc + sp * this.stretch[i] * k);
-      } else _s.set(sc, sc, sc);
+      } else if (this.mode[i] === 3) _s.set(sc, sc * 0.6, sc * 0.05);
+      else _s.set(sc, sc, sc);
       _m.compose(_v.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]), _q, _s);
       this.im.setMatrixAt(i, _m);
       _c.setRGB(this.col[i * 3], this.col[i * 3 + 1], this.col[i * 3 + 2]);
@@ -81,8 +88,9 @@ export class FX {
     this.scene = scene; this.camera = camera; this.numsEl = numsEl;
     const q = lowEnd ? 0.6 : 1;
     this.sparks = new Pool(scene, GEO.box, additive(0xffffff, 1), Math.round(700 * q));
-    this.glow = new Pool(scene, GEO.sphere, additive(0xffffff, 0.55), Math.round(400 * q));
-    this.puffs = new Pool(scene, GEO.ico, new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), Math.round(260 * q));
+    this.glow = new Pool(scene, GEO.sphereLo, additive(0xffffff, 0.55), Math.round(400 * q));
+    this.puffs = new Pool(scene, GEO.blob, toon(0xffffff, 0.35), Math.round(260 * q));
+    this.confetti = new Pool(scene, GEO.box, toon(0xffffff, 0.3, { side: THREE.DoubleSide }), Math.round(420 * q));
     this.debris = new Pool(scene, GEO.box, toon(0xffffff, 0.2), Math.round(300 * q), { bounce: true });
     this.sparks.im.renderOrder = 5; this.glow.im.renderOrder = 5;
     // shockwave rings
@@ -139,6 +147,31 @@ export class FX {
       const a = Math.random() * Math.PI * 2, sp = speed * (0.4 + Math.random() * 0.8);
       this.debris.spawn(x, y + Math.random() * 0.6, z, Math.cos(a) * sp + dx * speed * 0.6, 4 + Math.random() * 6, Math.sin(a) * sp + dz * speed * 0.6, 1.4 + Math.random() * 0.8, size * (0.5 + Math.random() * 0.9), colors[i % colors.length], 22, 0.4, 2);
     }
+    this.confettiBurst(x, y + 0.4, z, Math.round(n * 1.4), colors, speed * 0.8);
+  }
+  // team-coloured confetti that pops out of a defeated unit and flutters down
+  confettiBurst(x, y, z, n, colors, speed = 6) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, sp = speed * (0.3 + Math.random() * 0.8);
+      this.confetti.spawn(x, y, z, Math.cos(a) * sp, 5 + Math.random() * 6, Math.sin(a) * sp, 1.1 + Math.random() * 0.9, 0.22 + Math.random() * 0.14, colors[i % colors.length], 9, 2.6, 3);
+    }
+  }
+  // victory fireworks: rockets rise from around the arena and burst into coloured stars
+  fireworks(n = 10, colors = [0xFFC83D, 0xFF6F91, 0x6FFFEA, 0xFFFFFF, 0xB79CFF, 0xFF9A3D]) {
+    for (let k = 0; k < n; k++) {
+      setTimeout(() => {
+        const x = (Math.random() - 0.5) * 30, z = (Math.random() - 0.5) * 50, h = 12 + Math.random() * 8, col = colors[k % colors.length];
+        for (let j = 0; j < 8; j++) this.glow.spawn(x, 1 + j * 0.4, z, 0, 22, 0, 0.5 - j * 0.03, 0.3, 0xFFE6B0, 0, 0.8);
+        setTimeout(() => {
+          for (let i = 0; i < 60; i++) {
+            const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u), sp = 9 + Math.random() * 3;
+            this.sparks.spawn(x, h, z, Math.cos(a) * r * sp, u * sp, Math.sin(a) * r * sp, 1.1 + Math.random() * 0.5, 0.22, col, 5, 1.2, 0, 0.05);
+          }
+          this.glow.spawn(x, h, z, 0, 0, 0, 0.3, 4, col, 0, 1);
+          this.light(x, h, z, col, 40);
+        }, 480);
+      }, k * 260);
+    }
   }
   glowDot(x, y, z, vx, vy, vz, life, size, color, grav = 0, drag = 1) { this.glow.spawn(x, y, z, vx, vy, vz, life, size, color, grav, drag); }
   number(x, y, z, text, cls = '', life = 0.8) {
@@ -160,7 +193,7 @@ export class FX {
 
   update(dt, rdt) {
     this.t += dt;
-    this.sparks.update(dt); this.glow.update(dt); this.puffs.update(dt); this.debris.update(dt);
+    this.sparks.update(dt); this.glow.update(dt); this.puffs.update(dt); this.debris.update(dt); this.confetti.update(dt);
     for (const R of this.rings) {
       if (R.t <= 0) continue;
       R.t -= dt;
@@ -197,7 +230,7 @@ export class FX {
     );
   }
   clear() {
-    this.sparks.clear(); this.glow.clear(); this.puffs.clear(); this.debris.clear();
+    this.sparks.clear(); this.glow.clear(); this.puffs.clear(); this.debris.clear(); this.confetti.clear();
     for (const R of this.rings) { R.t = 0; R.m.visible = false; }
     for (const n of this.nums) { n.on = false; n.el.className = 'num'; }
     this.trauma = 0;

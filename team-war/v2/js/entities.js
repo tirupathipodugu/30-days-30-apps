@@ -1,7 +1,7 @@
 // Draws everything the simulation owns except the hero: minions (instanced), shots, telegraphs,
 // shield walls, firewalls, drones, pickups and health bars.
 import * as THREE from 'three';
-import { Crowd, rootMatrix, additive, glowMat, toon, GEO } from './gfx.js';
+import { Crowd, rootMatrix, additive, glowMat, toon, GEO, TIME } from './gfx.js';
 import { minionModel, PAL } from './models.js';
 import { KINDS, PICKUPS } from './config.js';
 
@@ -11,6 +11,49 @@ const MAXES = { grunt: 90, runner: 70, shooter: 45, brute: 30, boss: 2 };
 const _root = new THREE.Matrix4(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0), _right = new THREE.Vector3();
 
+// a glowing streak: bright head at the origin fading to nothing along -z (additive, so black = invisible)
+function streakGeometry() {
+  const g = new THREE.ConeGeometry(0.5, 1, 8, 4, false).rotateX(-Math.PI / 2).translate(0, 0, -0.5);
+  const p = g.attributes.position, c = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) { const k = Math.pow(1 + p.getZ(i), 1.6); c[i * 3] = c[i * 3 + 1] = c[i * 3 + 2] = k; }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return g;
+}
+function streakMat() {
+  const m = additive(0xffffff, 1, 2.4); m.vertexColors = true; return m;
+}
+// magical vertical curtains: kind 0 = honeycomb shield shimmer, kind 1 = rising code-fire
+function curtainMat(color, kind) {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: TIME, uColor: { value: new THREE.Color(color) }, uFade: { value: 1 }, uLen: { value: 1 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform float uTime, uFade, uLen; uniform vec3 uColor; varying vec2 vUv;
+      float h(vec2 p){ return fract(sin(dot(p, vec2(12.9, 78.2))) * 43758.5); }
+      float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+      void main(){
+        vec2 uv = vUv; float a;
+        ${kind === 0 ? `
+        vec2 g = vec2(uv.x * uLen * 2.2, uv.y * 3.0);
+        g.x += floor(g.y) * 0.5;
+        vec2 f = abs(fract(g) - 0.5);
+        float cell = smoothstep(0.38, 0.5, max(f.x * 1.15, f.y));
+        float sweep = smoothstep(0.15, 0.0, abs(fract(uv.x * 0.6 - uTime * 0.5) - 0.5) - 0.3);
+        float edge = smoothstep(0.82, 1.0, uv.y) + smoothstep(0.1, 0.0, uv.y) * 0.6;
+        a = (0.1 + cell * 0.4 + edge * 0.6 + sweep * 0.2 + 0.06 * sin(uTime * 9.0 + uv.x * 20.0)) * 0.6;
+        a *= 1.0 - smoothstep(0.9, 1.0, uv.y) * 0.0;` : `
+        float t = uTime * 2.2;
+        float fl = n(vec2(uv.x * uLen * 3.0, uv.y * 2.5 - t)) * 0.65 + n(vec2(uv.x * uLen * 7.0, uv.y * 5.0 - t * 1.7)) * 0.35;
+        float shape = smoothstep(0.0, 0.25, fl * (1.15 - uv.y) - uv.y * 0.55);
+        float bits = step(0.85, h(floor(vec2(uv.x * uLen * 8.0, uv.y * 8.0 - t * 3.0)))) * (1.0 - uv.y);
+        a = shape * 1.3 + bits * 0.6;`}
+        vec3 c = mix(uColor, vec3(1.0), clamp(a - 1.0, 0.0, 0.6));
+        gl_FragColor = vec4(c * a * uFade * 1.1, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+}
 function instanced(scene, geo, mat, max, shadow = false) {
   const im = new THREE.InstancedMesh(geo, mat, max);
   im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -26,8 +69,10 @@ export class Entities {
     this.crowds = new Map();
     this.st = { ph: 0, mv: 0, swing: 0, t: 0, roll: 0, seed: 0 };
     // projectiles
-    this.bolts = instanced(scene, GEO.box, additive(0xffffff, 1), 400);
-    this.boltCores = instanced(scene, GEO.box, additive(0xffffff, 1), 400);
+    const streak = streakGeometry();
+    this.bolts = instanced(scene, streak, streakMat(), 400);
+    this.boltCores = instanced(scene, streak, streakMat(), 400);
+    this.boltHeads = instanced(scene, GEO.sphereLo, additive(0xffffff, 0.9, 2.6), 400);
     this.orbs = instanced(scene, GEO.sphere, additive(0xffffff, 1), 200);
     this.orbHalo = instanced(scene, GEO.sphere, additive(0xffffff, 0.35), 200);
     this.bolts.renderOrder = this.orbs.renderOrder = 3;
@@ -36,7 +81,8 @@ export class Entities {
     this.barFg = instanced(scene, new THREE.PlaneGeometry(1, 1).translate(0.5, 0, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true, opacity: 1, toneMapped: false }), 160);
     this.barBg.renderOrder = 10; this.barFg.renderOrder = 11;
     // elite / ally markers on the ground
-    this.marks = instanced(scene, new THREE.RingGeometry(0.75, 1, 28).rotateX(-Math.PI / 2), additive(0xffffff, 0.75), 60);
+    this.marks = instanced(scene, new THREE.RingGeometry(0.72, 1, 28).rotateX(-Math.PI / 2), additive(0xffffff, 0.75), 240);
+    this.dying = []; this.seen = new Map(); this.alive = new Set();
     // telegraphs
     this.tele = [];
     for (let i = 0; i < 10; i++) {
@@ -54,7 +100,7 @@ export class Entities {
     this.walls = [];
     for (let i = 0; i < 3; i++) {
       const g = new THREE.Group();
-      const panel = new THREE.Mesh(GEO.box, additive(0xFFA85C, 0.4)); panel.scale.set(7.6, 2.2, 0.25); panel.position.y = 1.1;
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), curtainMat(0xFF9A4D, 0)); panel.scale.set(7.6, 2.4, 1); panel.position.y = 1.2; panel.material.uniforms.uLen.value = 3.2;
       const edge = new THREE.Mesh(GEO.box, additive(0xFFE0B0, 0.9)); edge.scale.set(7.6, 0.08, 0.3); edge.position.y = 2.2;
       g.add(panel, edge);
       for (let k = 0; k < 7; k++) {
@@ -69,7 +115,9 @@ export class Entities {
       const strip = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(0x3BFFE0, 0.5));
       const core = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(0xB8FFF4, 0.35));
       strip.position.y = 0.07; core.position.y = 0.08; strip.visible = core.visible = false;
-      scene.add(strip, core); this.fires.push({ strip, core });
+      const wall = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), curtainMat(0x2BFFE0, 1));
+      wall.visible = false; wall.renderOrder = 5; scene.add(wall);
+      scene.add(strip, core); this.fires.push({ strip, core, wall });
     }
     // drones (Team AI E)
     this.drones = [];
@@ -106,6 +154,7 @@ export class Entities {
   update(g, t, camera, trail) {
     const st = this.st;
     st.t = t;
+    if (g !== this.lastG) { this.lastG = g; this.seen.clear(); this.dying.length = 0; }
     for (const c of this.crowds.values()) c.begin();
     let nb = 0, nm = 0;
     const camQ = camera.quaternion;
@@ -151,10 +200,34 @@ export class Entities {
         this.barFg.setColorAt(nb, _c.setHex(u.ally ? 0x8CFF7A : u.elite ? 0xFFC83D : 0xFF4D4D));
         nb++;
       }
-      if (u.elite && nm < 60) {
-        _m.compose(_v.set(u.x, 0.06, u.z), _q.identity(), _s.set(u.r * 1.6, 1, u.r * 1.6)); this.marks.setMatrixAt(nm, _m);
-        this.marks.setColorAt(nm, _c.setHex(0xFFC83D)); nm++;
+      // team-coloured ground ring so sides read at a glance from the wide camera (gold for elites)
+      if (nm < 240) {
+        const rr = u.r * (u.elite ? 1.7 : 1.35);
+        _m.compose(_v.set(u.x, 0.05, u.z), _q.identity(), _s.set(rr, 1, rr)); this.marks.setMatrixAt(nm, _m);
+        if (u.elite) _c.setHex(0xFFC83D); else _c.setHex(u.side === 'human' ? 0xFF9A50 : 0x3FF0DC).multiplyScalar(u.ally ? 0.5 : 0.32);
+        this.marks.setColorAt(nm, _c); nm++;
       }
+      this.alive.add(u.id);
+      let rec = this.seen.get(u.id);
+      if (!rec) { rec = { key, x: 0, z: 0, face: 0, s: 1, y: 0 }; this.seen.set(u.id, rec); }
+      rec.x = u.x; rec.z = u.z; rec.face = u.face; rec.s = s; rec.y = y; rec.elite = u.elite; rec.lean = model.lean;
+    }
+    // units that vanished this frame get a quick squash-and-pop before the confetti takes over
+    for (const [id, rec] of this.seen) {
+      if (this.alive.has(id)) continue;
+      this.seen.delete(id);
+      if (this.dying.length < 40) this.dying.push({ ...rec, t: 0 });
+    }
+    this.alive.clear();
+    for (let i = this.dying.length - 1; i >= 0; i--) {
+      const d = this.dying[i];
+      d.t += 1 / 60;
+      if (d.t > 0.16) { this.dying.splice(i, 1); continue; }
+      const k = d.t / 0.16;
+      const sx = d.s * (1 + k * 0.7), sy = d.s * Math.max(0.05, 1 - k * 0.95);
+      st.mv = 0; st.swing = 0; st.ph = 0; st.seed = 0;
+      rootMatrix(_root, d.x, d.y, d.z, d.face, sx, sy, sx, 0, 0);
+      this.crowd(d.key).add(_root, st, 1, d.elite);
     }
     for (const c of this.crowds.values()) c.end();
     for (const im of [this.barBg, this.barFg]) { im.count = nb; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; }
@@ -175,19 +248,21 @@ export class Entities {
       } else {
         _q.setFromAxisAngle(UP, yaw);
         const big = s.big ? 2.4 : 1;
-        const l = s.src === 'turret' ? 1.4 : s.drone ? 1.0 : 1.9;
-        _m.compose(_v.set(s.x - s.dx * l * 0.5, 1.15, s.z - s.dz * l * 0.5), _q, _s.set(0.2 * big, 0.2 * big, l * (s.big ? 1.3 : 1)));
+        const l = (s.src === 'turret' ? 2.2 : s.drone ? 1.6 : 3.2) * (s.big ? 1.3 : 1);
+        _m.compose(_v.set(s.x, 1.15, s.z), _q, _s.set(0.36 * big, 0.36 * big, l));
         this.bolts.setMatrixAt(nbolt, _m);
         if (s.src === 'hero') {
           if (trail.prism) _c.setHSL((t * 0.8 + s.x * 0.05) % 1, 1, 0.6); else _c.setHex(s.crit ? 0xFFE066 : heroCol);
         } else _c.setHex(s.side === 'human' ? 0xFFB070 : 0x6FFFEA);
         this.bolts.setColorAt(nbolt, _c);
-        _m.compose(_v, _q, _s.set(0.08 * big, 0.08 * big, l * 0.9));
+        _m.compose(_v, _q, _s.set(0.12 * big, 0.12 * big, l * 0.75));
         this.boltCores.setMatrixAt(nbolt, _m); this.boltCores.setColorAt(nbolt, _c.setHex(0xFFFFFF));
+        _m.compose(_v, _q, _s.setScalar(0.34 * big));
+        this.boltHeads.setMatrixAt(nbolt, _m); this.boltHeads.setColorAt(nbolt, this.bolts.instanceColor ? _c.fromArray(this.bolts.instanceColor.array, nbolt * 3) : _c);
         nbolt++;
       }
     }
-    for (const im of [this.bolts, this.boltCores]) { im.count = nbolt; im.instanceMatrix.needsUpdate = true; if (nbolt) im.instanceColor.needsUpdate = true; }
+    for (const im of [this.bolts, this.boltCores, this.boltHeads]) { im.count = nbolt; im.instanceMatrix.needsUpdate = true; if (nbolt) im.instanceColor.needsUpdate = true; }
     for (const im of [this.orbs, this.orbHalo]) { im.count = norb; im.instanceMatrix.needsUpdate = true; if (norb) im.instanceColor.needsUpdate = true; }
 
     // telegraphs
@@ -217,12 +292,12 @@ export class Entities {
       const age = s.max - s.t;
       const rise = Math.min(1, age / 0.18), fade = Math.min(1, s.t / 0.4);
       w.g.scale.set(1, Math.max(0.01, rise * fade), 1);
-      w.panel.material.opacity = 0.3 + Math.sin(t * 9) * 0.06;
+      w.panel.material.uniforms.uFade.value = fade;
     });
     // firewalls
     this.fires.forEach((f, i) => {
       const s = g.fires[i];
-      f.strip.visible = f.core.visible = !!s;
+      f.strip.visible = f.core.visible = f.wall.visible = !!s;
       if (!s) return;
       const cx = (s.x0 + s.x1) / 2, cz = (s.z0 + s.z1) / 2, L = Math.hypot(s.x1 - s.x0, s.z1 - s.z0);
       const yaw = Math.atan2(s.x1 - s.x0, s.z1 - s.z0);
@@ -230,6 +305,9 @@ export class Entities {
       for (const m of [f.strip, f.core]) { m.position.x = cx; m.position.z = cz; m.rotation.y = yaw; }
       f.strip.scale.set(s.w * 2.2 * fade, 1, L * grow); f.core.scale.set(s.w * 0.7 * fade, 1, L * grow);
       f.strip.material.opacity = 0.45 + Math.sin(t * 14) * 0.1;
+      f.wall.position.set(cx, 0.05, cz); f.wall.rotation.y = yaw - Math.PI / 2;
+      f.wall.scale.set(L * grow, 2.6 * fade, 1);
+      f.wall.material.uniforms.uLen.value = L / 2; f.wall.material.uniforms.uFade.value = fade;
     });
     // drones
     this.drones.forEach((d, i) => {

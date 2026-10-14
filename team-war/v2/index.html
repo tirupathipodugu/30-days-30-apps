@@ -299,6 +299,86 @@
   @media (prefers-reduced-motion: reduce) { .screen.on .wrap > * { animation: none; } }
 </style>
 <script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js" } }</script>
+<!-- ===== look polish (visual layer: fonts, panels, banners, cards). Owned by the art pass. ===== -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800;900&display=swap">
+<style id="look-polish">
+  :root { --display: "Lilita One", "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif;
+    --panel: linear-gradient(180deg, rgba(34, 42, 60, 0.86), rgba(16, 20, 30, 0.86)); --line: rgba(255, 255, 255, 0.14); }
+  html, body { font-family: "Nunito", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; }
+  .panel { background: var(--panel); border: 1.5px solid var(--line); border-radius: 16px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+  .lbl { font-weight: 900; letter-spacing: .08em; }
+  .lbl b, #score, #mult, .num, #waveTxt, .bigscore, .stats b { font-family: var(--display); font-weight: 400; letter-spacing: .02em; }
+  .bar { height: 13px; border-radius: 8px; background: rgba(0, 0, 0, 0.45); box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); }
+  .bar.thin { height: 9px; }
+  .bar i { border-radius: 8px; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18), inset 0 3px 0 rgba(255, 255, 255, 0.28); }
+  #waveBox { border-radius: 18px; padding: 7px 16px 9px; }
+  #waveTxt { font-size: 16px; letter-spacing: .08em; text-shadow: 0 2px 0 rgba(0, 0, 0, .45); }
+  #score { font-size: 32px; color: #fff; text-shadow: 0 3px 0 rgba(0, 0, 0, .5), 0 0 18px rgba(255, 220, 140, .25); -webkit-text-stroke: 1px rgba(0,0,0,.35); }
+  #mult { font-size: 26px; -webkit-text-stroke: 1.5px rgba(0, 0, 0, .55); }
+  .num { font-size: 20px; -webkit-text-stroke: 1px rgba(0, 0, 0, .6); }
+  .num.crit { font-size: 30px; } .num.big { font-size: 26px; } .num.hurt { font-size: 24px; }
+  /* wave banner: a ribbon that swoops in behind the title */
+  #banner h2 { font-family: var(--display); font-weight: 400; font-style: normal; letter-spacing: .03em;
+    -webkit-text-stroke: 3px rgba(20, 16, 30, 0.85); paint-order: stroke fill;
+    text-shadow: 0 6px 0 rgba(0, 0, 0, .35), 0 0 40px rgba(0, 0, 0, .35); }
+  #banner p { display: inline-block; margin-top: 10px; padding: 6px 18px; border-radius: 999px; font-weight: 900;
+    background: linear-gradient(180deg, rgba(30, 36, 52, .92), rgba(14, 18, 28, .92)); border: 1.5px solid rgba(255, 255, 255, .18);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .35); text-shadow: none; }
+  #banner::before { content: ""; position: absolute; left: 50%; top: 0; width: min(760px, 92vw); height: clamp(52px, 12vw, 104px);
+    transform: translate(-50%, -6%) skewX(-12deg); background: linear-gradient(90deg, transparent, rgba(10, 12, 20, .55) 18%, rgba(10, 12, 20, .55) 82%, transparent); z-index: -1; }
+  #banner.show::before { animation: ribbon 1.7s forwards; }
+  @keyframes ribbon { 0% { transform: translate(-50%, -6%) skewX(-12deg) scaleX(0); } 14% { transform: translate(-50%, -6%) skewX(-12deg) scaleX(1.04); } 20%, 82% { transform: translate(-50%, -6%) skewX(-12deg) scaleX(1); } 100% { transform: translate(-50%, -6%) skewX(-12deg) scaleX(1.1); opacity: 0; } }
+  #callout { font-family: var(--display); font-weight: 400; font-style: normal; -webkit-text-stroke: 2.5px rgba(40, 20, 0, .8); paint-order: stroke fill; }
+  #bossWarn { font-family: var(--display); font-weight: 400; -webkit-text-stroke: 2px #2a0000; paint-order: stroke fill; }
+  .toast { border-radius: 14px; background: var(--panel); box-shadow: 0 6px 16px rgba(0, 0, 0, .3); }
+  /* ability buttons: glossy gems */
+  .ab { width: 66px; height: 66px; border: 3px solid rgba(255, 255, 255, .2);
+    background: radial-gradient(circle at 50% 30%, rgba(80, 92, 118, .95), rgba(20, 24, 34, .95) 70%);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, .4), inset 0 2px 0 rgba(255, 255, 255, .2); }
+  .ab .ico { font-family: var(--display); font-weight: 400; font-size: 28px; text-shadow: 0 2px 0 rgba(0, 0, 0, .5); }
+  .ab .sec { font-family: var(--display); font-weight: 400; font-size: 22px; }
+  .ab.ready { border-color: var(--team); background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--team) 70%, white), var(--team-dark) 75%);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, .4), 0 0 18px color-mix(in srgb, var(--team) 60%, transparent), inset 0 2px 0 rgba(255, 255, 255, .35); }
+  body.touch .ab { width: 60px; height: 60px; }
+  /* menu */
+  .title h1 { font-family: var(--display); font-weight: 400; font-style: normal; letter-spacing: .01em;
+    -webkit-text-stroke: 4px rgba(16, 14, 24, .9); paint-order: stroke fill; text-shadow: 0 8px 0 rgba(0, 0, 0, .35), 0 0 50px rgba(0, 0, 0, .3); }
+  .title .ver { font-family: var(--display); font-weight: 400; letter-spacing: .2em; box-shadow: 0 4px 0 rgba(0, 0, 0, .3); }
+  #menu { background: radial-gradient(ellipse at center, rgba(10, 12, 16, .05), rgba(10, 12, 16, .55) 80%); }
+  .team { border-radius: 22px; border: 3px solid rgba(255, 255, 255, .28); box-shadow: 0 10px 0 rgba(0, 0, 0, .25), 0 16px 34px rgba(0, 0, 0, .35); }
+  .team .tname { font-family: var(--display); font-weight: 400; font-style: normal; font-size: 30px; text-shadow: 0 3px 0 rgba(0, 0, 0, .3); }
+  .team .play { border-radius: 14px; background: rgba(255, 255, 255, .95); box-shadow: 0 4px 0 rgba(0, 0, 0, .25); }
+  .team.h .play { color: #A84A17; } .team.a .play { color: #0C6E66; }
+  .team.h { background: radial-gradient(circle at 80% 0%, rgba(255, 220, 160, .45), transparent 55%), linear-gradient(150deg, #F59457, #B5521D); }
+  .team.a { background: radial-gradient(circle at 80% 0%, rgba(170, 255, 240, .45), transparent 55%), linear-gradient(150deg, #2CCBBB, #0A5C55); }
+  .btn { border-radius: 14px; font-weight: 900; box-shadow: 0 4px 0 rgba(0, 0, 0, .3); }
+  .btn.primary { font-family: var(--display); font-weight: 400; font-size: 22px; letter-spacing: .02em; box-shadow: 0 5px 0 var(--team-dark), 0 10px 24px color-mix(in srgb, var(--team) 40%, transparent); }
+  .btn:active { transform: translateY(2px); }
+  h2.sh, .result h2 { font-family: var(--display); font-weight: 400; font-style: normal; -webkit-text-stroke: 3px rgba(16, 14, 24, .85); paint-order: stroke fill; text-shadow: 0 5px 0 rgba(0, 0, 0, .3); }
+  /* upgrade cards: collectible trading-card look */
+  .up { border: 0; border-radius: 20px; padding: 16px 16px 18px; min-height: 260px; overflow: hidden; isolation: isolate;
+    background: linear-gradient(170deg, color-mix(in srgb, var(--rc) 55%, #fff) 0%, var(--rc) 8%, color-mix(in srgb, var(--rc) 50%, #000) 100%);
+    box-shadow: 0 8px 0 rgba(0, 0, 0, .3), 0 14px 30px rgba(0, 0, 0, .4), inset 0 0 0 3px rgba(255, 255, 255, .35); }
+  .up::before { content: ""; position: absolute; inset: 7px; border-radius: 15px; z-index: -1;
+    background: radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--rc) 40%, #2a3142), #121722 62%); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .15); }
+  .up::after { content: ""; position: absolute; top: -60%; left: -80%; width: 50%; height: 220%; transform: rotate(20deg); z-index: 2; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .28), transparent); transition: left .5s; }
+  .up:hover::after, .up:focus-visible::after { left: 130%; }
+  .up .ic { width: 84px; height: 84px; border-radius: 50%; font-size: 42px; margin-top: 4px;
+    background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--rc) 65%, #fff), color-mix(in srgb, var(--rc) 55%, #000) 75%);
+    border: 3px solid rgba(255, 255, 255, .5); box-shadow: 0 0 24px color-mix(in srgb, var(--rc) 60%, transparent), inset 0 -4px 0 rgba(0, 0, 0, .25);
+    text-shadow: 0 2px 0 rgba(0, 0, 0, .35); }
+  .up .rar { padding: 2px 10px; border-radius: 999px; background: rgba(0, 0, 0, .45); color: color-mix(in srgb, var(--rc) 70%, #fff); }
+  .up .nm { font-family: var(--display); font-weight: 400; font-size: 22px; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(0, 0, 0, .45); }
+  .up .k { top: 12px; left: 14px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, .5); color: #fff; z-index: 3; }
+  .up.e::before { background: radial-gradient(circle at 50% 28%, rgba(200, 107, 255, .55), #160f24 62%),
+    conic-gradient(from 0deg, rgba(255, 120, 200, .25), rgba(120, 200, 255, .25), rgba(160, 255, 170, .25), rgba(255, 120, 200, .25)); background-blend-mode: screen; }
+  @media (max-width: 720px) { .up { min-height: 0; padding: 12px; } .up::before { inset: 5px; } .up .ic { width: 56px; height: 56px; font-size: 28px; margin-top: 0; } }
+</style>
+<!-- ===== end look polish ===== -->
 </head>
 <body>
 <canvas id="c" aria-label="Game view"></canvas>

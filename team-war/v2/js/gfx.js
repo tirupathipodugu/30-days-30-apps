@@ -250,7 +250,7 @@ function pivotMatrix(a, p, st, out) {
     else if (a === 'gun') tz = -st.swing * 0.3;
     else if (a === 'head') { ay = Math.sin(st.t * 1.7 + st.seed) * 0.22; ax = -0.06 + Math.sin(st.ph * 2) * 0.05 * st.mv; }
     else if (a === 'flap') az = Math.sin(st.t * 9 + st.seed) * 0.2;
-    else if (a === 'cape') ax = 0.12 + st.mv * 0.55 + Math.sin(st.t * 7 + st.seed) * 0.08 * (0.4 + st.mv) + st.swing * 0.2;
+    else if (a === 'cape') ax = 0.1 + st.mv * 0.38 + Math.sin(st.t * 7 + st.seed) * 0.07 * (0.4 + st.mv) + st.swing * 0.15;
     else if (a === 'blink') sy = blinkAt(st.t, st.seed);
     else if (a === 'thrust') { const f = 0.85 + Math.sin(st.t * 31 + st.seed) * 0.15; sy = f * (1 + st.mv * 0.4); sxz = f; }
     else if (a === 'bob') ty = Math.sin(st.t * 2.4 + st.seed) * 0.05;
@@ -278,7 +278,7 @@ export function bakeModel(model) {
     const key = (part.glow ? 'g' : 't') + '|' + (part.a || '') + '|' + (part.a ? part.p.join(',') : '');
     let gr = groups.get(key);
     if (!gr) { gr = { a: part.a || null, p: part.a ? part.p : ZERO, glow: !!part.glow, baker: new Baker(), shadow: !part.glow }; groups.set(key, gr); }
-    if (part.noShadow) gr.shadow = false;
+    if (part.noShadow || part.a === 'blink' || part.a === 'thrust') gr.shadow = false; // tiny parts: not worth a shadow draw
     gr.baker.add(GEO[part.g], part.c, localMatrix(part, _m2), { boost: part.glow ? GLOW : 0, elite: part.eliteC, jitter: part.j || 0 });
   }
   return [...groups.values()].map((g) => ({ a: g.a, p: g.p, glow: g.glow, shadow: g.shadow, geo: g.baker.geometry() }));

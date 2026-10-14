@@ -21,13 +21,13 @@ class OutlinePass extends Pass {
     this.camera = camera;
     this.uniforms = {
       tDiffuse: { value: null }, tDepth: { value: null }, texel: { value: new THREE.Vector2(1 / 1024, 1 / 1024) },
-      near: { value: camera.near }, far: { value: camera.far }, thick: { value: 1 }, strength: { value: 0.78 },
+      near: { value: camera.near }, far: { value: camera.far }, thick: { value: 1 }, strength: { value: 0.78 }, aspect: { value: 1.6 },
     };
     this.fsQuad = new FullScreenQuad(new THREE.ShaderMaterial({
       uniforms: this.uniforms,
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: /* glsl */`
-        uniform sampler2D tDiffuse, tDepth; uniform vec2 texel; uniform float near, far, thick, strength;
+        uniform sampler2D tDiffuse, tDepth; uniform vec2 texel; uniform float near, far, thick, strength, aspect;
         varying vec2 vUv;
         float lin(vec2 uv) { float d = texture2D(tDepth, uv).x * 2.0 - 1.0; return 2.0 * near * far / (far + near - d * (far - near)); }
         void main() {
@@ -40,11 +40,18 @@ class OutlinePass extends Pass {
           float k = clamp(c / 60.0, 0.6, 1.6);
           float edge = smoothstep(0.45 * k, 0.95 * k, d) * (1.0 - smoothstep(far * 0.55, far * 0.8, c));
           vec3 ink = col.rgb * vec3(0.16, 0.13, 0.17);
-          gl_FragColor = vec4(mix(col.rgb, ink, edge * strength), col.a);
+          vec3 o2 = mix(col.rgb, ink, edge * strength);
+          // grade: a little extra saturation and a soft warm vignette, like a film frame
+          float l = dot(o2, vec3(0.2126, 0.7152, 0.0722));
+          o2 = mix(vec3(l), o2, 1.12);
+          vec2 q = (vUv - 0.5) * vec2(aspect, 1.0);
+          float vig = smoothstep(1.05, 0.35, length(q));
+          o2 *= mix(vec3(0.62, 0.58, 0.66), vec3(1.0), vig);
+          gl_FragColor = vec4(o2, col.a);
         }`,
     }));
   }
-  setSize(w, h) { this.uniforms.texel.value.set(1 / w, 1 / h); this.uniforms.thick.value = h > 1300 ? 2 : 1; }
+  setSize(w, h) { this.uniforms.texel.value.set(1 / w, 1 / h); this.uniforms.thick.value = h > 1300 ? 2 : 1; this.uniforms.aspect.value = w / h; }
   render(renderer, writeBuffer, readBuffer) {
     this.uniforms.tDiffuse.value = readBuffer.texture;
     this.uniforms.tDepth.value = readBuffer.depthTexture;
@@ -99,9 +106,9 @@ export function createLook(renderer, scene, camera, lowEnd) {
   pmrem.dispose();
 
   // lights: warm low sun (long soft shadows), cool sky fill, hemisphere bounce
-  const hemi = new THREE.HemisphereLight(0xD6ECFF, 0x7A6A48, 1.35);
-  const sun = new THREE.DirectionalLight(0xFFE0B5, 3.3);
-  sun.position.set(28, 46, 24); sun.target.position.set(0, 0, 0);
+  const hemi = new THREE.HemisphereLight(0xC9E2FF, 0x6E5A3E, 1.25);
+  const sun = new THREE.DirectionalLight(0xFFD6A3, 3.4);
+  sun.position.set(34, 36, 30); sun.target.position.set(0, 0, 0);
   sun.castShadow = true;
   sun.shadow.mapSize.set(tier.shadow, tier.shadow);
   Object.assign(sun.shadow.camera, { left: -46, right: 46, top: 50, bottom: -50, near: 10, far: 120 });
@@ -196,7 +203,7 @@ export function fixedCamera(camera, team, w, h) {
   const portrait = aspect < 0.95;
   const side = team === 'ai' ? -1 : 1;
   let yaw, elev, fov, m;
-  if (portrait) { yaw = team === 'ai' ? Math.PI : 0; elev = 0.98; fov = 44; m = [0.04, 0.04, 0.2, 0.3]; }
+  if (portrait) { yaw = team === 'ai' ? Math.PI : 0; elev = 1.12; fov = 40; m = [0.03, 0.03, 0.2, 0.42]; }
   else { yaw = side * Math.PI / 2; elev = 0.86; fov = aspect > 2 ? 30 : 34; m = [0.035, 0.035, 0.12, 0.24]; }
   camera.fov = fov; camera.aspect = aspect; camera.near = 2; camera.far = 420;
   const dir = _v.set(Math.sin(yaw) * Math.cos(elev), Math.sin(elev), Math.cos(yaw) * Math.cos(elev));

@@ -181,8 +181,8 @@ function aiGrunt(team = P.aTeam) {
   return {
     scale: 1, lean: 0.08, stride: 2.2, parts: [
       ...legs(0.15, 0.48, 0.34, 0.15, P.gun, P.black, [0.24, 0.12, 0.32], 'rboxS'),
-      L('rbox', P.metal, [0, 0.82, 0], [0.66, 0.58, 0.5]),
-      L('rboxS', team, [0, 0.84, 0.21], [0.44, 0.34, 0.12], { eliteC: true }),
+      L('rbox', team, [0, 0.82, 0], [0.66, 0.58, 0.5], { eliteC: true }),
+      L('rboxS', P.metal, [0, 0.84, 0.21], [0.42, 0.32, 0.12]),
       L('sphereLo', P.aGlow, [0, 0.87, 0.28], [0.1, 0.1, 0.04], { glow: true }),
       L('cylLo', P.gun, [0, 1.1, 0], [0.18, 0.14, 0.18]),
       L('rbox', P.metal, [0, 1.4, 0], [0.8, 0.64, 0.64]),
@@ -194,8 +194,8 @@ function aiGrunt(team = P.aTeam) {
       L('sphereLo', P.aGlow, [0.14, 1.98, 0], [0.11, 0.11, 0.11], { glow: true }),
       L('capLimb', P.gun, [-0.42, 1.0, 0], [0.12, 0.34, 0.12], { a: 'armL' }),
       L('capLimb', P.gun, [0.42, 1.0, 0], [0.12, 0.34, 0.12], { a: 'armR' }),
-      L('rboxS', team, [-0.42, 1.0, 0], [0.22, 0.2, 0.22], { a: 'armL', o: [0, -0.4, 0] }),
-      L('rboxS', team, [0.42, 1.0, 0], [0.22, 0.2, 0.22], { a: 'armR', o: [0, -0.4, 0] }),
+      L('rboxS', P.metal, [-0.42, 1.0, 0], [0.22, 0.2, 0.22], { a: 'armL', o: [0, -0.4, 0] }),
+      L('rboxS', P.metal, [0.42, 1.0, 0], [0.22, 0.2, 0.22], { a: 'armR', o: [0, -0.4, 0] }),
     ],
   };
 }
