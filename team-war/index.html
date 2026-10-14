@@ -373,7 +373,7 @@
   // After `npx wrangler deploy`, paste the address it prints here, starting with wss:// instead of https://
   // e.g. const SERVER_URL = 'wss://human-vs-ai.YOUR-NAME.workers.dev';
   // Left empty, the page uses the PeerJS room (one player's browser hosts the game).
-  const SERVER_URL = '';
+  const SERVER_URL = 'wss://human-vs-ai.tirupathi-podugu.workers.dev';
   let ws = null, peerStarted = false;
   function dropServer() {
     if (ws) { const s = ws; ws = null; try { s.close(); } catch (e) {} }
