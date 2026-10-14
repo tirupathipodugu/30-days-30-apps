@@ -8,7 +8,7 @@ const SHARE_URL = 'https://tirupathipodugu.github.io/ideas/team-war/v2/';
 const ICONS = { human: { dash: '➜', q: '▥', e: '⚑', r: '☄' }, ai: { dash: '➜', q: '≋', e: '⟡', r: '◎' } };
 const BOSS_NAMES = { human: 'Magma Colossus', ai: 'Tidal Colossus' };
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
-const COIN = { human: '🪙', ai: '⚙️' };
+const COIN = { human: '🔥', ai: '💧' };
 
 export class UI {
   constructor(audio) {
