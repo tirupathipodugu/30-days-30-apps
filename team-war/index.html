@@ -15,6 +15,9 @@
   html, body { margin: 0; height: 100%; background: #F6F1E9; color: var(--ink);
     font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; overflow: hidden; }
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+  #feed { position: fixed; left: 16px; top: 78px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; z-index: 5; max-width: calc(100% - 32px); }
+  #feed div { background: rgba(255,255,255,.94); border-radius: 12px; padding: 6px 12px; font-size: 14px; font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12); transition: opacity .5s; align-self: flex-start; }
   #hud { position: fixed; top: 0; left: 0; right: 0; display: none; align-items: center; gap: 12px;
     padding: max(10px, env(safe-area-inset-top)) 16px 10px; pointer-events: none; }
   #hud.on { display: flex; }
@@ -70,6 +73,7 @@
 <body>
 <canvas id="c"></canvas>
 
+<div id="feed" aria-live="polite"></div>
 <div id="hud">
   <div class="side me"><span id="meName">Your tower</span><div class="bar"><i id="meHp"></i></div></div>
   <div class="mid"><b id="time">1:30</b><span id="kills">0 down</span><small id="online"></small></div>
@@ -214,6 +218,34 @@
   function floater(u, v, txt, color, big) {
     fx.floats.push({ u, v, txt, color, life: 0.9, big });
   }
+  // live feed: shows what the other players are doing
+  const feedLast = {};
+  function feed(text, color, key) {
+    const now = performance.now();
+    if (key) { if (now - (feedLast[key] || 0) < 2500) return; feedLast[key] = now; }
+    const box = $('feed'), el = document.createElement('div');
+    el.textContent = text; el.style.color = color || '#1E1B18';
+    box.appendChild(el);
+    while (box.children.length > 4) box.firstChild.remove();
+    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 600); }, 3500);
+  }
+  function nameOf(id) { const p = people().find((q) => q.id === id); return p ? p.name : null; }
+  let lastPeople = null;
+  function watchRoster() {
+    if (!myTeam) return;
+    const now = {};
+    for (const p of people()) now[p.id] = p;
+    if (lastPeople) {
+      for (const id in now) {
+        if (id === myId) continue;
+        const p = now[id], was = lastPeople[id];
+        if (!was) feed(p.name + ' joined ' + NAME[p.team], COL[p.team]);
+        else if (was.team !== p.team) feed(p.name + ' switched to ' + NAME[p.team], COL[p.team]);
+      }
+      for (const id in lastPeople) if (!now[id] && id !== myId) feed(lastPeople[id].name + ' left', '#5A524A');
+    }
+    lastPeople = now;
+  }
   function playEvent(e) {
     const mySide = SIDE[myTeam || 'human'];
     if (e[0] === 't') {
@@ -226,11 +258,15 @@
     else if (e[0] === 'k') { burst(e[1], e[2], COL[TEAMS[e[3]]], 14, 240); sfx.kill(); }
     else if (e[0] === 'h') {
       if (e[4] && e[4] === myId) floater(e[1], e[2], '-' + e[3], '#1E1B18', false);
+      else if (e[4] && e[5]) {
+        const n = nameOf(e[4]), p = people().find((q) => q.id === e[4]);
+        if (n && p) feed(n + ' took down ' + (p.team === 'human' ? 'a robot' : 'a human'), COL[p.team], 'k' + e[4]);
+      }
       if (!e[5]) sfx.hit();
     } else if (e[0] === 'g') {
       const tu = e[1] === 0 ? 270 : 1330;
       if (e[2] === myId) { sfx.send(); floater(tu, 310, 'Go!', COL[TEAMS[e[1]]], true); }
-      else floater(tu, 360, cleanName(e[3]) + ' sent 3', COL[TEAMS[e[1]]], false);
+      else { floater(tu, 360, cleanName(e[3]) + ' sent 3', COL[TEAMS[e[1]]], false); feed(cleanName(e[3]) + ' sent 3 fighters', COL[TEAMS[e[1]]]); }
     } else if (e[0] === 'e') {
       if (!myTeam) return;
       const winner = e[1];
@@ -665,6 +701,7 @@
   }
 
   function hud() {
+    watchRoster();
     if (!view || !myTeam) return;
     const mine = view.towers[SIDE[myTeam]], theirs = view.towers[SIDE[other(myTeam)]];
     $('meHp').style.width = (mine.hp / mine.max * 100) + '%';
