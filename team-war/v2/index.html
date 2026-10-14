@@ -433,7 +433,7 @@
   <div id="callout"></div>
   <div id="toasts"></div>
   <div id="abil">
-    <button class="ab" data-ab="dash" aria-label="Dash"><span class="ico">➜</span><span class="cd"></span><span class="sec"></span><span class="key">SPACE</span></button>
+    <button class="ab" data-ab="dash" aria-label="Dash"><span class="ico">➜</span><span class="cd"></span><span class="sec"></span><span class="key">SHIFT</span></button>
     <button class="ab" data-ab="q" aria-label="Ability Q"><span class="ico">Q</span><span class="cd"></span><span class="sec"></span><span class="key">Q</span></button>
     <button class="ab" data-ab="e" aria-label="Ability E"><span class="ico">E</span><span class="cd"></span><span class="sec"></span><span class="key">E</span></button>
     <button class="ab" data-ab="r" aria-label="Ultimate R"><span class="ico">R</span><span class="cd"></span><span class="sec"></span><span class="key">R</span></button>
@@ -467,7 +467,7 @@
     <div class="daily panel" id="dailyBox"><span style="font-size:28px" aria-hidden="true">📅</span><span class="grow"><span class="dt" id="dailyT">Daily Challenge</span><br><span class="dd" id="dailyD"></span></span>
       <span class="row" id="dailyBtns" style="flex-wrap:nowrap"><button class="btn gold" data-daily="human">Fire ▶</button><button class="btn gold" data-daily="ai">Water ▶</button></span><span class="go hidden" id="dailyDone">Done ✓</span></div>
     <div class="how">
-      <div class="panel kb"><b>Keyboard + mouse</b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · mouse aim · hold click to shoot · <kbd>Space</kbd> dash · <kbd>Q</kbd> <kbd>E</kbd> abilities · <kbd>R</kbd> ultimate (level 5) · <kbd>Esc</kbd> pause</div>
+      <div class="panel kb"><b>Keyboard + mouse</b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · mouse aim · hold click or <kbd>Space</kbd> to shoot · <kbd>Shift</kbd> dash · <kbd>Q</kbd> <kbd>E</kbd> abilities · <kbd>R</kbd> ultimate (level 5) · <kbd>Esc</kbd> pause</div>
       <div class="panel"><b>Touch</b>Left thumb moves. Right thumb aims and fires (let go and your hero auto-aims). Tap the round buttons to dash and use abilities.</div>
     </div>
   </div>
@@ -511,7 +511,7 @@
 </section>
 
 <!-- compact controls hint (self-contained; does not touch game modules) -->
-<div id="controls" aria-hidden="true"><span class="ctext">WASD move · hold click to shoot · Space dash · Q/E/R abilities</span><button id="ctoggle" type="button" aria-label="Show controls">?</button></div>
+<div id="controls" aria-hidden="true"><span class="ctext">WASD move · hold click or Space to shoot · Shift dash · Q/E/R abilities</span><button id="ctoggle" type="button" aria-label="Show controls">?</button></div>
 <script>
 (function () {
   var el = document.getElementById('controls'), txt = el.querySelector('.ctext'), tog = document.getElementById('ctoggle'), timer;

@@ -21,7 +21,7 @@ export class Input {
       const k = e.code;
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k) && this.enabled) e.preventDefault();
       if (!e.repeat) {
-        if (k === 'Space' || k === 'ShiftLeft' || k === 'ShiftRight') this.edge.dash = true;
+        if (k === 'ShiftLeft' || k === 'ShiftRight') this.edge.dash = true;
         if (k === 'KeyQ') this.edge.q = true;
         if (k === 'KeyE') this.edge.e = true;
         if (k === 'KeyR') this.edge.r = true;
@@ -155,7 +155,7 @@ export class Input {
       return { kind: 'dir', x: this.pad.ax, y: this.pad.ay, fire: true };
     }
     if (this.touchMode) return { kind: 'dir', x: this.lastAim.x, y: this.lastAim.y, fire: false, idle: true };
-    return { kind: 'mouse', sx: this.mouse.x, sy: this.mouse.y, fire: this.mouse.down || (this.pad && this.pad.fire) || this.keys.has('KeyJ') };
+    return { kind: 'mouse', sx: this.mouse.x, sy: this.mouse.y, fire: this.mouse.down || this.keys.has('Space') || (this.pad && this.pad.fire) || this.keys.has('KeyJ') };
   }
   takeEdges() { const e = { ...this.edge }; this.edge.dash = this.edge.q = this.edge.e = this.edge.r = false; return e; }
   reset() { this.mouse.down = false; this.sticks.move = this.sticks.aim = null; this.keys.clear(); this.drawSticks(); this.takeEdges(); }
