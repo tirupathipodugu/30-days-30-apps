@@ -1,0 +1,13 @@
+{
+  "name": "human-vs-ai-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "test": "node test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "3.114.17"
+  }
+}
