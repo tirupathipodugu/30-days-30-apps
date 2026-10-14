@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grandma Gigi</title>
+<style>
+:root{--bg:#f6efe6;--ink:#2b2420;--muted:#6d5f55;--btn:#fff;--btnb:#d9c9b8;--acc:#b0476b}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1d1916;--ink:#f1e8de;--muted:#b9a99a;--btn:#2a2420;--btnb:#4a3e35;--acc:#e07a9c}}
+:root[data-theme="dark"]{--bg:#1d1916;--ink:#f1e8de;--muted:#b9a99a;--btn:#2a2420;--btnb:#4a3e35;--acc:#e07a9c}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow-x:hidden}
+main{max-width:980px;margin:0 auto;padding:16px;display:flex;flex-wrap:wrap;gap:16px;justify-content:center}
+h1{font-size:20px;margin:0 0 4px}
+p.sub{margin:0 0 12px;color:var(--muted);font-size:14px}
+.stagewrap{flex:0 1 auto;width:100%;max-width:420px}
+.stagewrap.wide{max-width:900px}
+svg#stage{width:100%;height:auto;display:block;border-radius:18px;box-shadow:0 8px 30px rgba(60,30,10,.25)}
+.panel{flex:1 1 260px;max-width:420px;min-width:0}
+.grp{margin:0 0 12px}
+.grp h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 6px}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+button{min-height:44px;min-width:44px;padding:8px 14px;border-radius:12px;border:1px solid var(--btnb);background:var(--btn);color:var(--ink);font:inherit;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button[aria-pressed="true"]{outline:2px solid var(--acc)}
+.note{font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<div class="stagewrap" id="wrap">
+<svg id="stage" viewBox="0 0 360 640" xmlns="http://www.w3.org/2000/svg" aria-label="Grandma Gigi animated host">
+<defs>
+  <radialGradient id="bgG" cx="35%" cy="25%" r="90%"><stop offset="0" stop-color="#ffe9c9"/><stop offset=".55" stop-color="#f1c79c"/><stop offset="1" stop-color="#b9785a"/></radialGradient>
+  <radialGradient id="winG" cx="50%" cy="50%" r="60%"><stop offset="0" stop-color="#fff8e6" stop-opacity=".9"/><stop offset="1" stop-color="#fff8e6" stop-opacity="0"/></radialGradient>
+  <radialGradient id="skinG" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#ffe0c8"/><stop offset=".6" stop-color="#f2bf9f"/><stop offset="1" stop-color="#d79778"/></radialGradient>
+  <linearGradient id="skinL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7cdb0"/><stop offset="1" stop-color="#d9987a"/></linearGradient>
+  <linearGradient id="hairG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f2ef"/><stop offset=".5" stop-color="#cfcac6"/><stop offset="1" stop-color="#a39d99"/></linearGradient>
+  <radialGradient id="bunG" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fbfaf8"/><stop offset=".7" stop-color="#c9c3be"/><stop offset="1" stop-color="#99928d"/></radialGradient>
+  <linearGradient id="dressG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8a5bb0"/><stop offset="1" stop-color="#4f2f72"/></linearGradient>
+  <linearGradient id="shawlG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0b45a"/><stop offset=".5" stop-color="#d98b3a"/><stop offset="1" stop-color="#a95e24"/></linearGradient>
+  <linearGradient id="sleeveG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e9a34c"/><stop offset=".6" stop-color="#cf7f33"/><stop offset="1" stop-color="#9c5520"/></linearGradient>
+  <linearGradient id="cardG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffdf8"/><stop offset="1" stop-color="#f3e7d6"/></linearGradient>
+  <linearGradient id="phoneG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a3f4a"/><stop offset="1" stop-color="#15171c"/></linearGradient>
+  <pattern id="knit" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 4 L4 0 L8 4 M0 8 L4 4 L8 8" stroke="#8a4a1a" stroke-opacity=".22" fill="none" stroke-width="1"/></pattern>
+  <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#5a2a10" flood-opacity=".35"/></filter>
+  <clipPath id="eyeClipL"><ellipse cx="0" cy="0" rx="11" ry="8"/></clipPath>
+  <clipPath id="eyeClipR"><ellipse cx="0" cy="0" rx="11" ry="8"/></clipPath>
+  <clipPath id="mouthClip"><path id="mouthClipPath" d=""/></clipPath>
+</defs>
+<rect width="100%" height="100%" fill="url(#bgG)" id="bgRect"/>
+<g id="room">
+  <rect x="210" y="250" width="120" height="150" rx="10" fill="url(#winG)" opacity=".7"/>
+  <ellipse cx="180" cy="660" rx="260" ry="80" fill="#7a4630" opacity=".25"/>
+</g>
+<!-- data card -->
+<g id="card">
+  <g id="cardInner">
+    <rect x="0" y="0" width="300" height="150" rx="18" fill="url(#cardG)" filter="url(#soft)"/>
+    <rect id="cardGlow" x="-4" y="-4" width="308" height="158" rx="21" fill="none" stroke="#ffcf6a" stroke-width="5" opacity="0"/>
+    <text x="20" y="34" font-size="13" font-weight="700" fill="#b0476b" letter-spacing="2">TODAY IN AI</text>
+    <text x="20" y="90" font-size="31" font-weight="800" fill="#2b2420">[ONE NUMBER]</text>
+    <text x="20" y="118" font-size="15" fill="#6d5f55">[what happened, one line]</text>
+    <text x="20" y="138" font-size="11" fill="#9a8a7c">[source]</text>
+  </g>
+</g>
+<!-- character -->
+<g id="char">
+ <g id="root">
+  <g id="torso">
+    <path d="M-92 -26 Q-96 -56 -40 -62 L40 -62 Q96 -56 92 -26 L112 260 L-112 260 Z" fill="url(#dressG)"/>
+    <path d="M-30 -62 L0 -20 L30 -62 Z" fill="#f2bf9f"/>
+    <g id="pearls" fill="#fffaf0" stroke="#d8cbb8" stroke-width=".6">
+      <circle cx="-22" cy="-52" r="3.2"/><circle cx="-16" cy="-44" r="3.2"/><circle cx="-9" cy="-37" r="3.2"/><circle cx="0" cy="-34" r="3.4"/><circle cx="9" cy="-37" r="3.2"/><circle cx="16" cy="-44" r="3.2"/><circle cx="22" cy="-52" r="3.2"/>
+    </g>
+    <!-- shawl -->
+    <path d="M-100 -20 Q-98 -66 -36 -66 Q-10 -10 0 30 Q10 -10 36 -66 Q98 -66 100 -20 L112 120 Q60 80 30 150 L0 70 L-30 150 Q-60 80 -112 120 Z" fill="url(#shawlG)"/>
+    <path d="M-100 -20 Q-98 -66 -36 -66 Q-10 -10 0 30 Q10 -10 36 -66 Q98 -66 100 -20 L112 120 Q60 80 30 150 L0 70 L-30 150 Q-60 80 -112 120 Z" fill="url(#knit)"/>
+    <path d="M-36 -66 Q-10 -10 0 30 Q10 -10 36 -66" fill="none" stroke="#fff3d6" stroke-opacity=".5" stroke-width="2"/>
+    <circle cx="0" cy="34" r="7" fill="#c9a24a" stroke="#8a6a20" stroke-width="1.5"/>
+  </g>
+  <g id="neckG"><path d="M-17 -100 L-19 -58 Q0 -48 19 -58 L17 -100 Z" fill="url(#skinL)"/></g>
+  <g id="head">
+    <g id="bun"><circle cx="0" cy="-196" r="31" fill="url(#bunG)"/><path d="M-22 -206 Q0 -224 22 -206 M-26 -192 Q0 -214 26 -192 M-20 -180 Q2 -196 18 -178" fill="none" stroke="#9c958f" stroke-width="1.6" stroke-linecap="round"/><path id="pin" d="M14 -222 L30 -186" stroke="#c9a24a" stroke-width="3" stroke-linecap="round"/><circle cx="14" cy="-222" r="3.5" fill="#e05a7a"/></g>
+    <path d="M-60 -122 Q-66 -192 0 -196 Q66 -192 60 -122 Q52 -150 0 -158 Q-52 -150 -60 -122 Z" fill="url(#hairG)"/>
+    <ellipse cx="-57" cy="-118" rx="9" ry="14" fill="#e3a98a"/><ellipse cx="57" cy="-118" rx="9" ry="14" fill="#e3a98a"/>
+    <circle cx="-58" cy="-102" r="3" fill="#fffaf0"/><circle cx="58" cy="-102" r="3" fill="#fffaf0"/>
+    <ellipse id="face" cx="0" cy="-120" rx="56" ry="64" fill="url(#skinG)"/>
+    <ellipse cx="0" cy="-120" rx="56" ry="64" fill="none" stroke="#fff0dc" stroke-opacity=".55" stroke-width="3" stroke-dasharray="70 400" stroke-dashoffset="-10"/>
+    <!-- hair front -->
+    <path id="hairFront" d="M-58 -128 Q-62 -186 0 -186 Q62 -186 58 -128 Q50 -160 18 -162 Q4 -150 -14 -160 Q-48 -160 -58 -128 Z" fill="url(#hairG)"/>
+    <path d="M-46 -150 Q-20 -176 10 -170 M-30 -160 Q0 -180 40 -158" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="1.4" stroke-linecap="round"/>
+    <g id="feat">
+      <ellipse id="blushL" cx="-33" cy="-98" rx="13" ry="8" fill="#ff7b7b" opacity=".25"/>
+      <ellipse id="blushR" cx="33" cy="-98" rx="13" ry="8" fill="#ff7b7b" opacity=".25"/>
+      <path d="M-34 -110 Q-22 -106 -12 -110 M12 -110 Q22 -106 34 -110" fill="none" stroke="#c98a6c" stroke-width="1" opacity=".6"/>
+      <g id="eyeL" transform="translate(-22 -126)">
+        <g clip-path="url(#eyeClipL)">
+          <ellipse rx="11" ry="8" fill="#fffdf9"/>
+          <g class="iris"><circle r="5.6" fill="#6b4a2e"/><circle r="2.8" fill="#1b120c"/><circle cx="-1.6" cy="-1.8" r="1.4" fill="#fff"/></g>
+          <rect class="lidU" x="-12" y="-9" width="24" height="0" fill="#eab296"/>
+          <rect class="lidL" x="-12" y="9" width="24" height="0" fill="#eab296"/>
+        </g>
+        <path class="lash" d="" fill="none" stroke="#4a2c1e" stroke-width="1.8" stroke-linecap="round"/>
+      </g>
+      <g id="eyeR" transform="translate(22 -126)">
+        <g clip-path="url(#eyeClipR)">
+          <ellipse rx="11" ry="8" fill="#fffdf9"/>
+          <g class="iris"><circle r="5.6" fill="#6b4a2e"/><circle r="2.8" fill="#1b120c"/><circle cx="-1.6" cy="-1.8" r="1.4" fill="#fff"/></g>
+          <rect class="lidU" x="-12" y="-9" width="24" height="0" fill="#eab296"/>
+          <rect class="lidL" x="-12" y="9" width="24" height="0" fill="#eab296"/>
+        </g>
+        <path class="lash" d="" fill="none" stroke="#4a2c1e" stroke-width="1.8" stroke-linecap="round"/>
+      </g>
+      <g id="browL" transform="translate(-23 -146)"><path d="M-12 2 Q0 -4 12 0" fill="none" stroke="#bdb6b0" stroke-width="4" stroke-linecap="round"/></g>
+      <g id="browR" transform="translate(23 -146)"><path d="M-12 0 Q0 -4 12 2" fill="none" stroke="#bdb6b0" stroke-width="4" stroke-linecap="round"/></g>
+      <path d="M-3 -116 Q-6 -104 -2 -100 Q3 -98 6 -102" fill="none" stroke="#c07e60" stroke-width="2.2" stroke-linecap="round"/>
+      <g id="mouthG" transform="translate(0 -84)">
+        <path id="mouthIn" d="" fill="#6e2430"/>
+        <g id="mouthTeeth" clip-path="url(#mouthClip)"><rect id="teeth" x="-20" y="-12" width="40" height="6" fill="#fffaf2"/><ellipse id="tongue" cx="0" cy="14" rx="10" ry="7" fill="#d9636f"/></g>
+        <path id="mouthLine" d="" fill="none" stroke="#b24d5a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <g id="glasses" fill="none" stroke="#b8892f" stroke-width="2.4">
+        <circle cx="-22" cy="-125" r="17" fill="#fff" fill-opacity=".08"/><circle cx="22" cy="-125" r="17" fill="#fff" fill-opacity=".08"/>
+        <path d="M-5 -127 Q0 -131 5 -127 M-39 -127 L-55 -131 M39 -127 L55 -131"/>
+        <path d="M-31 -134 Q-26 -138 -20 -137 M13 -134 Q18 -138 24 -137" stroke="#fff" stroke-opacity=".8" stroke-width="2" stroke-linecap="round"/>
+      </g>
+    </g>
+    <g id="anchorL" transform="translate(-50 -146)"></g>
+    <g id="anchorR" transform="translate(48 -150)"></g>
+    <g id="anchorB" transform="translate(-6 -224)"></g>
+  </g>
+  <g id="strands" fill="none" stroke="#d6d1cc" stroke-width="2.2" stroke-linecap="round"></g>
+  <!-- arms -->
+  <g id="armL"></g>
+  <g id="armR"></g>
+ </g>
+</g>
+<g id="caption" opacity="0"><rect id="capBg" x="20" y="560" width="320" height="56" rx="14" fill="#1b120c" fill-opacity=".72"/><text id="capText" x="180" y="594" text-anchor="middle" font-size="17" font-weight="700" fill="#fff"></text></g>
+</svg>
+</div>
+<div class="panel">
+  <h1>Grandma Gigi</h1>
+  <p class="sub">Daily AI recap host, animated live in your browser. Everything moves on springs, so it never looks like a slideshow.</p>
+  <div class="grp"><h2>Talk</h2><div class="row">
+    <button class="primary" id="play">Play sample line</button>
+    <button id="sound" aria-pressed="true">Sound: on</button>
+    <button id="stop">Stop</button>
+  </div><p class="note" id="voiceNote"></p></div>
+  <div class="grp"><h2>Expressions</h2><div class="row" id="exprBtns"></div></div>
+  <div class="grp"><h2>Actions</h2><div class="row" id="gestBtns"></div></div>
+  <div class="grp"><h2>Frame</h2><div class="row">
+    <button id="fmtV" aria-pressed="true">9:16 Shorts</button><button id="fmtW" aria-pressed="false">16:9 wide</button>
+  </div></div>
+</div>
+</main>
+<script src="js/gigi.js"></script>
+</body>
+</html>
