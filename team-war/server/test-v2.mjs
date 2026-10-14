@@ -6,7 +6,8 @@
 //   node test-v2.mjs wss://human-vs-ai.tirupathi-podugu.workers.dev
 const BASE = process.argv[2] || 'ws://127.0.0.1:8787';
 const LIVE = !/127\.0\.0\.1|localhost/.test(BASE);
-const R = LIVE ? { a: 18, cap: 19, flood: 20 } : { a: 2, cap: 5, flood: 6 };
+const R = LIVE ? { a: 18, cap: 19, flood: 20, prop: 17 } : { a: 2, cap: 5, flood: 6, prop: 7 };
+const sideTotals = (r) => { const h = r.p.filter((p) => p[2] === 0), a = r.p.filter((p) => p[2] === 1); return { h: h.length, a: a.length, hb: h.filter((p) => p[6]).length, ab: a.filter((p) => p[6]).length }; };
 const skip = (msg) => console.log('SKIP ' + msg + ' (needs the local test switch)');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0, passes = 0;
@@ -51,7 +52,7 @@ const close = (...cs) => { for (const c of cs) try { c.ws.close(); } catch (e) {
   const r3 = await fetch(http + '/room/1'); ok(r3.status === 426, 'v1 /room/1 still routed (426)');
 }
 
-// 1. spectators get the roster; two players join opposite teams; names are cleaned; bots fill
+// 1. spectators get the roster; two players join opposite teams; names are cleaned; no bots (1 v 1)
 const A = await client(R.a), B = await client(R.a);
 ok(A.hi && B.hi && A.hi !== B.hi, 'both got hi with distinct ids');
 await until(() => A.rosters.length > 0, 2000);
@@ -60,21 +61,43 @@ A.send({ t: 'join', name: 'Asha<script>!!', team: 'human' });
 B.send({ t: 'join', name: 'Ravi', team: 'ai' });
 await until(() => A.me() && B.me(), 3000);
 ok(A.me() && A.me().side === 'human' && B.me() && B.me().side === 'ai', 'joined opposite teams (me.side human / ai)');
-await until(() => { const r = A.roster(); return r && r.p.length >= 4; }, 3000);
+await until(() => { const r = A.roster(); return r && r.p.length === 2; }, 3000);
 {
   const r = A.roster();
   ok(r.n === 2, 'roster counts 2 real players (n=' + r.n + ')');
   ok(r.p.some((p) => p[1] === 'Ashascript' && p[2] === 0), 'name is cleaned (Ashascript) and on Team Human');
   ok(r.p.some((p) => p[1] === 'Ravi' && p[2] === 1), 'Ravi is on Team AI');
   const bots = r.p.filter((p) => p[6] === 1);
-  ok(bots.length === 2 && bots.every((p) => p[1].startsWith('Bot · ')) && bots.some((p) => p[2] === 0) && bots.some((p) => p[2] === 1),
-    'bot fill: one "Bot · ..." per side to make 2 v 2: ' + bots.map((p) => p[1]).join(', '));
+  ok(bots.length === 0 && r.p.length === 2, 'one real player each side = 1 v 1, no bots added: ' + r.p.map((p) => p[1]).join(', '));
   const n0 = A.snaps.length; await sleep(1000); const rate = A.snaps.length - n0;
   ok(rate >= 11 && rate <= 19, `about 15 snapshots a second (got ${rate})`);
   const s = A.last();
-  ok(Array.isArray(s.h) && s.h.length === 4 && Array.isArray(s.u) && s.b.length === 7 && typeof s.T === 'number', 'snapshot shape: 4 heroes, units, bases, time');
+  ok(Array.isArray(s.h) && s.h.length === 2 && Array.isArray(s.u) && s.b.length === 7 && typeof s.T === 'number', 'snapshot shape: 2 heroes, units, bases, time');
   ok(A.events.some((e) => e.type === 'join' && e.name === 'Ravi' && e.side === 'ai'), 'join event for the feed: "Ravi joined Team AI"');
   ok(JSON.stringify(s).length < 12000, 'snapshot stays small (' + JSON.stringify(s).length + ' bytes)');
+}
+
+// 1b. proportional bot fill: both sides always have equal totals; bots scale with real players;
+// a real joining the thin side drops a bot (works on the live server too — no test switch needed)
+{
+  const P = [];
+  for (let i = 0; i < 3; i++) { P.push(await client(R.prop)); P[i].send({ t: 'join', name: 'Hum' + i, team: 'human' }); await sleep(120); }
+  await until(() => { const r = P[0].roster(); return r && sideTotals(r).a === 3; }, 4000);
+  let t = sideTotals(P[0].roster());
+  ok(t.h === 3 && t.a === 3 && t.hb === 0 && t.ab === 3, `3 humans one side -> 3 bots fill the other (H ${t.h}/${t.hb}b, A ${t.a}/${t.ab}b)`);
+  ok(t.h === t.a, 'both teams have equal total fighters');
+  const D = await client(R.prop); D.send({ t: 'join', name: 'Deet', team: 'ai' });
+  await until(() => { const r = P[0].roster(); return r && sideTotals(r).ab === 2; }, 4000);
+  t = sideTotals(P[0].roster());
+  ok(t.a === 3 && t.ab === 2 && t.h === 3, `a 4th real joins the thin side -> one bot drops (A now ${t.a - t.ab} real + ${t.ab} bots)`);
+  ok(t.h === t.a && P[0].roster().n === 4, 'totals stay equal (3 v 3) with 4 real players; real players preferred over bots');
+  close(...P, D);
+  await sleep(400);
+  const S = await client(R.prop); S.send({ t: 'join', name: 'Lone', team: 'human' });
+  await until(() => { const r = S.roster(); return r && sideTotals(r).a === 2; }, 4000);
+  t = sideTotals(S.roster());
+  ok(t.h === 2 && t.a === 2 && t.hb === 1 && t.ab === 2, `solo player: padded to 2 v 2 (1 ally bot + a matched enemy side), not a swarm (${t.hb + t.ab} bots total)`);
+  close(S);
 }
 
 // 2. calm the arena (no waves, no bots), then movement, clamping and firing

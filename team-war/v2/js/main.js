@@ -8,7 +8,7 @@ import { Hero } from './hero.js';
 import { FX } from './fx.js';
 import { Audio } from './audio.js';
 import { Input } from './input.js';
-import { UI } from './ui.js';
+import { UI, BOSS_NAMES } from './ui.js';
 import { makeBot, botPick } from './bot.js';
 import * as meta from './meta.js';
 import { createLook, fixedCamera } from './look.js';
@@ -498,7 +498,6 @@ const net = new Net(serverUrl());
 const remote = new Map(); // hero id -> Hero view for every other hero in the match
 let pendingPlay = null;
 const NAME_KEY = 'hva2-name';
-const BOSS_OF = { human: 'Siege Giant', ai: 'Mainframe Titan' };
 const escHtml = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const tagName = (name, side) => `<b style="color:${TEAMS[side].css}">${escHtml(name)}</b>`;
 const teamName = (side) => tagName('Team ' + TEAMS[side].short, side);
@@ -618,13 +617,13 @@ function onNetEvents(v) {
         break;
       case 'bossSpawn':
         if (e.side === v.foe) onEvent(v, e, false);
-        else { fx.ring(e.x, e.z, 1, 10, 0.8, 0xFFC83D); ui.toast(`Your ${BOSS_OF[e.side]} joins the fight!`, 'good'); }
-        ui.feed(`${teamName(e.side)}'s ${BOSS_OF[e.side]} entered the arena`);
+        else { fx.ring(e.x, e.z, 1, 10, 0.8, 0xFFC83D); ui.toast(`Your ${BOSS_NAMES[e.side]} joins the fight!`, 'good'); }
+        ui.feed(`${teamName(e.side)}'s ${BOSS_NAMES[e.side]} entered the arena`);
         break;
       case 'bossWarn': ui.toast('⚠ Both bosses join in 5 seconds!', 'bad'); audio.play('warn'); break;
       case 'bossDown':
-        ui.banner(`${BOSS_OF[e.side]} down!`, e.name ? `by ${e.name}` : '', '#FFC83D');
-        ui.feed(e.name ? `${tagName(e.name, other(e.side))} took down the ${BOSS_OF[e.side]}` : `The ${BOSS_OF[e.side]} fell`);
+        ui.banner(`${BOSS_NAMES[e.side]} down!`, e.name ? `by ${e.name}` : '', '#FFC83D');
+        ui.feed(e.name ? `${tagName(e.name, other(e.side))} took down the ${BOSS_NAMES[e.side]}` : `The ${BOSS_NAMES[e.side]} fell`);
         audio.setMusic(true, 1);
         break;
       case 'baseHit': {

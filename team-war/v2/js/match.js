@@ -7,7 +7,7 @@ import { COVER, mulberry32, segCircle, segSeg } from './sim.js';
 import { makeBot, botPick } from './bot.js';
 
 export const MATCH = {
-  dur: 480, showEnd: 8, respawn: 4, maxPerSide: 6, maxPlayers: 12, minPerSide: 2, offerTime: 10,
+  dur: 480, showEnd: 8, respawn: 4, maxPerSide: 6, maxPlayers: 12, offerTime: 10,
   waveEvery: 24, bossAt: [180, 360], pvp: 0.5, baseHp: 3500, unitCap: 34,
 };
 export const SIDES = ['human', 'ai'];
@@ -39,7 +39,7 @@ export class Match {
     this.events = [];
     this.players = new Map(); // pid -> { name, side } (survives match restarts)
     this.hid = 1; this.nid = 1; this.matchNo = 0;
-    this.cfg = { minPerSide: MATCH.minPerSide, waves: true }; // tests can switch bots / waves off
+    this.cfg = { bots: true, waves: true }; // tests can switch bots / waves off
     this.heroes = [];
     this.reset(true);
   }
@@ -131,18 +131,33 @@ export class Match {
     this.dirty = true;
   }
   forget(h) { for (const d of this.drones) if (d.owner === h.id) d.t = Math.min(d.t, 0); }
+  // Bots are proportional to the real players: both sides always end with the SAME total
+  // (real + bots), equal to the larger side's real-player count, so no side is outnumbered.
+  // Real players are preferred — a bot is dropped when a real joins the smaller side.
+  // When only one person is on (the other side empty) each side is padded to 2, so you get one
+  // ally and a matched enemy instead of standing alone; two real players on opposite sides play 1 v 1.
+  botTarget() {
+    if (!this.cfg.bots) return null; // tests: real players only
+    const rh = this.realCount('human'), ra = this.realCount('ai');
+    const maxReal = Math.max(rh, ra);
+    if (maxReal === 0) return 0;
+    const lonely = (rh === 0 || ra === 0) && maxReal <= 1; // one real player, no live opponent
+    return Math.min(MATCH.maxPerSide, lonely ? 2 : maxReal);
+  }
   fillBots() {
-    const target = Math.min(MATCH.maxPerSide, Math.max(this.cfg.minPerSide, this.realCount('human'), this.realCount('ai')));
+    const target = this.botTarget();
     for (const side of SIDES) {
+      // real players are never dropped; bots only top the side up to the shared target
+      const want = target === null ? this.realCount(side) : Math.max(target, this.realCount(side));
       let n = this.heroesOf(side).length;
-      while (n < target) {
+      while (n < want) {
         const used = new Set(this.heroes.map((h) => h.name));
         const free = BOT_NAMES.filter((b) => !used.has('Bot · ' + b));
         const nm = 'Bot · ' + (free.length ? free[(this.rand() * free.length) | 0] : BOT_NAMES[n % BOT_NAMES.length]);
         this.heroes.push(this.makeHero(side, nm, null, true));
         n++; this.dirty = true;
       }
-      while (n > target) {
+      while (n > want) {
         const bots = this.heroes.filter((h) => h.bot && h.side === side);
         if (!bots.length) break;
         const b = bots.find((x) => x.dead) || bots[bots.length - 1];
@@ -172,8 +187,8 @@ export class Match {
     const h = this.heroOf(pid);
     const n = (v, def = 0) => (Number.isFinite(Number(v)) ? Number(v) : def);
     if (d.cmd === 'time') this.t = n(d.v, this.t);
-    else if (d.cmd === 'calm') { this.cfg.waves = false; this.cfg.minPerSide = 0; this.units = []; this.shots = []; this.queue = []; this.slams = []; this.fillBots(); }
-    else if (d.cmd === 'bots') { this.cfg.minPerSide = n(d.v, MATCH.minPerSide); this.fillBots(); }
+    else if (d.cmd === 'calm') { this.cfg.waves = false; this.cfg.bots = false; this.units = []; this.shots = []; this.queue = []; this.slams = []; this.fillBots(); }
+    else if (d.cmd === 'bots') { this.cfg.bots = d.v === 0 ? false : true; this.fillBots(); }
     else if (d.cmd === 'base' && this.bases[d.side]) this.bases[d.side].hp = n(d.v, 1);
     else if (h && d.cmd === 'xp') this.gainXp(h, n(d.v));
     else if (h && d.cmd === 'place') { h.x = n(d.x); h.z = n(d.z); h.vx = h.vz = 0; h.inv = 0; }
