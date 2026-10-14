@@ -11,35 +11,23 @@ import { Input } from './input.js';
 import { UI } from './ui.js';
 import { makeBot, botPick } from './bot.js';
 import * as meta from './meta.js';
+import { createLook, fixedCamera } from './look.js';
+import { Net, serverUrl, cleanName } from './net.js'; // multiplayer
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('c');
 const coarse = matchMedia('(pointer: coarse)').matches;
 const lowEnd = coarse || (navigator.hardwareConcurrency || 8) <= 4;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !lowEnd, powerPreference: 'high-performance' });
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = lowEnd ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
-const maxPR = Math.min(window.devicePixelRatio || 1, lowEnd ? 1.5 : 2);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: lowEnd, powerPreference: 'high-performance' });
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(36, 1, 2, 420);
+// lighting, sky, tone mapping, post-processing and quality tiers live in look.js
+const look = createLook(renderer, scene, camera, lowEnd);
+let maxPR = Math.min(window.devicePixelRatio || 1, look.maxPR);
 let pixelRatio = maxPR;
 renderer.setPixelRatio(pixelRatio);
 
-const scene = new THREE.Scene();
-const SKY = 0xC9D2CF;
-scene.background = new THREE.Color(SKY);
-scene.fog = new THREE.Fog(SKY, 62, 135);
-const camera = new THREE.PerspectiveCamera(46, 1, 0.5, 240);
-const hemi = new THREE.HemisphereLight(0xFFF4E4, 0x5B5149, 1.7);
-scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xFFF0D6, 2.6);
-sun.castShadow = true;
-sun.shadow.mapSize.set(lowEnd ? 1024 : 2048, lowEnd ? 1024 : 2048);
-Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 90 });
-sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
-scene.add(sun, sun.target);
-const fill = new THREE.DirectionalLight(0xBFD8FF, 0.5); fill.position.set(10, 8, -12); scene.add(fill);
-
-const world = buildWorld(scene, renderer, COVER);
+const world = buildWorld(scene, renderer, COVER, look.detail);
 const entities = new Entities(scene);
 entities.prewarm(['human', 'ai']);
 const fx = new FX(scene, camera, document.getElementById('nums'), lowEnd);
@@ -57,6 +45,7 @@ let trail = meta.trailFor(profile, team);
 let hitstop = 0, slowT = 0, slowMax = 1, endT = 0, simTime = 0, realTime = 0;
 let demoBot = makeBot(0.75);
 let testBot = null;
+let online = null; // multiplayer: { team } while in a live match (see the "online multiplayer" section)
 let lastShotT = -1, lastHitT = -1, lastBaseToast = -10, flankToastWave = 0;
 const camTarget = new THREE.Vector3(0, 0, 20), camPos = new THREE.Vector3(0, 30, 40);
 let camYaw = 0, camYawCur = 0;
@@ -67,8 +56,8 @@ let aimPoint = null;
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
+  look.resize();
+  frameCamera();
 }
 addEventListener('resize', resize); resize();
 
@@ -106,7 +95,7 @@ function startRun(t, opts = {}) {
   audio.team = t; audio.setMusic(true, 1);
   hitstop = 0; slowT = 0; endT = 0; simTime = 0; flankToastWave = 0;
   mode = 'play'; ui.show(null);
-  camYaw = camYawCur = t === 'human' ? 0 : Math.PI;
+  ui.roster(null, 0, net.status === 'offline' ? 'offline' : 'solo');
   snapCamera();
   handleEvents(game, false); // headstart / intro events
   const scored = game.isDaily;
@@ -114,6 +103,7 @@ function startRun(t, opts = {}) {
   if (perks.ult && !profile.seenUlt) { profile.seenUlt = true; meta.saveProfile(profile); setTimeout(() => ui.toast(`Ultimate unlocked: ${TEAMS[t].abilities.r.name} (R)`, 'syn'), 1200); }
 }
 function toMenu() {
+  if (online) leaveOnline();
   mode = 'menu'; game = null; endT = 0;
   profile = meta.loadProfile();
   ui.renderMenu(profile, meta.dailyState(profile));
@@ -123,8 +113,8 @@ function toMenu() {
 }
 function pause(on) {
   if (on && mode === 'play') {
-    mode = 'paused'; ui.renderBuild(game, document.getElementById('pauseBuild')); ui.show('pause'); input.reset(); audio.setMusic(false);
-  } else if (!on && mode === 'paused') { mode = 'play'; ui.show(null); audio.setMusic(true, game.boss ? 2 : 1); }
+    mode = 'paused'; ui.renderBuild(online ? net.view : game, document.getElementById('pauseBuild')); ui.show('pause'); input.reset(); audio.setMusic(false);
+  } else if (!on && mode === 'paused') { mode = 'play'; ui.show(null); audio.setMusic(true, (online ? net.view : game).boss ? 2 : 1); }
 }
 function pick(i) {
   if (mode !== 'upgrade' || !game) return;
@@ -459,48 +449,21 @@ function ambient(g, dt) {
   for (const p of g.pickups) if (Math.random() < 0.5) fx.glowDot(p.x + (Math.random() - 0.5), 0.3, p.z + (Math.random() - 0.5), 0, 2.5, 0, 0.6, 0.15, 0xffffff);
 }
 
-// ---------- camera ----------
-function camRig() {
-  const portrait = innerHeight > innerWidth * 1.05;
-  return portrait ? { h: 27, d: 12, fov: 60, ahead: 3.5 } : { h: 19.5, d: 15, fov: 47, ahead: 4.5 };
+// ---------- camera (owned by the look pass: see look.js fixedCamera) ----------
+// The camera is completely still: one framing per team and screen shape that shows the whole arena.
+// No follow, no lead, no shake, no zoom. Input directions use the same fixed yaw.
+var camKey = ''; // var: resize() runs before this line on boot
+function frameCamera() {
+  const t = online ? net.view.team : mode === 'menu' ? 'human' : ((game || demo) ? (game || demo).team : 'human');
+  const key = t + ':' + innerWidth + 'x' + innerHeight;
+  if (key === camKey) return;
+  camKey = key;
+  const r = fixedCamera(camera, t, innerWidth, innerHeight);
+  look.fitFog();
+  camYaw = camYawCur = r.yaw;
 }
-function snapCamera() {
-  const g = game || demo; if (!g) return;
-  camTarget.set(g.hero.x, 0, g.hero.z);
-  updateCamera(1, g, true);
-}
-function updateCamera(rdt, g, snap = false) {
-  const rig = camRig();
-  if (camera.fov !== rig.fov) { camera.fov = rig.fov; camera.updateProjectionMatrix(); }
-  if (mode === 'menu') {
-    const a = realTime * 0.05;
-    const h = g.hero;
-    const tx = h.x * 0.4, tz = h.z * 0.5;
-    camTarget.x += (tx - camTarget.x) * Math.min(1, rdt * 0.8); camTarget.z += (tz - camTarget.z) * Math.min(1, rdt * 0.8); camTarget.y = 0;
-    camera.position.set(camTarget.x + Math.sin(a) * 34, 28, camTarget.z + Math.cos(a) * 34);
-    camera.lookAt(camTarget);
-  } else {
-    let yd = camYaw - camYawCur; while (yd > Math.PI) yd -= Math.PI * 2; while (yd < -Math.PI) yd += Math.PI * 2;
-    camYawCur += yd * Math.min(1, rdt * 4);
-    const h = g.hero;
-    const F = fwd(g.team);
-    let tx = h.x, tz = h.z;
-    if (h.dead) { tx = 0; tz = baseZ(g.team) + F * 10; }
-    tx += h.vx * 0.16; tz += h.vz * 0.16 + F * rig.ahead;
-    if (aimPoint && !h.dead) { tx += Math.max(-4, Math.min(4, (aimPoint.x - h.x) * 0.16)); tz += Math.max(-4, Math.min(4, (aimPoint.z - h.z) * 0.16)); }
-    const k = snap ? 1 : 1 - Math.exp(-rdt * 5.5);
-    camTarget.x += (tx - camTarget.x) * k; camTarget.z += (tz - camTarget.z) * k;
-    const slow = slowT > 0 ? Math.min(1, slowT / 0.3) : 0;
-    const zoom = 1 - 0.14 * slow;
-    const s = Math.sin(camYawCur), c = Math.cos(camYawCur);
-    camPos.set(camTarget.x + s * rig.d * zoom, rig.h * zoom, camTarget.z + c * rig.d * zoom);
-    const sh = fx.shakeVec(realTime);
-    camera.position.copy(camPos).add(sh);
-    camera.lookAt(camTarget.x + sh.x * 0.3, 0, camTarget.z + sh.z * 0.3);
-  }
-  sun.position.set(camTarget.x - 14, 32, camTarget.z + 9);
-  sun.target.position.set(camTarget.x, 0, camTarget.z - 2);
-}
+function snapCamera() { frameCamera(); }
+function updateCamera() { frameCamera(); }
 
 // ---------- off-screen enemy arrows ----------
 const arrowsEl = document.getElementById('arrows');
@@ -534,19 +497,20 @@ function frame(rdt, doRender = true) {
   rdt = Math.min(rdt, 1 / 20);
   realTime += rdt;
   input.pollPad();
-  const g = mode === 'menu' ? demo : game;
+  const g = online ? net.view : mode === 'menu' ? demo : game;
   if (!g) return;
   // time scale: hit-stop, then slow motion easing back to normal
   let ts = 1;
-  if (hitstop > 0) { hitstop -= rdt; ts = 0.04; }
-  else if (slowT > 0) {
+  hitstop = 0; // no hit-stop freezes: the screen stays calm
+  if (slowT > 0) {
     slowT -= rdt;
     const k = slowT / slowMax;
     ts = k > 0.35 ? 0.25 : 0.25 + (1 - k / 0.35) * 0.75;
     if (slowT <= 0) ui.slowmo(false);
   }
   const dt = rdt * ts;
-  if (mode === 'play' || mode === 'menu') {
+  if (online) onlineStep(rdt);
+  else if (mode === 'play' || mode === 'menu') {
     const inp = mode === 'menu' ? demoBot(g, dt) : buildInput(g);
     let left = dt, first = true;
     while (left > 1e-6) {
@@ -565,7 +529,7 @@ function frame(rdt, doRender = true) {
   }
   if (endT > 0) { endT -= rdt; if (endT <= 0) finishRun(); }
   // views
-  const gv = mode === 'menu' ? demo : game;
+  const gv = online ? net.view : mode === 'menu' ? demo : game;
   if (heroView) heroView.update(gv.hero, dt, realTime);
   entities.update(gv, realTime, camera, mode === 'menu' ? meta.trailFor(profile, gv.team) : trail);
   world.update(rdt, gv, turretAims);
@@ -576,7 +540,8 @@ function frame(rdt, doRender = true) {
     ui.hud(gv, rdt);
     if (!input.touchMode) ui.crosshair(input.mouse.x, input.mouse.y, realTime - lastShotT < 0.06, realTime - lastHitT < 0.1);
   }
-  if (doRender) renderer.render(scene, camera);
+  if (online) onlineViews(rdt);
+  if (doRender) look.render();
 }
 function finishRun() {
   const g = game; if (!g) return;
@@ -604,7 +569,7 @@ function finishRun() {
 }
 
 // ---------- wiring ----------
-for (const b of document.querySelectorAll('.team')) b.addEventListener('click', () => startRun(b.dataset.team));
+for (const b of document.querySelectorAll('.team')) b.addEventListener('click', () => play(b.dataset.team));
 for (const b of document.querySelectorAll('[data-daily]')) b.addEventListener('click', () => startRun(b.dataset.daily, { daily: true }));
 document.getElementById('shopBtn').addEventListener('click', () => { audio.unlock(); audio.play('click'); openShop(); });
 document.getElementById('shopClose').addEventListener('click', () => { ui.renderMenu(profile, meta.dailyState(profile)); ui.show('menu'); });
@@ -634,6 +599,7 @@ for (const b of document.querySelectorAll('.ab')) {
 input.on('key', (k) => {
   if (k === 'Escape' || k === 'KeyP') { if (mode === 'play') pause(true); else if (mode === 'paused') pause(false); }
   if (mode === 'upgrade' && ['Digit1', 'Digit2', 'Digit3'].includes(k)) pick(+k.slice(-1) - 1);
+  if (online && mode === 'play' && ['Digit1', 'Digit2', 'Digit3'].includes(k)) net.pick(+k.slice(-1) - 1); // level-up cards, no pause
   if (mode === 'end' && (k === 'Enter' || k === 'KeyR')) document.getElementById('againBtn').click();
   if (k === 'KeyM') { audio.unlock(); audio.setMuted(!audio.muted); ui.refreshMute(); }
 });
@@ -645,7 +611,11 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- boot ----------
+ui.mountOnline({ name: savedName(), onName: () => {} });
+ui.mpStatus(net.status, 0, 1);
 toMenu();
+net.connect(1);
+setInterval(() => { if (net.status === 'offline' && net.url && mode === 'menu') net.connect(1, true); }, 20000); // keep trying quietly
 renderer.compile(scene, camera);
 let last = performance.now();
 function loop(now) {
@@ -654,6 +624,8 @@ function loop(now) {
   frame(rdt);
   // adaptive resolution: keep 60 fps on weaker machines
   frameMs = frameMs * 0.95 + (performance.now() - t0) * 0.05;
+  look.adapt(rdt, mode === 'play' && !document.hidden);
+  if (maxPR > look.maxPR) { maxPR = look.maxPR; pixelRatio = Math.min(pixelRatio, maxPR); renderer.setPixelRatio(pixelRatio); resize(); }
   adaptT += rdt;
   if (adaptT > 2 && mode === 'play') {
     adaptT = 0;
@@ -668,9 +640,9 @@ requestAnimationFrame(loop);
 window.__game = {
   get game() { return game; }, get demo() { return demo; }, get mode() { return mode; },
   get state() { const g = game || demo; return g && { mode, phase: g.phase, wave: g.wave, score: g.score, hp: g.hero.hp, units: g.units.length, shots: g.shots.length, kills: g.kills, base: g.bases[g.team].hp, foeBase: g.bases[g.foe].hp, result: g.result }; },
-  startRun, toMenu, pick, pause,
+  startRun, toMenu, pick, pause, play, net, get online() { return online; },
   step(dt = 1 / 60, n = 1, render = true) { for (let i = 0; i < n; i++) frame(dt, render && i === n - 1); return this.state; },
-  render() { renderer.render(scene, camera); },
+  render() { look.render(); }, look,
   setWave(n) { const g = game; g.wave = n; g.units = []; g.shots = []; g.queue = []; g.startWave(); g.phase = 'intro'; g.phaseT = 0.5; },
   giveUpgrade(id, n = 1) { for (let i = 0; i < n; i++) game.applyUpgrade(id); handleEvents(game, true); },
   bot(on, skill = 0.75) { testBot = on ? makeBot(skill) : null; },

@@ -5,6 +5,8 @@ import { Crowd, rootMatrix, additive, glowMat, toon, GEO } from './gfx.js';
 import { minionModel, PAL } from './models.js';
 import { KINDS, PICKUPS } from './config.js';
 
+// visual size of minions vs their collision radius: bigger so they read from the fixed wide camera
+const VIS_SCALE = 1.5;
 const MAXES = { grunt: 90, runner: 70, shooter: 45, brute: 30, boss: 2 };
 const _root = new THREE.Matrix4(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0), _right = new THREE.Vector3();
@@ -134,7 +136,7 @@ export class Entities {
       if (age < 0.35) { const a = age / 0.35; pop = a < 0.7 ? a / 0.7 * 1.15 : 1.15 - (a - 0.7) / 0.3 * 0.15; }
       const flash = u.hitT > 0.05 ? Math.min(1, u.hitT / 0.11) * (u.kind === 'boss' ? 0.35 : u.kind === 'brute' || u.elite ? 0.55 : 0.9) : 0;
       const sq = flash * 0.12;
-      const s = model.scale * 1.12 * (u.r / kr) * Math.max(0.01, pop);
+      const s = model.scale * VIS_SCALE * (u.r / kr) * Math.max(0.01, pop);
       const roll = u.stun > 0 ? Math.sin(t * 22 + u.id) * 0.18 : 0;
       rootMatrix(_root, u.x, y, u.z, u.face, s * (1 + sq), s * (1 - sq), s * (1 + sq), model.lean * st.mv, roll);
       crowd.add(_root, st, flash, u.elite);

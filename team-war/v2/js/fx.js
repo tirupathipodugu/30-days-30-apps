@@ -146,7 +146,7 @@ export class FX {
     n.x = x + (Math.random() - 0.5) * 0.6; n.y = y; n.z = z + (Math.random() - 0.5) * 0.6; n.t = life; n.max = life; n.on = true;
     n.el.textContent = text; n.el.className = 'num on ' + cls;
   }
-  shake(amount) { this.trauma = Math.min(1, this.trauma + amount); }
+  shake() { /* the camera never moves: impacts read through flashes, sparks and rings instead */ }
   muzzle(pos, color) {
     this.muzzleLight.position.copy(pos); this.muzzleLight.color.setHex(color); this.muzzleLight.intensity = 14;
     this.flash.position.copy(pos); this.flash.material.color.setHex(color); this.flash.visible = true; this.flashT = 0.05;
