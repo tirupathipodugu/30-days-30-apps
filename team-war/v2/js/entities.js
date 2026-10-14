@@ -44,9 +44,11 @@ function curtainMat(color, kind) {
         a *= 1.0 - smoothstep(0.9, 1.0, uv.y) * 0.0;` : `
         float t = uTime * 2.2;
         float fl = n(vec2(uv.x * uLen * 3.0, uv.y * 2.5 - t)) * 0.65 + n(vec2(uv.x * uLen * 7.0, uv.y * 5.0 - t * 1.7)) * 0.35;
-        float shape = smoothstep(0.0, 0.25, fl * (1.15 - uv.y) - uv.y * 0.55);
-        float bits = step(0.85, h(floor(vec2(uv.x * uLen * 8.0, uv.y * 8.0 - t * 3.0)))) * (1.0 - uv.y);
-        a = shape * 1.3 + bits * 0.6;`}
+        float body = fl * (1.2 - uv.y) - uv.y * 0.6;
+        float shape = smoothstep(0.02, 0.2, body);
+        float core = smoothstep(0.25, 0.5, body);
+        float bits = step(0.88, h(floor(vec2(uv.x * uLen * 8.0, uv.y * 8.0 - t * 3.0)))) * (1.0 - uv.y);
+        a = shape * 0.45 + core * 0.55 + bits * 0.5;`}
         vec3 c = mix(uColor, vec3(1.0), clamp(a - 1.0, 0.0, 0.6));
         gl_FragColor = vec4(c * a * uFade * 1.1, 1.0);
         #include <tonemapping_fragment>
@@ -112,8 +114,8 @@ export class Entities {
     // firewalls (Team AI Q)
     this.fires = [];
     for (let i = 0; i < 3; i++) {
-      const strip = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(0x3BFFE0, 0.5));
-      const core = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(0xB8FFF4, 0.35));
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(0x3BFFE0, 0.35, 1.2));
+      const core = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(0xB8FFF4, 0.25, 1.2));
       strip.position.y = 0.07; core.position.y = 0.08; strip.visible = core.visible = false;
       const wall = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), curtainMat(0x2BFFE0, 1));
       wall.visible = false; wall.renderOrder = 5; scene.add(wall);
@@ -306,7 +308,7 @@ export class Entities {
       f.strip.scale.set(s.w * 2.2 * fade, 1, L * grow); f.core.scale.set(s.w * 0.7 * fade, 1, L * grow);
       f.strip.material.opacity = 0.45 + Math.sin(t * 14) * 0.1;
       f.wall.position.set(cx, 0.05, cz); f.wall.rotation.y = yaw - Math.PI / 2;
-      f.wall.scale.set(L * grow, 2.6 * fade, 1);
+      f.wall.scale.set(L * grow, 3.2 * fade, 1);
       f.wall.material.uniforms.uLen.value = L / 2; f.wall.material.uniforms.uFade.value = fade;
     });
     // drones

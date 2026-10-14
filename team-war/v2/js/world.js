@@ -80,15 +80,31 @@ function floorTexture(maxAniso) {
   }
   g.fillStyle = 'rgba(30,40,30,0.25)'; // little gaps between tiles where the earth shows
   for (let i = 0; i < 120; i++) { const x = R() * c.width, y = Z(-6 + R() * 6); g.fillRect(x, y, 2 + R() * 16, 2 + R() * 3); }
-  // circuit traces
+  // circuit traces (painted dim here; a glowing overlay animates light pulses along the same paths)
+  const MK = 15, mc = document.createElement('canvas'); mc.width = FW * MK; mc.height = FW * MK;
+  const mg = mc.getContext('2d'); mg.fillStyle = '#000'; mg.fillRect(0, 0, mc.width, mc.height); mg.lineCap = 'round'; mg.lineWidth = 2.2;
+  const MX = (x) => (x + FW / 2) * MK, MZ = (z) => (z + FW) * MK; // overlay covers z in [-36, 0]
   g.lineWidth = 3; g.lineCap = 'round';
   for (let i = 0; i < 30; i++) {
     let x = -W + 1 + R() * (2 * W - 2), z = -Lh + 1 + R() * (Lh - 6);
-    g.strokeStyle = 'rgba(80,250,230,0.55)';
+    g.strokeStyle = 'rgba(80,250,230,0.4)';
     g.beginPath(); g.moveTo(X(x), Z(z));
-    for (let s = 0; s < 4; s++) { if (R() < 0.5) x += (R() - 0.5) * 8; else z += (R() - 0.5) * 8; x = Math.max(-W + 0.5, Math.min(W - 0.5, x)); z = Math.max(-Lh + 0.5, Math.min(-3, z)); g.lineTo(X(x), Z(z)); }
+    let dist = R() * 4;
+    for (let s = 0; s < 4; s++) {
+      const x0 = x, z0 = z;
+      if (R() < 0.5) x += (R() - 0.5) * 8; else z += (R() - 0.5) * 8; x = Math.max(-W + 0.5, Math.min(W - 0.5, x)); z = Math.max(-Lh + 0.5, Math.min(-3, z));
+      g.lineTo(X(x), Z(z));
+      const l = Math.hypot(x - x0, z - z0);
+      const lg = mg.createLinearGradient(MX(x0), MZ(z0), MX(x) + 0.01, MZ(z) + 0.01);
+      // red = trace mask, green = distance along the trace (wraps every 4 units) so pulses can travel
+      const steps = 8;
+      for (let k = 0; k <= steps; k++) { const d = ((dist + l * k / steps) / 4) % 1; lg.addColorStop(k / steps, `rgb(255,${Math.round(d * 255)},0)`); }
+      mg.strokeStyle = lg; mg.beginPath(); mg.moveTo(MX(x0), MZ(z0)); mg.lineTo(MX(x), MZ(z)); mg.stroke();
+      dist += l;
+    }
     g.stroke();
     g.fillStyle = 'rgba(160,255,245,0.9)'; g.beginPath(); g.arc(X(x), Z(z), 5, 0, 7); g.fill();
+    mg.fillStyle = 'rgb(255,0,255)'; mg.beginPath(); mg.arc(MX(x), MZ(z), 3.2, 0, 7); mg.fill();
   }
   // contested zone: a soft golden ring where the two worlds meet
   g.strokeStyle = 'rgba(255,236,190,0.55)'; g.lineWidth = 6;
@@ -109,7 +125,29 @@ function floorTexture(maxAniso) {
   }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
-  return tex;
+  const mask = new THREE.CanvasTexture(mc); mask.anisotropy = maxAniso;
+  return { tex, mask };
+}
+function circuitOverlay(mask) {
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: TIME, uMask: { value: mask } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform float uTime; uniform sampler2D uMask; varying vec2 vUv;
+      void main(){
+        vec4 t = texture2D(uMask, vUv);
+        float trace = t.r;
+        float pulse = smoothstep(0.82, 1.0, fract(t.g - uTime * 0.35)) + smoothstep(0.85, 1.0, fract(t.g + 0.5 - uTime * 0.35)) * 0.6;
+        float node = t.b * (0.6 + 0.4 * sin(uTime * 3.0 + vUv.x * 40.0));
+        vec3 c = vec3(0.2, 1.0, 0.9) * (trace * (0.12 + pulse * 2.2) + node * 1.6);
+        gl_FragColor = vec4(c, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(36, 36).rotateX(-Math.PI / 2), m);
+  p.position.set(0, 0.025, -18); p.renderOrder = 1;
+  return p;
 }
 
 // ---------------- terrain around the arena ----------------
@@ -125,7 +163,7 @@ function terrainHeight(x, z) {
   return h;
 }
 function buildTerrain(scene) {
-  const geo = new THREE.PlaneGeometry(260, 260, 120, 120).rotateX(-Math.PI / 2);
+  const geo = new THREE.PlaneGeometry(260, 260, 100, 100).rotateX(-Math.PI / 2);
   const p = geo.attributes.position, cols = new Float32Array(p.count * 3), c = new THREE.Color(), c2 = new THREE.Color();
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i), h = terrainHeight(x, z);
@@ -167,7 +205,8 @@ function buildWater(scene) {
         vec3 col = mix(deep, shallow, smoothstep(0.4, 2.4, d));
         float streak = smoothstep(0.72, 0.9, f);
         col += vec3(0.9, 0.97, 1.0) * streak * 0.55 * (1.0 - tech);
-        col += vec3(0.3, 1.6, 1.5) * streak * 1.1 * tech; // the coolant canal glows
+        float f2 = n(vec2(vW.x * 5.0, vW.z * 0.22 + uTime * 2.2 * side));
+        col += vec3(0.3, 1.6, 1.5) * smoothstep(0.78, 0.96, f2) * 0.9 * tech; // the coolant canal carries streaks of light
         float edge = smoothstep(1.5, 2.3, d);
         col = mix(col, vec3(0.95, 0.98, 1.0), edge * 0.5 * (1.0 - tech));
         col = mix(col, vec3(0.2, 0.9, 0.85), edge * 0.35 * tech);
@@ -222,7 +261,7 @@ function grassSpot(R, human) {
 }
 function buildGrass(scene, detail) {
   const R = mulberry32(21);
-  const N = Math.round(10000 * detail);
+  const N = Math.round(8500 * detail);
   const geo = grassGeometry();
   const mat = toon(0xffffff, 0, { vertexColors: true, side: THREE.DoubleSide, sway: [0.16, 2.2] });
   const im = new THREE.InstancedMesh(geo, mat, N);
@@ -765,7 +804,9 @@ function domeMaterial(color) {
 export function buildWorld(scene, renderer, cover, detail = 1) {
   const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   buildTerrain(scene);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(36, 72).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: floorTexture(maxAniso) }));
+  const ft = floorTexture(maxAniso);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(36, 72).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: ft.tex }));
+  scene.add(circuitOverlay(ft.mask));
   floor.receiveShadow = true; floor.position.y = 0.0;
   scene.add(floor);
   buildWater(scene);

@@ -43,9 +43,10 @@ export class Hero {
     const tri = new THREE.Shape(); tri.moveTo(0, 0.5); tri.lineTo(0.3, 0); tri.lineTo(-0.3, 0); tri.lineTo(0, 0.5);
     this.chev = new THREE.Mesh(new THREE.ShapeGeometry(tri).rotateX(-Math.PI / 2), ringMat);
     this.chev.position.set(0, 0.05, 1.25); this.root.add(this.chev);
-    const mk = new THREE.Shape(); mk.moveTo(-0.32, 0.3); mk.lineTo(0.32, 0.3); mk.lineTo(0, -0.18); mk.lineTo(-0.32, 0.3);
-    this.marker = new THREE.Mesh(new THREE.ExtrudeGeometry(mk, { depth: 0.12, bevelEnabled: false }).translate(0, 0, -0.06), glowMat(tc));
-    this.marker.scale.setScalar(0.9);
+    // a spinning gem that points down at the hero
+    this.marker = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.9, 4).rotateX(Math.PI), glowMat(tc));
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.28, 4).translate(0, 0.59, 0), glowMat(0xffffff));
+    this.marker.add(cap);
     scene.add(this.marker);
     this.walk = 0; this.lean = 0; this.roll = 0; this.yaw = 0; this.flash = 0; this.pop = 1; this.t = 0;
     this.capeV = 0; this.capeA = 0.2; this.land = 0; this.prevSin = 0;
