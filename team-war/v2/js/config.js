@@ -31,8 +31,8 @@ export const MAX_WAVE = 10;
 export const BOSS_WAVES = [3, 6, 9, 10];
 
 export const HERO = {
-  hp: 100, speed: 8.6, rate: 6.2, dmg: 11, shotSpeed: 44, shotLife: 0.52, r: 0.6,
-  dashDist: 6.8, dashTime: 0.15, dashCd: 1.9, dashInv: 0.32, revives: 2, respawn: 2.6,
+  hp: 100, speed: 9.4, rate: 6.2, dmg: 11, shotSpeed: 44, shotLife: 0.52, r: 0.6,
+  dashDist: 7.2, dashTime: 0.14, dashCd: 1.7, dashInv: 0.4, revives: 2, respawn: 2.6,
 };
 
 // Minion kinds. hp/dmg get multiplied by the wave scaling.

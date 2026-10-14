@@ -13,6 +13,8 @@ export class Input {
     this.handlers = {};
     this.enabled = false;
     this.lastAim = { x: 0, y: 1 };
+    this.R = 82; // touch stick travel radius: big and forgiving
+    this.inject = null; // test hook: { mv:{x,y}, aim:{...} } overrides live input
 
     addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT')) return;
@@ -69,7 +71,7 @@ export class Input {
         if (s && s.id === e.pointerId) {
           s.x = e.clientX; s.y = e.clientY;
           // the base follows the thumb if it drifts too far
-          const R = 70, dx = s.x - s.ox, dy = s.y - s.oy, d = Math.hypot(dx, dy);
+          const R = this.R, dx = s.x - s.ox, dy = s.y - s.oy, d = Math.hypot(dx, dy);
           if (d > R) { s.ox = s.x - dx / d * R; s.oy = s.y - dy / d * R; }
         }
       }
@@ -88,9 +90,11 @@ export class Input {
   }
   stickVec(s) {
     if (!s) return { x: 0, y: 0, m: 0 };
-    const dx = s.x - s.ox, dy = s.y - s.oy, d = Math.hypot(dx, dy), R = 70;
-    const m = Math.min(1, d / R);
-    if (d < 6) return { x: 0, y: 0, m: 0 };
+    const dx = s.x - s.ox, dy = s.y - s.oy, d = Math.hypot(dx, dy), R = this.R, DZ = 9;
+    if (d < DZ) return { x: 0, y: 0, m: 0 };
+    // smooth ramp out of the dead zone so the first bit of travel is gentle, not a jump
+    let m = Math.min(1, (d - DZ) / (R - DZ));
+    m = m * m * (3 - 2 * m);
     return { x: (dx / d) * m, y: (-dy / d) * m, m };
   }
   drawSticks() {
@@ -101,7 +105,7 @@ export class Input {
         el.classList.add('on');
         el.style.left = s.ox + 'px'; el.style.top = s.oy + 'px';
         const v = this.stickVec(s);
-        el.firstElementChild.style.transform = `translate(${v.x * 46}px, ${-v.y * 46}px)`;
+        el.firstElementChild.style.transform = `translate(${v.x * 52}px, ${-v.y * 52}px)`;
       } else {
         el.classList.remove('on');
         el.style.left = ''; el.style.top = '';
@@ -126,6 +130,7 @@ export class Input {
   }
   // Screen-space move vector, y up.
   moveVec() {
+    if (this.inject && this.inject.mv) return { x: this.inject.mv.x, y: this.inject.mv.y };
     let x = 0, y = 0;
     const K = this.keys;
     if (K.has('KeyA') || K.has('ArrowLeft')) x -= 1;
@@ -139,6 +144,7 @@ export class Input {
   }
   // Aim: { kind: 'mouse', sx, sy, fire } | { kind: 'dir', x, y (screen, y up), fire } | null
   aim() {
+    if (this.inject && this.inject.aim) return this.inject.aim;
     if (this.sticks.aim) {
       const v = this.stickVec(this.sticks.aim);
       if (v.m > 0.15) { this.lastAim = { x: v.x, y: v.y }; }

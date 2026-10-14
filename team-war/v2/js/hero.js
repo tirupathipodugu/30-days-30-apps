@@ -78,6 +78,7 @@ export class Hero {
     this.walk = 0; this.lean = 0; this.roll = 0; this.yaw = 0; this.flash = 0; this.pop = 1; this.t = 0;
     this.capeV = 0; this.capeA = 0.2; this.land = 0; this.prevSin = 0;
     this.bank = 0; this.kick = 0; this.hurtPrev = 0; this.recover = 0; this.dashPrev = false;
+    this.dashLaunch = 0; this.moveLean = 0; this.ringMv = 0;
     this.muzzle = new THREE.Vector3();
   }
   // collect parts per bone: p(bone, geo, color, [x,y,z], scale, rot, opts)
@@ -202,30 +203,36 @@ export class Hero {
     r.visible = true; this.marker.visible = true;
     this.pop = Math.min(1, this.pop + dt * 4);
     r.position.set(h.x, 0, h.z);
-    // turn toward aim (eased), and bank the body into the turn
+    // turn toward aim with an eased, slightly critically-damped feel (no snapping), and bank into the turn
     let da = h.aim - this.yaw; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
-    const applied = da * Math.min(1, dt * 15);
+    // faster the further off we are, so quick flicks still catch up, but small corrections stay smooth
+    const turnK = Math.min(1, dt * (12 + Math.min(1, Math.abs(da) / 1.2) * 10));
+    const applied = da * turnK;
     this.yaw += applied;
     r.rotation.y = this.yaw;
-    const turnBank = Math.max(-0.3, Math.min(0.3, applied / Math.max(dt, 1e-3) * 0.028));
-    this.bank += (turnBank - this.bank) * Math.min(1, dt * 8);
+    const turnBank = Math.max(-0.42, Math.min(0.42, applied / Math.max(dt, 1e-3) * 0.032));
+    this.bank += (turnBank - this.bank) * Math.min(1, dt * 9);
     const sp = Math.hypot(h.vx, h.vz);
     const fwdMv = (h.vx * Math.sin(this.yaw) + h.vz * Math.cos(this.yaw)) / 9;
     const sideMv = (h.vx * Math.cos(this.yaw) - h.vz * Math.sin(this.yaw)) / 9;
-    const mv = Math.min(1, sp / 8);
+    const mv = Math.min(1, sp / 8.5);
     const dashing = h.dashT > 0;
+    // a lean that reads as the whole body tipping into the run, easing in and out so it feels weighty
+    this.moveLean += (Math.min(1, sp / 9) - this.moveLean) * Math.min(1, dt * 8);
     // hit stagger: a sharp recoil the instant damage lands, easing back out
     if (h.hurtT > this.hurtPrev + 1e-3) this.kick = 1;
     this.hurtPrev = h.hurtT;
     this.kick = Math.max(0, this.kick - dt / 0.26);
     const kickE = this.kick * this.kick;
-    // dash recovery: a landing squash when a dash ends
+    // dash: a sharp launch stretch at the start, then a landing squash when it ends
+    if (dashing && !this.dashPrev) this.dashLaunch = 1;
+    this.dashLaunch = Math.max(0, this.dashLaunch - dt / 0.12);
     if (this.dashPrev && !dashing) this.recover = 1;
     this.dashPrev = dashing;
-    this.recover = Math.max(0, this.recover - dt / 0.22);
+    this.recover = Math.max(0, this.recover - dt / 0.26);
     this.walk += dt * (4 + sp * 1.05) * (fwdMv < -0.2 ? -1 : 1);
-    this.lean += ((dashing ? 0.5 : fwdMv * 0.3) - this.lean) * Math.min(1, dt * 10);
-    this.roll += (-sideMv * 0.24 + this.bank - this.roll) * Math.min(1, dt * 12);
+    this.lean += ((dashing ? 0.6 : fwdMv * 0.5) - this.lean) * Math.min(1, dt * 11);
+    this.roll += (-sideMv * 0.4 + this.bank - this.roll) * Math.min(1, dt * 13);
     const rec = h.recoil || 0;
     const pop = this.pop < 1 ? 1 + Math.sin(this.pop * Math.PI) * 0.3 : 1;
     const s = HERO_SCALE * pop;
@@ -236,8 +243,11 @@ export class Hero {
     this.land = Math.max(0, this.land - dt * 7);
     const breathe = Math.sin(t * 2.2) * 0.02 * (1 - mv);
     const sq = this.land * 0.07 * mv + this.recover * this.recover * 0.14;
-    if (dashing) r.scale.set(s * 0.86, s * 0.9, s * 1.35);
-    else r.scale.set(s * (1 + sq * 0.6), s * (1 - sq + breathe), s * (1 + sq * 0.6));
+    if (dashing) {
+      // stronger stretch right as the dash launches, easing toward a lean through the burst
+      const launch = this.dashLaunch * this.dashLaunch;
+      r.scale.set(s * (0.86 - launch * 0.08), s * (0.9 - launch * 0.06), s * (1.35 + launch * 0.22));
+    } else r.scale.set(s * (1 + sq * 0.6), s * (1 - sq + breathe), s * (1 + sq * 0.6));
     if (this.hover) {
       this.hoverG.position.y = 0.42 + Math.sin(t * 3.2) * 0.08 - kickE * 0.1;
       this.body.rotation.set(this.lean * 1.2 - kickE * 0.4, 0, this.roll * 1.4);
@@ -268,8 +278,10 @@ export class Hero {
     const hurt = h.hurtT > 0 ? h.hurtT / 0.35 : 0;
     this.mat.emissive.setRGB(hurt * 0.9, hurt * 0.25, hurt * 0.2);
     r.visible = !(h.inv > 0.4 && Math.floor(t * 18) % 2 === 0);
-    this.ring.material.opacity = 0.55 + Math.sin(t * 4) * 0.15;
-    this.ring.scale.setScalar(1 + Math.sin(t * 4) * 0.04);
+    // the player's ring swells a touch while moving, so your own hero stays unmistakable in a crowd
+    this.ringMv += (mv - this.ringMv) * Math.min(1, dt * 6);
+    this.ring.material.opacity = 0.55 + Math.sin(t * 4) * 0.15 + this.ringMv * 0.22;
+    this.ring.scale.setScalar(1 + Math.sin(t * 4) * 0.04 + this.ringMv * 0.12);
     this.marker.position.set(h.x, (this.hover ? 4.3 : 4.2) + Math.sin(t * 3) * 0.15, h.z);
     this.marker.rotation.y = t * 1.5;
     this.root.updateMatrixWorld(true);

@@ -146,14 +146,18 @@
   body.touch .ab .key { display: none; }
 
   /* touch sticks */
-  .stick { position: fixed; width: 128px; height: 128px; margin: -64px 0 0 -64px; border-radius: 50%; border: 2px solid rgba(255,255,255,.28);
-    background: rgba(0,0,0,.18); pointer-events: none; display: none; }
-  .stick i { position: absolute; left: 36px; top: 36px; width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,.55); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
-  body.touch.playing .stick { display: block; opacity: .4; }
-  body.touch.playing .stick.on { opacity: 1; }
-  #stickMove { left: calc(96px + var(--safe-l)); top: calc(100% - 120px - var(--safe-b)); }
-  #stickAim { left: calc(100% - 96px - var(--safe-r)); top: calc(100% - 120px - var(--safe-b)); }
-  #stickAim i { background: color-mix(in srgb, var(--team) 80%, white); }
+  .stick { position: fixed; width: 150px; height: 150px; margin: -75px 0 0 -75px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.3);
+    background: radial-gradient(circle at 50% 50%, rgba(0,0,0,.1), rgba(0,0,0,.28)); pointer-events: none; display: none;
+    transition: opacity .18s ease; box-shadow: inset 0 0 22px rgba(0,0,0,.35); }
+  .stick i { position: absolute; left: 43px; top: 43px; width: 64px; height: 64px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.95), rgba(255,255,255,.5) 70%);
+    box-shadow: 0 3px 10px rgba(0,0,0,.5), 0 0 0 2px rgba(0,0,0,.18); transition: transform .05s linear; }
+  body.touch.playing .stick { display: block; opacity: .34; }
+  body.touch.playing .stick.on { opacity: 1; border-color: rgba(255,255,255,.7); box-shadow: inset 0 0 22px rgba(0,0,0,.35), 0 0 18px rgba(255,255,255,.22); }
+  #stickMove { left: calc(104px + var(--safe-l)); top: calc(100% - 128px - var(--safe-b)); }
+  #stickAim { left: calc(100% - 104px - var(--safe-r)); top: calc(100% - 128px - var(--safe-b)); }
+  #stickAim.on { border-color: color-mix(in srgb, var(--team) 85%, white); box-shadow: inset 0 0 22px rgba(0,0,0,.35), 0 0 20px color-mix(in srgb, var(--team) 55%, transparent); }
+  #stickAim i { background: radial-gradient(circle at 50% 35%, #fff, color-mix(in srgb, var(--team) 80%, white) 70%); }
   body.touch #abil { left: auto; right: calc(12px + var(--safe-r)); transform: none; bottom: calc(196px + var(--safe-b)); flex-direction: column-reverse; gap: 10px; }
   body.touch .ab { width: 58px; height: 58px; }
   body.touch #toasts { top: calc(196px + var(--safe-t)); width: min(60vw, 300px); }
@@ -292,8 +296,8 @@
     body.touch #toasts { top: calc(96px + var(--safe-t)); }
     #bossBar { width: 38%; top: calc(64px + var(--safe-t)); padding: 3px 8px 5px; } #bossBar .bar { height: 8px; }
     #banner h2 { font-size: 44px; } #banner { top: 26%; }
-    .stick { width: 110px; height: 110px; margin: -55px 0 0 -55px; } .stick i { left: 29px; top: 29px; }
-    #stickMove, #stickAim { top: calc(100% - 90px - var(--safe-b)); }
+    .stick { width: 132px; height: 132px; margin: -66px 0 0 -66px; } .stick i { left: 36px; top: 36px; width: 60px; height: 60px; }
+    #stickMove, #stickAim { top: calc(100% - 96px - var(--safe-b)); }
   }
   @media (pointer: coarse) { .how .kb { display: none; } .how { grid-template-columns: 1fr; } }
   @media (prefers-reduced-motion: reduce) { .screen.on .wrap > * { animation: none; } }

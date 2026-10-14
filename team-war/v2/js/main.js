@@ -132,6 +132,22 @@ function screenToWorld(x, y) { // screen dir (x right, y up) -> world xz, using 
   const s = Math.sin(camYawCur), c = Math.cos(camYawCur);
   return { x: c * x - s * y, z: -s * x - c * y };
 }
+// Momentum on the *input* vector (not the physics): a snappy ease-in so the hero leaves the mark the
+// instant you push, and a slightly softer ease-out so it carries a little weight when you let go.
+// This smooths the intent before it reaches the sim, so solo, net prediction and the server all agree.
+let mvRampX = 0, mvRampZ = 0, lastRampT = -1;
+function rampMove(mv, dead) {
+  const dt = lastRampT < 0 ? 0 : Math.min(0.05, Math.max(0, realTime - lastRampT));
+  lastRampT = realTime;
+  if (dead) { mvRampX = mvRampZ = 0; return { x: 0, y: 0 }; }
+  const target = Math.hypot(mv.x, mv.y), cur = Math.hypot(mvRampX, mvRampZ);
+  const rate = target > cur + 1e-4 ? 24 : 11; // ~0.06 s to full, ~0.13 s to coast down
+  const k = Math.min(1, dt * rate);
+  mvRampX += (mv.x - mvRampX) * k; mvRampZ += (mv.y - mvRampZ) * k;
+  if (Math.abs(mvRampX) < 1e-3) mvRampX = 0;
+  if (Math.abs(mvRampZ) < 1e-3) mvRampZ = 0;
+  return { x: mvRampX, y: mvRampZ };
+}
 function nearestFoe(g, x, z, range, dirX, dirZ, cone) {
   let best = null, bd = range;
   for (const u of g.units) {
@@ -145,7 +161,7 @@ function nearestFoe(g, x, z, range, dirX, dirZ, cone) {
 }
 function buildInput(g) {
   const h = g.hero;
-  const mv = input.moveVec();
+  const mv = rampMove(input.moveVec(), h.dead);
   const m = screenToWorld(mv.x, mv.y);
   const out = { mx: m.x, mz: m.z, ax: 0, az: 0, fire: false, aimDist: 9 };
   const a = input.aim();
@@ -860,4 +876,20 @@ window.__game = {
   renderer, scene, camera, fx, ui, audio, input, meta,
   get profile() { return meta.loadProfile(); },
   setProfile(p) { meta.saveProfile(Object.assign(meta.loadProfile(), p)); profile = meta.loadProfile(); },
+  // ---- controls / movement test helpers ----
+  // inject screen-space intent: mv {x:right, y:up}, aim { kind:'dir', x, y, fire } (both go through the
+  // real camera-relative pipeline), then step() frames and read heroState() to check on-screen movement.
+  injectInput(mv, aim) { input.inject = { mv: mv || null, aim: aim || null }; },
+  clearInput() { input.inject = null; },
+  dashNow() { input.edge.dash = true; },
+  heroState() {
+    const g = online ? net.view : (game || demo); if (!g) return null;
+    const h = g.hero, sp = new THREE.Vector3(h.x, 1, h.z).project(camera);
+    return {
+      x: h.x, z: h.z, vx: h.vx, vz: h.vz, speed: Math.hypot(h.vx, h.vz),
+      aim: h.aim, aimX: h.aimX, aimZ: h.aimZ, dashT: h.dashT, dashCd: h.dashCd, inv: h.inv, dead: h.dead,
+      heroYaw: heroView ? heroView.yaw : null, team: g.team, camYaw: camYawCur,
+      screen: { x: (sp.x * 0.5 + 0.5) * innerWidth, y: (-sp.y * 0.5 + 0.5) * innerHeight },
+    };
+  },
 };
