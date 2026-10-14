@@ -77,12 +77,20 @@ export const SYNERGIES = [
   { id: 'ricostorm', a: 'bounce', b: 'pierce', name: 'Pinball',      desc: 'Ricochets bounce one extra time' },
 ];
 
-// Random drops from kills.
+// Random drops from kills, plus the ability power-ups that rain onto the floor over time.
 export const PICKUPS = {
   heal:   { name: 'Repair Kit', color: 0x56D364, life: 11 },
   frenzy: { name: 'Frenzy',     color: 0xFFC83D, life: 11, dur: 7 },
   reset:  { name: 'Overdrive',  color: 0x6FA8FF, life: 11 },
+  // Ability power-ups. Walk over one and the hero instantly unleashes that ability — no button, no cooldown gate.
+  // `ability` is which slot fires (q/e/r); the themed name (Flame Wall / Ice Wall …) comes from the hero's team.
+  abil_q: { name: 'Q Ability',  color: 0xB45AFF, life: 10, ability: 'q' },
+  abil_e: { name: 'E Ability',  color: 0x2BE0C8, life: 10, ability: 'e' },
+  abil_r: { name: 'R Ultimate', color: 0xFF4D6E, life: 10, ability: 'r' },
 };
+// The ability-pickup kinds in Q/E/R order, and the slot each one fires.
+export const ABILITY_PICKS = ['abil_q', 'abil_e', 'abil_r'];
+export const ABILITY_KEY = { abil_q: 'q', abil_e: 'e', abil_r: 'r' };
 
 // Random twists that can hit a normal wave: a little surprise every run.
 export const TWISTS = {

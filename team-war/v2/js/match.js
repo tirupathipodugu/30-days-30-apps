@@ -2,7 +2,7 @@
 // game server (server/room-v2.js) runs exactly this file; the page renders the snapshots it sends.
 // Real Team Human heroes fight real Team AI heroes (PvP) while both sides' minion waves march (PvE).
 // Bot heroes fill a side that has fewer players. A match ends when a base falls or after 8 minutes.
-import { ARENA, HERO, KINDS, UPGRADES, UPG, SYNERGIES, PICKUPS, STREAKS, TWISTS, baseZ, fwd, other } from './config.js';
+import { ARENA, HERO, KINDS, UPGRADES, UPG, SYNERGIES, PICKUPS, STREAKS, TWISTS, baseZ, fwd, other, ABILITY_PICKS } from './config.js';
 import { COVER, mulberry32, segCircle, segSeg } from './sim.js';
 import { makeBot, botPick } from './bot.js';
 
@@ -12,7 +12,7 @@ export const MATCH = {
 };
 export const SIDES = ['human', 'ai'];
 export const KIND_LIST = ['grunt', 'runner', 'shooter', 'brute', 'boss'];
-export const PICK_LIST = ['heal', 'frenzy', 'reset'];
+export const PICK_LIST = ['heal', 'frenzy', 'reset', 'abil_q', 'abil_e', 'abil_r'];
 export const SLAM_KINDS = ['slam', 'leap', 'boulder'];
 export const BOSS_STATES = ['walk', 'wind', 'leap', 'recover'];
 const BOT_NAMES = ['Nova', 'Pixel', 'Echo', 'Blaze', 'Volt', 'Rook', 'Juno', 'Sable', 'Orbit', 'Flint', 'Kite', 'Zed', 'Ember', 'Quill'];
@@ -60,7 +60,7 @@ export class Match {
     this.cover = COVER.map((c) => ({ ...c }));
     this.rally = { human: 0, ai: 0 };
     this.bosses = { human: null, ai: null }; this.bossNo = 0; this.bossWarned = 0;
-    this.waveN = 0; this.nextWaveT = 3; this.twist = null; this.xpT = 0;
+    this.waveN = 0; this.nextWaveT = 3; this.twist = null; this.xpT = 0; this.abilT = 6;
     const old = this.heroes;
     this.heroes = [];
     for (const [pid, p] of this.players) this.heroes.push(this.makeHero(p.side, p.name, pid, false));
@@ -308,6 +308,16 @@ export class Match {
       }
     }
     for (const s of SIDES) this.rally[s] = Math.max(0, this.rally[s] - dt);
+    // Ability power-ups rain onto the floor over time; grabbing one unleashes that ability (no Q/E/R buttons).
+    // More live heroes -> spawn more often, so each hero gets one every several seconds rather than a flood.
+    if (this.cfg.waves) {
+      this.abilT -= dt;
+      if (this.abilT <= 0) {
+        const alive = this.heroes.filter((h) => !h.dead).length || 1;
+        this.abilT = Math.max(2.5, (7 + this.rand() * 4) / alive);
+        this.spawnAbilityPickup();
+      }
+    }
     this.xpT += dt;
     const passive = this.xpT >= 1;
     if (passive) this.xpT -= 1;
@@ -792,6 +802,17 @@ export class Match {
     this.pickups.push({ kind, x, z, t: PICKUPS[kind].life, id: this.nid++ });
     this.emit('drop', { kind, x, z });
   }
+  // Spawn one ability power-up at a random floor spot, capped so the arena never floods with them.
+  spawnAbilityPickup() {
+    if (this.pickups.length >= 10) return;
+    let onFloor = 0;
+    for (const p of this.pickups) if (PICKUPS[p.kind].ability) onFloor++;
+    if (onFloor >= 4) return; // a handful at most across the whole arena
+    const kind = ABILITY_PICKS[(this.rand() * ABILITY_PICKS.length) | 0];
+    const x = (this.rand() - 0.5) * 26, z = (this.rand() - 0.5) * 44;
+    this.pickups.push({ kind, x, z, t: PICKUPS[kind].life, id: this.nid++ });
+    this.emit('drop', { kind, x, z });
+  }
   explode(x, z, r, dmg, side, by, kb, kind, stun = 0) {
     for (const u of this.units) {
       if (u.dead || u.side === side) continue;
@@ -998,6 +1019,8 @@ export class Match {
       p.x += (dx / (nd || 1)) * dt * 12; p.z += (dz / (nd || 1)) * dt * 12;
       if (nd < 1.1) {
         p.t = 0;
+        const ability = PICKUPS[p.kind].ability;
+        if (ability) { this.useAbility(near, ability, near.inp); continue; } // fire it now; the 'ability' event drives visuals/sound
         if (p.kind === 'heal') near.hp = Math.min(near.max, near.hp + near.max * 0.35);
         else if (p.kind === 'frenzy') near.frenzy = PICKUPS.frenzy.dur;
         else { near.cd.q = near.cd.e = near.cd.r = 0; near.dashCd = 0; }

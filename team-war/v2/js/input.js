@@ -22,9 +22,7 @@ export class Input {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k) && this.enabled) e.preventDefault();
       if (!e.repeat) {
         if (k === 'ShiftLeft' || k === 'ShiftRight') this.edge.dash = true;
-        if (k === 'KeyQ') this.edge.q = true;
-        if (k === 'KeyE') this.edge.e = true;
-        if (k === 'KeyR') this.edge.r = true;
+        // Q/E/R no longer cast abilities — abilities now come from floor power-ups. Only Dash stays on a key.
         this.emit('key', k);
       }
       this.keys.add(k);
@@ -121,10 +119,7 @@ export class Input {
     const prev = this.pad ? this.pad.btn : [];
     const btn = p.buttons.map((b) => b.pressed);
     const pressed = (i) => btn[i] && !prev[i];
-    if (pressed(0) || pressed(4)) this.edge.dash = true;
-    if (pressed(2)) this.edge.q = true;
-    if (pressed(3)) this.edge.e = true;
-    if (pressed(1) || pressed(5)) this.edge.r = true;
+    if (pressed(0) || pressed(4) || pressed(1) || pressed(5)) this.edge.dash = true; // face/shoulder buttons all dash now
     if (pressed(9)) this.emit('key', 'Escape');
     this.pad = { mx: dz(p.axes[0]), my: -dz(p.axes[1]), ax: dz(p.axes[2] || 0), ay: -dz(p.axes[3] || 0), fire: (p.buttons[7] && p.buttons[7].value > 0.3), btn };
   }

@@ -23,6 +23,8 @@ export class UI {
       banner: $('#banner'), callout: $('#callout'), toasts: $('#toasts'),
       vignette: $('#vignette'), hurt: $('#hurt'), slowmo: $('#slowmo'), lowhp: $('#lowhp'), crosshair: $('#crosshair'),
     };
+    // Abilities are no longer buttons — they fire from floor power-ups — so drop the Q/E/R buttons from the HUD. Dash stays.
+    for (const k of ['q', 'e', 'r']) { const b = document.querySelector('.ab[data-ab="' + k + '"]'); if (b) b.remove(); }
     this.ab = {};
     for (const b of document.querySelectorAll('.ab')) this.ab[b.dataset.ab] = { el: b, cd: b.querySelector('.cd'), sec: b.querySelector('.sec'), ico: b.querySelector('.ico'), ready: true, lastSec: '' };
     this.cache = {};
@@ -57,13 +59,12 @@ export class UI {
     const ic = ICONS[team];
     for (const k of ['dash', 'q', 'e', 'r']) {
       const a = this.ab[k];
+      if (!a) continue; // only Dash remains as a HUD button; Q/E/R are floor power-ups now
       a.ico.textContent = ic[k];
       const name = k === 'dash' ? 'Dash' : T.abilities[k].name;
       a.el.setAttribute('aria-label', name);
       a.el.title = k === 'dash' ? 'Dash (Space)' : `${name} (${k.toUpperCase()}): ${T.abilities[k].desc}`;
     }
-    this.ab.r.el.classList.toggle('locked', !ultUnlocked);
-    this.ab.r.el.querySelector('.key').textContent = ultUnlocked ? 'R' : 'LV ' + ULT_LEVEL;
     this.team = team; this.cache = {};
   }
 
@@ -131,11 +132,11 @@ export class UI {
     if (h.dead) buffs.unshift([`RESPAWN IN ${Math.max(0, h.respawnT).toFixed(1)}s`, '#FF5A5A']);
     const bh = buffs.map(([t, c]) => `<span class="buff" style="--c:${c}">${t}</span>`).join('');
     this.set('buffs', E.buffs, 'innerHTML', bh);
-    // abilities
-    const cd = { dash: [h.dashCd, g.dashCd()], q: [h.cd.q, h.cdMax.q], e: [h.cd.e, h.cdMax.e], r: [h.cd.r, h.cdMax.r] };
+    // abilities — only Dash is a HUD button now; Q/E/R fire from floor power-ups (see the "what fired" toast below)
+    const cd = { dash: [h.dashCd, g.dashCd()] };
     for (const k in cd) {
       const a = this.ab[k];
-      if (k === 'r' && !g.ultUnlocked()) continue;
+      if (!a) continue;
       if (k === 'dash' && g.mod === 'nodash') { a.el.classList.add('locked'); continue; }
       const [c, m] = cd[k];
       const p = c > 0 ? Math.min(1, c / (m || 1)) : 0;
@@ -146,6 +147,8 @@ export class UI {
       const ready = c <= 0;
       if (ready !== a.ready) { a.ready = ready; a.el.classList.toggle('ready', ready); if (ready) { a.el.classList.remove('flash'); void a.el.offsetWidth; a.el.classList.add('flash'); } }
     }
+    // "what fired" note — the sim sets g.note when the hero grabs an ability power-up (e.g. "Flame Wall!")
+    if (g.note && g.note.id !== this._abNote) { this._abNote = g.note.id; this.toast(g.note.text, 'good'); }
     // screen overlays
     this.vig = Math.max(0, this.vig - dt * 1.8); this.hurtV = Math.max(0, this.hurtV - dt * 2.5);
     E.vignette.style.opacity = this.vig.toFixed(2); E.hurt.style.opacity = this.hurtV.toFixed(2);

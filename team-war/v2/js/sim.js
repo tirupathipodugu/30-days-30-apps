@@ -4,7 +4,7 @@
 
 import {
   ARENA, HERO, KINDS, UPGRADES, UPG, SYNERGIES, PICKUPS, STREAKS, MAX_WAVE,
-  baseZ, fwd, other, waveCounts, waveScale, bossWave, TWISTS,
+  baseZ, fwd, other, waveCounts, waveScale, bossWave, TWISTS, TEAMS, ABILITY_PICKS, ABILITY_KEY,
 } from './config.js';
 
 export function mulberry32(seed) {
@@ -66,6 +66,7 @@ export class Game {
     this.slams = []; this.pickups = []; this.booms = [];
     this.cover = COVER.map((c) => ({ ...c }));
     this.queue = []; this.allyT = 0.3; this.rally = 0; this.frenzy = 0;
+    this.abilT = 6; this.note = null; this._noteId = 0; this.lastInp = {}; // ability-pickup spawn timer + "what fired" note
     this.offer = null; this.result = null; this.boss = null; this.bossWarnT = 0;
     this.waveTotal = 0; this.waveDone = 0; this.shotCount = 0;
     this.stats = { shots: 0, dashes: 0, abilities: 0, pickups: 0, dmgTaken: 0, breaches: 0, waveTimes: [], bossKills: 0 };
@@ -245,6 +246,7 @@ export class Game {
   step(dt, input = {}) {
     if (this.phase === 'won' || this.phase === 'lost' || this.phase === 'upgrade') return;
     this.t += dt;
+    this.lastInp = input;
     const h = this.hero;
 
     if (this.phase === 'intro') {
@@ -285,6 +287,11 @@ export class Game {
     this.frenzy = Math.max(0, this.frenzy - dt);
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) { if (this.mult > 1) this.emit('comboLost', { combo: this.combo }); this.combo = 0; this.mult = 1; } }
     if (this.streakT > 0) { this.streakT -= dt; if (this.streakT <= 0) this.streak = 0; }
+    // Ability power-ups drop onto the floor over time — walking over one unleashes the ability (replaces the Q/E/R buttons).
+    if (this.phase === 'fight' || this.phase === 'intro') {
+      this.abilT -= dt;
+      if (this.abilT <= 0) { this.abilT = 7 + this.rand() * 4; this.spawnAbilityPickup(); }
+    }
 
     this.stepHero(dt, input);
     this.stepAllies(dt);
@@ -747,6 +754,25 @@ export class Game {
     this.pickups.push({ kind, x, z, t: PICKUPS[kind].life, id: this.nid++ });
     this.emit('drop', { kind, x, z });
   }
+  // Spawn one ability power-up at a random floor spot. Capped so the arena never floods with them.
+  spawnAbilityPickup() {
+    let onFloor = 0;
+    for (const p of this.pickups) if (PICKUPS[p.kind].ability) onFloor++;
+    if (onFloor >= 2) return;
+    const pool = ABILITY_PICKS.filter((k) => ABILITY_KEY[k] !== 'r' || this.ultUnlocked());
+    const kind = pool[(this.rand() * pool.length) | 0];
+    const x = (this.rand() - 0.5) * 26, z = (this.rand() - 0.5) * 44;
+    this.pickups.push({ kind, x, z, t: PICKUPS[kind].life, id: this.nid++ });
+    this.emit('drop', { kind, x, z });
+  }
+  // A hero grabbed an ability power-up: unleash that ability now (reusing the cast logic + 'ability' event) and note what fired.
+  fireAbilityPickup(k) {
+    const h = this.hero;
+    if (h.dead) return;
+    this.useAbility(k, this.lastInp || {});
+    const ab = TEAMS[this.team].abilities[k];
+    this.note = { id: ++this._noteId, text: (ab ? ab.name : 'Ability') + '!' };
+  }
   explode(x, z, r, dmg, side, byHero, kb, kind, stun = 0) {
     for (const u of this.units) {
       if (u.dead || u.side === side) continue;
@@ -941,6 +967,8 @@ export class Game {
       if (d < 3.2) { p.x += (dx / (d || 1)) * dt * 12; p.z += (dz / (d || 1)) * dt * 12; }
       if (d < 1.1) {
         p.t = 0; p.got = true; this.stats.pickups++;
+        const ability = PICKUPS[p.kind].ability;
+        if (ability) { this.fireAbilityPickup(ability); continue; } // the 'ability' event drives visuals/sound; note drives the toast
         if (p.kind === 'heal') h.hp = Math.min(h.max, h.hp + h.max * 0.35);
         else if (p.kind === 'frenzy') this.frenzy = PICKUPS.frenzy.dur;
         else if (p.kind === 'reset') { h.cd.q = h.cd.e = h.cd.r = 0; h.dashCd = 0; }

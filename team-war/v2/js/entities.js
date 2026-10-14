@@ -5,8 +5,8 @@ import { Crowd, rootMatrix, additive, glowMat, toon, GEO, TIME, contactShadowMat
 import { minionModel, PAL } from './models.js';
 import { KINDS, PICKUPS } from './config.js';
 
-// visual size of minions vs their collision radius: bigger so they read from the fixed wide camera
-const VIS_SCALE = 1.5;
+// visual size of minions vs their collision radius: a touch bigger than life so they read from the fixed wide camera
+const VIS_SCALE = 1.2;
 const MAXES = { grunt: 90, runner: 70, shooter: 45, brute: 30, boss: 2 };
 const _root = new THREE.Matrix4(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0), _right = new THREE.Vector3();
@@ -225,13 +225,13 @@ export class Entities {
       }
       // soft contact shadow under the unit (a touch bigger than its footprint), grounds it on the arena
       if (nsh < 300) {
-        const sr = u.r * (u.kind === 'boss' ? 3.4 : u.kind === 'brute' || u.elite ? 2.7 : 2.1) * Math.max(0.2, pop);
+        const sr = u.r * (u.kind === 'boss' ? 2.8 : u.kind === 'brute' || u.elite ? 2.2 : 1.7) * Math.max(0.2, pop);
         _m.compose(_v.set(u.x, 0.035 + y * 0.02, u.z), _q.identity(), _s.set(sr, 1, sr));
         this.shadows.setMatrixAt(nsh++, _m);
       }
       // team-coloured ground ring so sides read at a glance from the wide camera (gold for elites)
       if (nm < 240) {
-        const rr = u.r * (u.elite ? 1.7 : 1.35);
+        const rr = u.r * (u.elite ? 1.4 : 1.12);
         _m.compose(_v.set(u.x, 0.05, u.z), _q.identity(), _s.set(rr, 1, rr)); this.marks.setMatrixAt(nm, _m);
         if (u.elite) _c.setHex(0xFFC83D); else _c.setHex(u.side === 'human' ? 0xFF6A1E : 0x4FC8FF).multiplyScalar(u.ally ? 0.5 : 0.32);
         this.marks.setColorAt(nm, _c); nm++;
@@ -258,7 +258,7 @@ export class Entities {
       st.mv = 0; st.swing = 0; st.ph = 0; st.recoil = 0; st.seed = d.id;
       rootMatrix(_root, d.x, d.y + sink, d.z, d.face, sc, sc * (1 - e * 0.25), sc, fall, Math.sin(d.id) * 0.4 * e);
       this.crowd(d.key).add(_root, st, Math.max(0, 1 - k * 2.5), d.elite);
-      if (nsh < 300) { const sr = Math.max(0.01, sc * 2.1); _m.compose(_v.set(d.x, 0.035, d.z), _q.identity(), _s.set(sr, 1, sr)); this.shadows.setMatrixAt(nsh++, _m); }
+      if (nsh < 300) { const sr = Math.max(0.01, sc * 1.7); _m.compose(_v.set(d.x, 0.035, d.z), _q.identity(), _s.set(sr, 1, sr)); this.shadows.setMatrixAt(nsh++, _m); }
     }
     this.shadows.count = nsh; this.shadows.instanceMatrix.needsUpdate = true;
     for (const c of this.crowds.values()) c.end();
@@ -355,14 +355,16 @@ export class Entities {
       const s = g.pickups[i];
       p.g.visible = !!s;
       if (!s) return;
-      const col = PICKUPS[s.kind].color;
-      p.gem.material.color.setHex(col); p.gem.material.emissive.setHex(col).multiplyScalar(0.35);
+      const def = PICKUPS[s.kind], col = def.color, ab = !!def.ability; // ability power-ups read bigger/brighter + a taller spinning crystal
+      p.gem.material.color.setHex(col); p.gem.material.emissive.setHex(col).multiplyScalar(ab ? 0.6 : 0.35);
       p.halo.material.color.setHex(col); p.beam.material.color.setHex(col); p.ring.material.color.setHex(col);
+      p.halo.material.opacity = ab ? 0.42 : 0.25; p.beam.material.opacity = ab ? 0.3 : 0.18;
+      p.gem.scale.set(ab ? 0.82 : 0.7, ab ? 1.35 : 1, ab ? 0.82 : 0.7);
       p.g.position.set(s.x, 0, s.z);
-      p.gem.rotation.y = t * 2.5; p.gem.position.y = 1.1 + Math.sin(t * 4 + i) * 0.18;
+      p.gem.rotation.y = t * (ab ? 3.6 : 2.5); p.gem.position.y = 1.1 + Math.sin(t * 4 + i) * 0.18;
       const blink = s.t < 3 ? (Math.floor(t * 8) % 2 ? 0.3 : 1) : 1;
-      p.g.scale.setScalar(blink === 0.3 ? 0.85 : 1);
-      p.ring.scale.setScalar(1 + ((t * 1.5) % 1) * 0.6);
+      p.g.scale.setScalar((ab ? 1.28 : 1) * (blink === 0.3 ? 0.85 : 1));
+      p.ring.scale.setScalar(1 + ((t * (ab ? 2.2 : 1.5)) % 1) * (ab ? 0.95 : 0.6));
     });
   }
 }
