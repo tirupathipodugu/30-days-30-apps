@@ -4,7 +4,7 @@
 // Elemental motion is done with scrolling emissive/normal shaders and pooled point particles — not a real
 // fluid sim — so it reads believable from the fixed camera without a GPU-heavy simulation.
 import * as THREE from 'three';
-import { toon, glowMat, additive, GEO, Baker, M4, TIME, GLOW } from './gfx.js';
+import { toon, glowMat, additive, GEO, Baker, M4, TIME, GLOW, contactShadowMat, SHADOW_PLANE } from './gfx.js';
 import { ARENA } from './config.js';
 import { mulberry32 } from './sim.js';
 
@@ -14,9 +14,11 @@ function vnoise(x, z) {
   return (Math.sin(x * 0.21 + Math.sin(z * 0.13) * 2) + Math.sin(z * 0.17 + Math.cos(x * 0.11) * 2) + Math.sin((x + z) * 0.37) * 0.5) / 2.5;
 }
 
-// palettes
-const FIRE = { rock: 0x2A1E1E, rockD: 0x1A1214, rockL: 0x3E2C28, obsid: 0x241A22, lava: 0xFF5A14, lavaHot: 0xFFC040, ember: 0xFF7A2A, scorch: 0x120C0C };
-const WATER = { ice: 0xBFE6FF, iceD: 0x7FB8DA, deep: 0x0C3C5C, surf: 0x1E8FC0, foam: 0xEAFBFF, coral: 0x2CC0D6, crystal: 0x8FE8F2 };
+// palettes — focused 5-ish colours per side with one mood anchor (fire = warm amber, water = cool teal) and
+// a real value range (clear darks + a few brights), not muddy equal mid-tones.
+const FIRE = { rock: 0x33231F, rockD: 0x1C1416, rockL: 0x4A342C, obsid: 0x281C26, lava: 0xFF5A14, lavaHot: 0xFFC040, ember: 0xFF7A2A, scorch: 0x140D0C };
+// water pulled down from near-white into readable teal mid-tones so forms read and the half stops looking washed out
+const WATER = { ice: 0x8FC8E6, iceD: 0x568FB2, deep: 0x0C3C5C, surf: 0x1C7FB0, foam: 0xCDEBF5, coral: 0x27B4CC, crystal: 0x8FE8F2 };
 
 // ---------------- arena floor canvas (basalt | ice) + a lava crack mask ----------------
 function floorTexture(maxAniso) {
@@ -68,18 +70,18 @@ function floorTexture(maxAniso) {
   // a glowing channel straight down from the fortress gate
   crack(0, BZ - 5, 2.6, 0.5, 11);
 
-  // ---- WATER half (z < 0): pale rippled ice ----
-  g.fillStyle = '#A9D8EC'; g.fillRect(0, 0, c.width, Z(1));
+  // ---- WATER half (z < 0): rippled ice, mid-toned teal (not near-white) so it carries value contrast ----
+  g.fillStyle = '#6FA6C2'; g.fillRect(0, 0, c.width, Z(1));
   { const lg = g.createLinearGradient(0, Z(-6), 0, Z(2)); // shoreline where ice meets basalt
-    lg.addColorStop(0, '#A9D8EC'); lg.addColorStop(0.5, '#8FB7C4'); lg.addColorStop(1, '#4A3B36');
+    lg.addColorStop(0, '#6FA6C2'); lg.addColorStop(0.5, '#5E8494'); lg.addColorStop(1, '#3B2E2A');
     g.fillStyle = lg; g.fillRect(0, Z(-6), c.width, Z(2) - Z(-6)); }
-  for (let i = 0; i < 1600; i++) { // ice sheen + deeper patches
+  for (let i = 0; i < 1600; i++) { // ice sheen + deeper patches (fewer blown-out whites, more deep teal)
     const x = R() * c.width, y = Z(-Lh) + R() * (Z(1) - Z(-Lh));
     const v = R();
-    g.fillStyle = v < 0.5 ? 'rgba(120,190,215,0.22)' : v < 0.82 ? 'rgba(235,250,255,0.22)' : 'rgba(40,120,160,0.2)';
+    g.fillStyle = v < 0.5 ? 'rgba(80,150,180,0.26)' : v < 0.82 ? 'rgba(205,235,248,0.16)' : 'rgba(20,86,124,0.3)';
     g.beginPath(); g.ellipse(x, y, 8 + R() * 34, 5 + R() * 18, R() * 3, 0, 7); g.fill();
   }
-  g.lineWidth = 2.2; g.strokeStyle = 'rgba(235,250,255,0.5)'; // ice cracks
+  g.lineWidth = 2.2; g.strokeStyle = 'rgba(225,242,250,0.32)'; // ice cracks
   for (let i = 0; i < 90; i++) {
     let x = (R() - 0.5) * FW, z = -Lh + R() * (Lh + 1), ang = R() * 7;
     g.beginPath(); g.moveTo(X(x), Z(z));
@@ -116,8 +118,9 @@ function lavaOverlay(mask) {
         float flow = fract(t.g - uTime * 0.18);
         float pulse = smoothstep(0.55, 1.0, flow) * (0.6 + 0.4 * sin(uTime * 2.0 + t.g * 30.0));
         float node = t.b * (0.7 + 0.3 * sin(uTime * 4.0 + vUv.x * 60.0));
-        float heat = crack * (0.5 + pulse * 1.6) + node * 2.2;
-        vec3 col = mix(vec3(1.6, 0.25, 0.03), vec3(1.9, 1.1, 0.25), smoothstep(0.6, 1.8, heat));
+        // calmer veins: lower heat so the lava network reads as a few molten seams, not a loud glowing web
+        float heat = crack * (0.34 + pulse * 1.05) + node * 1.5;
+        vec3 col = mix(vec3(1.4, 0.22, 0.03), vec3(1.75, 1.0, 0.22), smoothstep(0.6, 1.8, heat));
         gl_FragColor = vec4(col * heat, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -142,13 +145,13 @@ function waterOverlay() {
         // moving caustic web
         float a = n(q + vec2(0.0, uTime * 0.25));
         float b = n(q * 1.9 - vec2(uTime * 0.18, 0.0));
-        float caustic = pow(smoothstep(0.55, 0.95, a) + smoothstep(0.6, 0.98, b), 1.5);
+        float caustic = pow(smoothstep(0.6, 0.98, a) + smoothstep(0.64, 1.0, b), 1.5) * 0.6;
         // foam at the centre clash line and near the base
         float foam = smoothstep(2.2, 0.0, abs(vW.z)) * (0.5 + 0.5 * n(q * 3.0 + uTime * 0.6));
         foam += smoothstep(8.0, 4.0, abs(vW.z + ${BZ.toFixed(1)})) * 0.3 * n(q * 2.0 - uTime * 0.4);
-        float alpha = caustic * 0.18 + foam * 0.5;
-        vec3 col = mix(vec3(0.6, 0.9, 1.0), vec3(1.0), foam);
-        gl_FragColor = vec4(col * (caustic * 0.8 + foam * 1.4), clamp(alpha, 0.0, 0.7));
+        float alpha = caustic * 0.12 + foam * 0.34;
+        vec3 col = mix(vec3(0.42, 0.74, 0.92), vec3(0.92, 0.98, 1.0), foam);
+        gl_FragColor = vec4(col * (caustic * 0.55 + foam * 1.0), clamp(alpha, 0.0, 0.55));
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -484,7 +487,7 @@ function buildSteam(scene, count) {
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: `varying float vA;
-      void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.05, d); gl_FragColor = vec4(vec3(0.9, 0.94, 0.97), a * vA * 0.26); }`,
+      void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.05, d); gl_FragColor = vec4(vec3(0.86, 0.9, 0.95), a * vA * 0.15); }`,
   });
   const pts = new THREE.Points(g, mat); pts.frustumCulled = false; pts.renderOrder = 7;
   scene.add(pts); return mat;
@@ -560,6 +563,16 @@ export function buildWorld(scene, renderer, cover, detail = 1) {
   scene.add(volcano, ...citadel.falls, ...citadel.rings, citadel.core);
   for (const c of fort.cracks) scene.add(c);
   for (const c of citadel.cracks) scene.add(c);
+
+  // contact shadows ground the big static set pieces (bases + cover) — one instanced mesh, so it's a single
+  // draw call rather than one per piece, keeping us inside the draw-call budget.
+  const staticShadows = [[0, BZ + 0.6, 26, 0.05], [0, -BZ - 0.4, 26, 0.05]];
+  for (const c of cover) staticShadows.push([c.x, c.z, c.r * 3.4, 0.045]);
+  const shMesh = new THREE.InstancedMesh(SHADOW_PLANE, contactShadowMat(0.8), staticShadows.length);
+  shMesh.renderOrder = 1; shMesh.frustumCulled = false;
+  const _sm = new THREE.Matrix4();
+  staticShadows.forEach(([x, z, r, y], i) => { _sm.makeScale(r, 1, r); _sm.setPosition(x, y, z); shMesh.setMatrixAt(i, _sm); });
+  shMesh.instanceMatrix.needsUpdate = true; scene.add(shMesh);
 
   // fire gouts erupting from the fortress
   const goutMat = additive(FIRE.lava, 0.95, 2.6), goutCore = additive(FIRE.lavaHot, 0.95, 2.6);

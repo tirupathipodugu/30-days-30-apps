@@ -70,6 +70,26 @@ export function additive(color = 0xffffff, opacity = 1, boost = 2) {
   return m;
 }
 
+// A soft radial-gradient "contact shadow" blob laid flat under a unit/hero/building so it sits in the world
+// instead of floating. The single biggest cheap grounding trick; rendered as a dark, fading disc.
+let _shadowTex = null;
+export function contactShadowTexture() {
+  if (_shadowTex) return _shadowTex;
+  const s = 128, c = document.createElement('canvas'); c.width = c.height = s;
+  const g = c.getContext('2d');
+  const rg = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+  rg.addColorStop(0, 'rgba(0,0,0,0.58)'); rg.addColorStop(0.45, 'rgba(0,0,0,0.3)');
+  rg.addColorStop(0.75, 'rgba(0,0,0,0.1)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, s, s);
+  _shadowTex = new THREE.CanvasTexture(c); _shadowTex.colorSpace = THREE.SRGBColorSpace;
+  return _shadowTex;
+}
+// A flat, ground-facing disc material for contact shadows (dark, soft, doesn't write depth).
+export function contactShadowMat(opacity = 0.9) {
+  return new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, depthWrite: false, opacity, toneMapped: false, color: 0x000000 });
+}
+export const SHADOW_PLANE = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+
 // ---------- geometry ----------
 function roundedBox(r = 0.22, seg = 4) {
   const g = new THREE.BoxGeometry(1, 1, 1, seg, seg, seg);

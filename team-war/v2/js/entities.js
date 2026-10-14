@@ -1,7 +1,7 @@
 // Draws everything the simulation owns except the hero: minions (instanced), shots, telegraphs,
 // shield walls, firewalls, drones, pickups and health bars.
 import * as THREE from 'three';
-import { Crowd, rootMatrix, additive, glowMat, toon, GEO, TIME } from './gfx.js';
+import { Crowd, rootMatrix, additive, glowMat, toon, GEO, TIME, contactShadowMat, SHADOW_PLANE } from './gfx.js';
 import { minionModel, PAL } from './models.js';
 import { KINDS, PICKUPS } from './config.js';
 
@@ -82,6 +82,11 @@ export class Entities {
     this.barBg = instanced(scene, new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true, opacity: 0.85, toneMapped: false }), 160);
     this.barFg = instanced(scene, new THREE.PlaneGeometry(1, 1).translate(0.5, 0, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true, opacity: 1, toneMapped: false }), 160);
     this.barBg.renderOrder = 10; this.barFg.renderOrder = 11;
+    // soft contact-shadow blobs under every unit — grounds them so they stop "floating" on the arena
+    this.shadows = new THREE.InstancedMesh(SHADOW_PLANE, contactShadowMat(0.85), 300);
+    this.shadows.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.shadows.frustumCulled = false; this.shadows.count = 0; this.shadows.renderOrder = 1;
+    scene.add(this.shadows);
     // elite / ally markers on the ground
     this.marks = instanced(scene, new THREE.RingGeometry(0.72, 1, 28).rotateX(-Math.PI / 2), additive(0xffffff, 0.75), 240);
     this.dying = []; this.seen = new Map(); this.alive = new Set();
@@ -161,7 +166,7 @@ export class Entities {
     this.lastT = t;
     if (g !== this.lastG) { this.lastG = g; this.seen.clear(); this.dying.length = 0; }
     for (const c of this.crowds.values()) c.begin();
-    let nb = 0, nm = 0;
+    let nb = 0, nm = 0, nsh = 0;
     const camQ = camera.quaternion;
     const bgC = new THREE.Color(0x1a1a1a);
     for (const u of g.units) {
@@ -218,6 +223,12 @@ export class Entities {
         this.barFg.setColorAt(nb, _c.setHex(u.ally ? 0x8CFF7A : u.elite ? 0xFFC83D : 0xFF4D4D));
         nb++;
       }
+      // soft contact shadow under the unit (a touch bigger than its footprint), grounds it on the arena
+      if (nsh < 300) {
+        const sr = u.r * (u.kind === 'boss' ? 3.4 : u.kind === 'brute' || u.elite ? 2.7 : 2.1) * Math.max(0.2, pop);
+        _m.compose(_v.set(u.x, 0.035 + y * 0.02, u.z), _q.identity(), _s.set(sr, 1, sr));
+        this.shadows.setMatrixAt(nsh++, _m);
+      }
       // team-coloured ground ring so sides read at a glance from the wide camera (gold for elites)
       if (nm < 240) {
         const rr = u.r * (u.elite ? 1.7 : 1.35);
@@ -247,7 +258,9 @@ export class Entities {
       st.mv = 0; st.swing = 0; st.ph = 0; st.recoil = 0; st.seed = d.id;
       rootMatrix(_root, d.x, d.y + sink, d.z, d.face, sc, sc * (1 - e * 0.25), sc, fall, Math.sin(d.id) * 0.4 * e);
       this.crowd(d.key).add(_root, st, Math.max(0, 1 - k * 2.5), d.elite);
+      if (nsh < 300) { const sr = Math.max(0.01, sc * 2.1); _m.compose(_v.set(d.x, 0.035, d.z), _q.identity(), _s.set(sr, 1, sr)); this.shadows.setMatrixAt(nsh++, _m); }
     }
+    this.shadows.count = nsh; this.shadows.instanceMatrix.needsUpdate = true;
     for (const c of this.crowds.values()) c.end();
     for (const im of [this.barBg, this.barFg]) { im.count = nb; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; }
     this.marks.count = nm; this.marks.instanceMatrix.needsUpdate = true; if (nm) this.marks.instanceColor.needsUpdate = true;

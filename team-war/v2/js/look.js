@@ -39,14 +39,9 @@ class OutlinePass extends Pass {
           float d = max(max(a - c, b - c), max(e - c, f - c));
           float k = clamp(c / 60.0, 0.6, 1.6);
           float edge = smoothstep(0.45 * k, 0.95 * k, d) * (1.0 - smoothstep(far * 0.55, far * 0.8, c));
+          // ink edges only — colour grade + vignette now happen in GradePass after tone mapping
           vec3 ink = col.rgb * vec3(0.16, 0.13, 0.17);
           vec3 o2 = mix(col.rgb, ink, edge * strength);
-          // grade: a little extra saturation and a soft warm vignette, like a film frame
-          float l = dot(o2, vec3(0.2126, 0.7152, 0.0722));
-          o2 = mix(vec3(l), o2, 1.12);
-          vec2 q = (vUv - 0.5) * vec2(aspect, 1.0);
-          float vig = smoothstep(1.05, 0.35, length(q));
-          o2 *= mix(vec3(0.62, 0.58, 0.66), vec3(1.0), vig);
           gl_FragColor = vec4(o2, col.a);
         }`,
     }));
@@ -59,6 +54,51 @@ class OutlinePass extends Pass {
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
     this.fsQuad.render(renderer);
   }
+}
+
+// Colour grade + vignette (+ optional film grain), run AFTER tone mapping on the display-referred image.
+// One warm, filmic grade unifies the fire/water palette into a single world: gentle contrast, a warm/cool
+// split-tone (warm highlights, cool shadows), a touch of saturation, and a soft vignette to focus the centre.
+class GradePass extends ShaderPass {
+  constructor(opts = {}) {
+    super({
+      uniforms: {
+        tDiffuse: { value: null }, uTime: { value: 0 }, aspect: { value: 1.6 },
+        contrast: { value: 1.12 }, saturation: { value: 1.12 }, warmth: { value: 0.78 },
+        lift: { value: 0.012 }, vignette: { value: 0.34 }, grain: { value: 0.0 },
+      },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: /* glsl */`
+        uniform sampler2D tDiffuse; uniform float uTime, aspect, contrast, saturation, warmth, lift, vignette, grain;
+        varying vec2 vUv;
+        void main() {
+          vec3 col = texture2D(tDiffuse, vUv).rgb;
+          // filmic S-curve contrast about mid-grey, then lift the deepest shadows a hair so darks aren't crushed
+          col = (col - 0.5) * contrast + 0.5;
+          col += lift * (1.0 - smoothstep(0.0, 0.5, col));
+          float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+          // split-tone: warm (amber) highlights, cool (teal) shadows — the classic "one world" cinema grade
+          col = mix(col, col * vec3(1.055, 1.005, 0.93), smoothstep(0.45, 1.0, l) * warmth);
+          col = mix(col, col * vec3(0.95, 1.0, 1.06), smoothstep(0.5, 0.0, l) * 0.55 * warmth);
+          // overall warm bias + saturation
+          col += vec3(0.018, 0.006, -0.012) * warmth;
+          col = mix(vec3(l), col, saturation);
+          // soft vignette to focus the arena
+          vec2 q = (vUv - 0.5) * vec2(aspect, 1.0);
+          float vig = smoothstep(0.98, 0.34, length(q));
+          col *= mix(1.0, vig, vignette);
+          // very subtle animated grain (high tier only) — hides banding, adds a filmic texture
+          if (grain > 0.0) {
+            float n = fract(sin(dot(vUv * (uTime * 60.0 + 1.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+            col += n * grain;
+          }
+          gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+        }`,
+    });
+    this.grainOn = !!opts.grain;
+    this.uniforms.grain.value = opts.grain ? 0.022 : 0.0;
+  }
+  setSize(w, h) { this.uniforms.aspect.value = w / h; }
 }
 
 function skyDome() {
@@ -77,10 +117,12 @@ function skyDome() {
   return m;
 }
 
+// grade (warm filmic LUT-style grade + vignette) and fog are cheap, so they run on EVERY tier. Bloom, the
+// ink outline, FXAA, film grain and high-res shadows are gated up. Low still gets one cheap grade pass.
 export const TIERS = {
-  high: { post: true, outline: true, bloom: true, fxaa: true, shadow: 2048, soft: true, pr: 2, detail: 1 },
-  medium: { post: true, outline: true, bloom: true, fxaa: false, shadow: 1536, soft: true, pr: 1.5, detail: 0.7 },
-  low: { post: false, outline: false, bloom: false, fxaa: false, shadow: 1024, soft: false, pr: 1.25, detail: 0.45 },
+  high: { grade: true, grain: true, outline: true, bloom: true, fxaa: true, shadow: 2048, soft: true, pr: 2, detail: 1 },
+  medium: { grade: true, grain: false, outline: true, bloom: true, fxaa: false, shadow: 1536, soft: true, pr: 1.5, detail: 0.7 },
+  low: { grade: true, grain: false, outline: false, bloom: false, fxaa: false, shadow: 1024, soft: false, pr: 1.25, detail: 0.45 },
 };
 
 export function createLook(renderer, scene, camera, lowEnd) {
@@ -91,54 +133,67 @@ export function createLook(renderer, scene, camera, lowEnd) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.info.autoReset = false; // count every pass of a frame together
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.96;
+  renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = tier.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
 
   scene.background = new THREE.Color(SKY_HORIZON);
-  scene.fog = new THREE.Fog(HAZE, 95, 190);
+  // FogExp2 matched to the horizon colour: kept light so the arena stays crisp and only the far
+  // background (volcanoes, ocean, diorama edges) melts into the sky — depth & mood without hazing the subject.
+  scene.fog = new THREE.FogExp2(HAZE, 0.003);
   scene.add(skyDome());
 
-  // environment map for speculars on water, metal and gems
+  // environment map for speculars on water, metal and gems (kept dim so it fills, not washes)
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.3;
+  scene.environmentIntensity = 0.2;
   pmrem.dispose();
 
-  // lights: warm low sun (long soft shadows), cool sky fill, hemisphere bounce
-  const hemi = new THREE.HemisphereLight(0xC9E2FF, 0x6E5A3E, 1.25);
-  const sun = new THREE.DirectionalLight(0xFFD6A3, 3.4);
-  sun.position.set(34, 36, 30); sun.target.position.set(0, 0, 0);
+  // Artist lighting: one warm directional KEY (the sun, shadow caster), a dim cool hemisphere/dir FILL
+  // (~4:1 key:fill so forms read 3D, not flat), and a cool RIM/back light so units separate from the ground.
+  const hemi = new THREE.HemisphereLight(0xBBD6FF, 0x4A3A2E, 0.5);
+  const sun = new THREE.DirectionalLight(0xFFCF9E, 3.9);
+  sun.position.set(34, 40, 30); sun.target.position.set(0, 0, 0);
   sun.castShadow = true;
   sun.shadow.mapSize.set(tier.shadow, tier.shadow);
-  Object.assign(sun.shadow.camera, { left: -46, right: 46, top: 50, bottom: -50, near: 10, far: 120 });
-  sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.04; sun.shadow.radius = 3;
-  const fill = new THREE.DirectionalLight(0x9CC2FF, 0.9); fill.position.set(-30, 18, -26);
-  scene.add(hemi, sun, sun.target, fill);
+  // tightened frustum (hugs the arena + bases) so shadow texels aren't wasted on empty sky
+  Object.assign(sun.shadow.camera, { left: -38, right: 38, top: 44, bottom: -44, near: 12, far: 125 });
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.045; sun.shadow.radius = 3.2;
+  const fill = new THREE.DirectionalLight(0x8FB4FF, 0.32); fill.position.set(-30, 18, -26);
+  // rim / back light opposite the key: a cool edge that lifts silhouettes off the background
+  const rim = new THREE.DirectionalLight(0xDDEBFF, 1.15); rim.position.set(-22, 26, -40); rim.target.position.set(0, 2, 0);
+  scene.add(hemi, sun, sun.target, fill, rim, rim.target);
 
   // post
-  let composer = null, outline = null, bloom = null, fxaa = null;
+  let composer = null, outline = null, bloom = null, fxaa = null, grade = null;
   const size = new THREE.Vector2();
   function buildComposer() {
     if (composer) { composer.renderTarget1.dispose(); composer.renderTarget2.dispose(); composer = null; }
-    if (!tier.post) return;
+    outline = bloom = fxaa = grade = null;
     renderer.getSize(size);
     const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType });
-    rt.depthTexture = new THREE.DepthTexture(size.x, size.y);
-    rt.depthTexture.type = THREE.UnsignedIntType;
+    if (tier.outline) { // the ink pass reads scene depth; only allocate a depth buffer when it's on
+      rt.depthTexture = new THREE.DepthTexture(size.x, size.y);
+      rt.depthTexture.type = THREE.UnsignedIntType;
+    }
     composer = new EffectComposer(renderer, rt);
-    // a cloned depth texture shares its GPU source with the original; give the second buffer its own
-    composer.renderTarget2.depthTexture = new THREE.DepthTexture(size.x, size.y);
-    composer.renderTarget2.depthTexture.type = THREE.UnsignedIntType;
+    if (tier.outline) {
+      // a cloned depth texture shares its GPU source with the original; give the second buffer its own
+      composer.renderTarget2.depthTexture = new THREE.DepthTexture(size.x, size.y);
+      composer.renderTarget2.depthTexture.type = THREE.UnsignedIntType;
+    }
     composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(size.x, size.y);
     composer.addPass(new RenderPass(scene, camera));
     if (tier.outline) { outline = new OutlinePass(camera); composer.addPass(outline); }
     if (tier.bloom) {
-      bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.32, 0.5, 1.5);
+      // selective bloom: high threshold so only emissive / out-of-range things (lava, visors, FX) glow,
+      // and a gentle strength so the frame stays clean rather than hazed.
+      bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.26, 0.62, 1.9);
       composer.addPass(bloom);
     }
-    composer.addPass(new OutputPass());
+    composer.addPass(new OutputPass()); // tone map + sRGB
+    if (tier.grade) { grade = new GradePass({ grain: tier.grain }); composer.addPass(grade); } // warm filmic grade + vignette
     if (tier.fxaa) { fxaa = new ShaderPass(FXAAShader); composer.addPass(fxaa); }
     resize();
   }
@@ -168,18 +223,22 @@ export function createLook(renderer, scene, camera, lowEnd) {
     renderer.shadowMap.type = tier.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
     sun.shadow.mapSize.set(tier.shadow, tier.shadow);
-    outline = bloom = fxaa = null;
     buildComposer();
     cool = 4;
   }
 
   return {
-    sun, hemi, fill,
+    sun, hemi, fill, rim,
     get tier() { return tierName; }, get detail() { return tier.detail; }, get maxPR() { return tier.pr; },
     setTier, adapt, resize,
-    // haze starts just past the arena so the diorama edges melt into the sky colour
-    fitFog() { const d = camera.position.length(); scene.fog.near = d * 1.2; scene.fog.far = d * 2.6; },
-    render() { renderer.info.reset(); if (composer) composer.render(); else renderer.render(scene, camera); },
+    // exponential haze scaled to the camera distance: the arena stays clear while the diorama edges and
+    // the far volcanoes / ocean melt into the sky colour (hides pop-in, adds depth & mood).
+    fitFog() { const d = camera.position.length() || 80; scene.fog.density = Math.min(0.01, Math.max(0.0016, 0.17 / d)); },
+    render() {
+      renderer.info.reset();
+      if (grade && grade.grainOn) grade.uniforms.uTime.value = performance.now() * 0.001;
+      if (composer) composer.render(); else renderer.render(scene, camera);
+    },
   };
 }
 

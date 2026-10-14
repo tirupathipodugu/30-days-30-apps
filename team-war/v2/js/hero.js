@@ -3,7 +3,7 @@
 // Procedural animation: walk cycle with squash & stretch, idle breathing, blinking, lean, recoil kick,
 // dash stretch, cape follow-through, hurt flash. A floating team marker keeps the hero easy to find.
 import * as THREE from 'three';
-import { toon, glowMat, additive, GEO, Baker, M4, GLOW, GRADIENT, blinkAt, TIME } from './gfx.js';
+import { toon, glowMat, additive, GEO, Baker, M4, GLOW, GRADIENT, blinkAt, TIME, contactShadowMat, SHADOW_PLANE } from './gfx.js';
 import { PAL } from './models.js';
 
 // Fire hero = a dark ember body overlaid with a climbing flame glow; Water hero = a pale translucent body
@@ -59,6 +59,9 @@ export class Hero {
     this.finishBones();
     // ground marker: a bold glowing ring with a bright inner disc, an expanding "sonar" pulse,
     // an aim chevron, and a spinning gem overhead — so the player's own hero is never in doubt.
+    // soft contact shadow so the hero sits on the ground under its glowing ring
+    this.shadow = new THREE.Mesh(SHADOW_PLANE, contactShadowMat(0.85));
+    this.shadow.position.y = 0.03; this.shadow.scale.set(2.3, 1, 2.3); this.shadow.renderOrder = 1; this.root.add(this.shadow);
     const tc = team === 'human' ? 0xFFB070 : 0x6FFFEA;
     const ringMat = additive(tc, 0.85, 2.0);
     this.ring = new THREE.Mesh(new THREE.RingGeometry(0.82, 1.12, 48).rotateX(-Math.PI / 2), ringMat);
