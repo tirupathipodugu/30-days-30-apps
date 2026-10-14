@@ -12,5 +12,12 @@
     "hook": "A heart that beats on your screen. Block an artery and try to save it.",
     "path": "living-heart/",
     "tweet": "2109857383128461454"
+  },
+  {
+    "day": 3,
+    "name": "Skin Check",
+    "hook": "Scan your face in 10 seconds and see what your skin actually needs.",
+    "path": "skin-check/",
+    "tweet": "2110373097316794852"
   }
 ]
