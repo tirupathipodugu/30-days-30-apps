@@ -17,26 +17,34 @@ function noise(seed){const p=[rnd(0,6.28),rnd(0,6.28),rnd(0,6.28)];return t=>(Ma
 function buildArm(side){
   const g=$(side<0?'armL':'armR');
   const sx=side*80, sy=-36;
+  // one continuous sleeve: shoulder->elbow->wrist drawn as round-joined strokes in the same fill (updated per frame)
+  const sleeveDark=el('path',{fill:'none',stroke:'#b8702f','stroke-width':31.5,'stroke-linecap':'round','stroke-linejoin':'round'},g);
+  const sleeve=el('path',{fill:'none',stroke:'#d98b3a','stroke-width':29,'stroke-linecap':'round','stroke-linejoin':'round'},g);
+  const sleeveKnit=el('path',{fill:'none',stroke:'url(#knit)','stroke-width':29,'stroke-linecap':'round','stroke-linejoin':'round'},g);
+  const sleeveHi=el('path',{fill:'none',stroke:'#f6c27a','stroke-opacity':.22,'stroke-width':5,'stroke-linecap':'round','stroke-linejoin':'round'},g);
+  // shawl drapes over the top of the sleeve, so the arm reads as coming out from under it
+  el('ellipse',{cx:side*-3,cy:-2,rx:17,ry:17,fill:'#d98b3a'},g);
+  el('ellipse',{cx:side*-3,cy:-2,rx:17,ry:17,fill:'url(#knit)'},g);
   const up=el('g',{},g);
-  el('path',{d:'M-17 -6 Q-19 50 -14 96 L14 96 Q19 50 17 -6 Q0 -16 -17 -6 Z',fill:'url(#sleeveG)'},up);
-  el('path',{d:'M-17 -6 Q-19 50 -14 96 L14 96 Q19 50 17 -6 Q0 -16 -17 -6 Z',fill:'url(#knit)'},up);
   const fo=el('g',{},up);
-  el('circle',{cx:0,cy:0,r:14.5,fill:'#cf7f33'},fo);
-  el('path',{d:'M-14 0 Q-14 44 -11 80 L11 80 Q14 44 14 0 Z',fill:'url(#sleeveG)'},fo);
-  el('path',{d:'M-14 0 Q-14 44 -11 80 L11 80 Q14 44 14 0 Z',fill:'url(#knit)'},fo);
-  el('rect',{x:-13,y:72,width:26,height:10,rx:5,fill:'#f6d48f'},fo);
   const hand=el('g',{},fo);
-  // relaxed / open hand
+  el('rect',{x:-13,y:-8,width:26,height:10,rx:5,fill:'#f6d48f'},hand);
+  const sk='#eab296', skD='#c98a6c';
+  const finger=(par,x1,y1,x2,y2,w)=>{el('path',{d:`M${x1} ${y1} L${x2} ${y2}`,stroke:skD,fill:'none','stroke-width':w+1.4,'stroke-linecap':'round'},par);el('path',{d:`M${x1} ${y1} L${x2} ${y2}`,stroke:'#f2c0a2',fill:'none','stroke-width':w,'stroke-linecap':'round'},par);};
+  // relaxed / open hand: palm + thumb + 4 fingers
   const open=el('g',{},hand);
-  el('path',{d:`M-10 0 Q-13 14 -10 26 Q-6 34 0 34 Q8 34 10 26 Q13 14 10 0 Z`,fill:'url(#skinL)'},open);
-  for(let i=0;i<4;i++){const x=-7.5+i*5;el('path',{d:`M${x} 24 Q${x+0.5} 36 ${x} ${38+(i==1||i==2?3:0)}`,stroke:'#e4a98b',fill:'none','stroke-width':4.6,'stroke-linecap':'round'},open);}
-  el('path',{d:`M${side*-9} 8 Q${side*-17} 16 ${side*-15} 24`,stroke:'#eab296',fill:'none','stroke-width':5,'stroke-linecap':'round'},open);
-  // pointing hand (fist + index finger)
+  finger(open,side*-8,8,side*-16,22,6);
+  el('path',{d:`M-10 0 Q-13 14 -10 25 Q-5 31 0 31 Q7 31 10 25 Q13 14 10 0 Z`,fill:'url(#skinL)',stroke:skD,'stroke-width':.8},open);
+  [[-7,36],[-2.4,39],[2.4,39],[7,35]].forEach(([x,y])=>finger(open,x,26,x*1.1,y,4.6));
+  el('path',{d:'M-6 14 Q0 18 6 13',stroke:skD,fill:'none','stroke-width':.9,opacity:.7},open);
+  // pointing hand: fist with curled knuckles + extended index + thumb
   const point=el('g',{opacity:0},hand);
-  el('path',{d:'M-10 0 Q-13 14 -10 24 Q-4 32 2 31 Q10 30 11 22 Q13 12 10 0 Z',fill:'url(#skinL)'},point);
-  el('path',{d:'M-6 26 Q-3 30 1 29 M2 28 Q6 30 9 26',stroke:'#c98a6c',fill:'none','stroke-width':1.2},point);
-  el('path',{d:`M${side*4} 24 L${side*4} 50`,stroke:'#eeb699',fill:'none','stroke-width':6,'stroke-linecap':'round'},point);
-  el('path',{d:`M${side*-9} 8 Q${side*-14} 16 ${side*-6} 22`,stroke:'#eab296',fill:'none','stroke-width':5,'stroke-linecap':'round'},point);
+  el('path',{d:'M-10 0 Q-13 14 -10 24 Q-4 32 2 31 Q10 30 11 22 Q13 12 10 0 Z',fill:'url(#skinL)',stroke:skD,'stroke-width':.8},point);
+  [-5,0,5].forEach(x=>el('ellipse',{cx:x-side*2,cy:28,rx:3,ry:3.4,fill:'#f2c0a2',stroke:skD,'stroke-width':.8},point));
+  finger(point,side*6,24,side*6,50,5.4);
+  el('ellipse',{cx:side*6,cy:49,rx:1.6,ry:1.3,fill:'#fbe3d6'},point);
+  finger(point,side*-9,8,side*-3,24,5.6);
+  const arm={sleeve:[sleeveDark,sleeve,sleeveKnit,sleeveHi]};
   // phone hand: hand + upright phone
   const phone=el('g',{opacity:0},hand);
   el('path',{d:'M-10 0 Q-13 14 -10 26 Q-6 34 0 34 Q8 34 10 26 Q13 14 10 0 Z',fill:'url(#skinL)'},phone);
@@ -50,7 +58,7 @@ function buildArm(side){
   el('text',{x:0,y:32,'text-anchor':'middle','font-size':6,fill:'#6d5f55'},phInner).textContent='[what it means]';
   // fingers wrapped over phone edge
   for(let i=0;i<3;i++)el('ellipse',{cx:side*-26,cy:-60+i*9,rx:5,ry:4,fill:'#eab296'},phInner);
-  return {g,sx,sy,up,fo,hand,open,point,phone,ph,side,
+  return {g,sx,sy,up,fo,hand,open,point,phone,ph,side,sleeves:arm.sleeve,
     a1:new S(0,38,9),a2:new S(0,30,7.5),a3:new S(0,55,9),
     pOpen:new S(1,60,14),pPoint:new S(0,60,14),pPhone:new S(0,60,14)};
 }
@@ -62,7 +70,7 @@ R.g.setAttribute('transform',`translate(${R.sx} ${R.sy})`);
 // [a1, a2(relative), a3(relative), handPose]
 const POSE={
   restL:[-8,-50,-14,'open'], restR:[8,50,14,'open'],
-  pointR:[-150,-8,-4,'point'],
+  pointR:[-156,-2,-4,'point'],
   psstL:[30,152,-6,'point'],
   phoneL:[38,168,0,'phone'],
   explainL:[24,-176,12,'open'], explainR:[-24,176,-12,'open'],
@@ -151,7 +159,7 @@ function gesture(name,hold){
   explainOn=false;lookAtCard=0;gestName=name;
   if(name==='point'){setArm(R,POSE.pointR);setArm(L,POSE.restL);lookAtCard=1;head.yaw.v+=40;head.roll.v-=30;done(hold||2.6);}
   else if(name==='psst'){setArm(L,POSE.psstL);setArm(R,POSE.restR);setExpr('sly');head.roll.v+=40;done(hold||2.4);}
-  else if(name==='phone'){setArm(L,POSE.phoneL);setArm(R,POSE.restR);head.pitch.v+=20;done(hold||3);}
+  else if(name==='phone'){setArm(L,POSE.phoneL);setArm(R,[-14,112,-14,'open']);head.pitch.v+=20;done(hold||3);}
   else if(name==='explain'){setArm(L,POSE.explainL);setArm(R,POSE.explainR);explainOn=true;done(hold||3.2);}
   else if(name==='shock'){setArm(L,POSE.shockL);setArm(R,POSE.shockR);setExpr('surprised');head.dy.v-=60;head.pitch.v-=60;done(hold||2);}
   else if(name==='laugh'){setArm(L,POSE.laughL);setArm(R,POSE.laughR);setExpr('laughing');laughOn=hold||2.4;done(hold||2.6);}
@@ -178,7 +186,7 @@ function startWord(i){wIdx=i;wStart=talkT;const W=words[i];if(!W)return;
   else if(c)gesture(c, c==='phone'?3.6:undefined);
   if(!c&&i%6===3&&gestName==='rest')gesture('explain',1.8);
   $('capText').textContent=captionFor(i);}
-function captionFor(i){const s=Math.max(0,i-2);return words.slice(s,s+5).map(x=>x.w).join(' ');}
+function captionFor(i){const s=Math.max(0,i-2);return words.slice(s,s+4).map(x=>x.w).join(' ');}
 function say(text,silent){stopTalk();const P=parse(text);words=P.out;talking=true;talkT=0;wIdx=-1;lastBoundary=-1;
   $('caption').setAttribute('opacity',1);setExpr('happy');
   const useVoice=!silent&&soundOn&&'speechSynthesis' in window;
@@ -265,6 +273,14 @@ function render(dt){
   // eyes
   const lidU=Math.min(1,ex.lidU.x+blink*(1-ex.lidU.x)), lidL=ex.lidL.x*(1-blink*0.3);
   const asy=ex.asym.x;
+  // turning: the far side of the face foreshortens
+  const sqL=1-Math.max(0,-hy)*0.32, sqR=1-Math.max(0,hy)*0.32;
+  $('eyeL').setAttribute('transform',`translate(-22 -126) scale(${sqL.toFixed(3)} 1)`);
+  $('eyeR').setAttribute('transform',`translate(22 -126) scale(${sqR.toFixed(3)} 1)`);
+  $('lensL').setAttribute('transform',`translate(-22 -125) scale(${sqL.toFixed(3)} 1) translate(22 125)`);
+  $('lensR').setAttribute('transform',`translate(22 -125) scale(${sqR.toFixed(3)} 1) translate(-22 125)`);
+  $('browL').firstElementChild.setAttribute('transform',`scale(${sqL.toFixed(3)} 1)`);
+  $('browR').firstElementChild.setAttribute('transform',`scale(${sqR.toFixed(3)} 1)`);
   [['eyeL',-1],['eyeR',1]].forEach(([id,s])=>{const g=$(id);
     const lu=Math.min(1,lidU+(s<0?-asy*0.02:asy*0.035)), ll=lidL;
     const uh=lu*17, lh=ll*9;
@@ -300,6 +316,10 @@ function render(dt){
     const idle=(A===L?nz.armL:nz.armR)(T*0.6)*2;
     const a1=A.a1.x+idle, a2=A.a2.x+idle*0.6, a3=A.a3.x+idle;
     A.up.setAttribute('transform',`rotate(${f1(a1)})`);
+    {const r1=a1*D,r2=(a1+a2)*D;const ex_=-92*Math.sin(r1),ey_=92*Math.cos(r1);const wx=ex_-74*Math.sin(r2),wy=ey_+74*Math.cos(r2);
+     const sx0=-4*Math.sin(r1),sy0=4*Math.cos(r1);
+     const d=`M${f1(sx0)} ${f1(sy0)} L${f1(ex_)} ${f1(ey_)} L${f1(wx)} ${f1(wy)}`;
+     A.sleeves.forEach((p,i)=>p.setAttribute('d',i===3?`M${f1(sx0-6*Math.cos(r1)*A.side)} ${f1(sy0)} L${f1(ex_-5*Math.cos(r1)*A.side)} ${f1(ey_)} L${f1(wx-4*Math.cos(r2)*A.side)} ${f1(wy)}`:d));}
     A.fo.setAttribute('transform',`translate(0 92) rotate(${f1(a2)})`);
     A.hand.setAttribute('transform',`translate(0 80) rotate(${f1(a3)})`);
     A.open.setAttribute('opacity',f1(A.pOpen.x));A.point.setAttribute('opacity',f1(A.pPoint.x));A.phone.setAttribute('opacity',f1(A.pPhone.x));
