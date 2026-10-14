@@ -233,30 +233,44 @@ export function blinkAt(t, seed) {
   return ph < 0.12 ? Math.max(0.08, Math.abs(ph - 0.06) / 0.06) : 1;
 }
 
-// Pose of the moving pivot of a part group (no local offsets). st: { ph, mv, swing, t, roll, seed }
+// A weapon swing with weight: a brief wind-up (arm pulls back), a fast chop, then an eased follow-through.
+// s is the raw swing (1 the instant the strike starts, decaying to 0), returned angle is the extra arm pitch.
+export function attackArm(s) {
+  const a = 1 - Math.max(0, Math.min(1, s)); // 0 at strike start -> 1 fully recovered
+  const windup = Math.min(1, a / 0.16);
+  const strike = Math.max(0, (a - 0.16) / 0.84);
+  const back = windup * (1 - strike) * 1.0;                       // raise/cock the arm back
+  const chop = -2.9 * Math.sin(Math.min(1, strike * 1.5) * Math.PI) * (1 - strike * 0.35); // swing through + settle
+  return back + chop;
+}
+// Pose of the moving pivot of a part group (no local offsets).
+// st: { ph (walk phase), mv (0..1 eased), swing (0..1 attack), t, roll, seed, recoil (0..1 hit stagger) }
 function pivotMatrix(a, p, st, out) {
   let ax = 0, ay = 0, az = 0, ty = 0, tz = 0, sy = 1, sxz = 1;
   if (a) {
-    const sw = Math.sin(st.ph);
-    if (a === 'legL') ax = sw * 0.8 * st.mv;
-    else if (a === 'legR') ax = -sw * 0.8 * st.mv;
-    else if (a === 'armL') { ax = -sw * 0.7 * st.mv - st.swing * 0.5; az = -0.12 - st.mv * 0.08; }
-    else if (a === 'armR') { ax = sw * 0.7 * st.mv - st.swing * 2.4; az = 0.12 + st.mv * 0.08; }
+    const sw = Math.sin(st.ph), swc = Math.cos(st.ph), mv = st.mv, rec = st.recoil || 0;
+    if (a === 'legL') ax = sw * 0.95 * mv;                         // bigger, confident stride
+    else if (a === 'legR') ax = -sw * 0.95 * mv;
+    else if (a === 'armL') { ax = -sw * 0.8 * mv - st.swing * 0.35 + rec * 0.5; az = -0.12 - mv * 0.1; } // opposes legs
+    else if (a === 'armR') { ax = sw * 0.55 * mv + attackArm(st.swing) + rec * 0.3; az = 0.12 + mv * 0.1; }
     else if (a === 'armsUp') ax = -1.2 - st.swing * 1.6;
-    else if (a === 'aim') ax = -1.45 + st.swing * 0.35;
+    else if (a === 'aim') ax = -1.45 + st.swing * 0.3 + rec * 0.45;
     else if (a === 'wheel') ax = st.roll;
     else if (a === 'spin') ay = st.t * 4 + st.seed;
     else if (a === 'spinFast') ay = st.t * 12 + st.seed;
-    else if (a === 'gun') tz = -st.swing * 0.3;
-    else if (a === 'head') { ay = Math.sin(st.t * 1.7 + st.seed) * 0.22; ax = -0.06 + Math.sin(st.ph * 2) * 0.05 * st.mv; }
+    else if (a === 'gun') tz = -st.swing * 0.35;
+    else if (a === 'head') { ay = Math.sin(st.t * 1.7 + st.seed) * 0.2 + sw * 0.05 * mv; ax = -0.05 + swc * 0.05 * mv - rec * 0.6; } // head leads/recoils
     else if (a === 'flap') az = Math.sin(st.t * 9 + st.seed) * 0.2;
-    else if (a === 'cape') ax = 0.1 + st.mv * 0.38 + Math.sin(st.t * 7 + st.seed) * 0.07 * (0.4 + st.mv) + st.swing * 0.15;
+    else if (a === 'cape') { // trailing secondary motion: lags the body, billows with speed, snaps on a hit
+      ax = 0.12 + mv * 0.5 + Math.sin(st.t * 6 + st.seed) * 0.08 * (0.4 + mv) + st.swing * 0.22 - rec * 0.3;
+      az = Math.sin(st.t * 4.5 + st.seed) * 0.05 * (0.3 + mv);
+    }
     else if (a === 'blink') sy = blinkAt(st.t, st.seed);
-    else if (a === 'thrust') { const f = 0.85 + Math.sin(st.t * 31 + st.seed) * 0.15; sy = f * (1 + st.mv * 0.4); sxz = f; }
+    else if (a === 'thrust') { const f = 0.85 + Math.sin(st.t * 31 + st.seed) * 0.15; sy = f * (1 + mv * 0.4); sxz = f; }
     else if (a === 'bob') ty = Math.sin(st.t * 2.4 + st.seed) * 0.05;
   }
-  // body bob: everything above the hips rises and falls twice per stride (squash & stretch on landing)
-  if (a !== 'legL' && a !== 'legR' && a !== 'wheel') ty += Math.abs(Math.sin(st.ph)) * 0.09 * st.mv;
+  // body bob: everything above the hips rises and falls twice per stride, dipping on each footfall
+  if (a !== 'legL' && a !== 'legR' && a !== 'wheel') ty += Math.abs(Math.sin(st.ph)) * 0.1 * st.mv;
   out.makeTranslation(p[0], p[1] + ty, p[2] + tz);
   if (ax || ay || az) { _e.set(ax, ay, az); _m.makeRotationFromEuler(_e); out.multiply(_m); }
   if (sy !== 1 || sxz !== 1) { _m.makeScale(sxz, sy, sxz); out.multiply(_m); }

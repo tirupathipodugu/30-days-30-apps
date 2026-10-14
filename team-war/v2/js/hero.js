@@ -33,23 +33,27 @@ export class Hero {
     this.bones = [];
     if (team === 'human') this.buildHuman(skin); else this.buildRobot(skin);
     this.finishBones();
-    // ground marker: glowing ring + aim chevron, and a bobbing arrow over the head
+    // ground marker: a bold glowing ring with a bright inner disc, an expanding "sonar" pulse,
+    // an aim chevron, and a spinning gem overhead — so the player's own hero is never in doubt.
     const tc = team === 'human' ? 0xFFB070 : 0x6FFFEA;
-    const ringMat = additive(tc, 0.7, 1.6);
-    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.0, 48).rotateX(-Math.PI / 2), ringMat);
+    const ringMat = additive(tc, 0.85, 2.0);
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.82, 1.12, 48).rotateX(-Math.PI / 2), ringMat);
     this.ring.position.y = 0.05; this.root.add(this.ring);
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.8, 40).rotateX(-Math.PI / 2), additive(tc, 0.16, 1));
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.0, 40).rotateX(-Math.PI / 2), additive(tc, 0.22, 1));
     disc.position.y = 0.04; this.ring.add(disc);
-    const tri = new THREE.Shape(); tri.moveTo(0, 0.5); tri.lineTo(0.3, 0); tri.lineTo(-0.3, 0); tri.lineTo(0, 0.5);
+    this.pulse = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.05, 40).rotateX(-Math.PI / 2), additive(tc, 0.6, 1.6));
+    this.pulse.position.y = 0.06; this.root.add(this.pulse);
+    const tri = new THREE.Shape(); tri.moveTo(0, 0.55); tri.lineTo(0.32, 0); tri.lineTo(-0.32, 0); tri.lineTo(0, 0.55);
     this.chev = new THREE.Mesh(new THREE.ShapeGeometry(tri).rotateX(-Math.PI / 2), ringMat);
-    this.chev.position.set(0, 0.05, 1.25); this.root.add(this.chev);
-    // a spinning gem that points down at the hero
-    this.marker = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.9, 4).rotateX(Math.PI), glowMat(tc));
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.28, 4).translate(0, 0.59, 0), glowMat(0xffffff));
-    this.marker.add(cap);
+    this.chev.position.set(0, 0.05, 1.3); this.root.add(this.chev);
+    // a spinning gem that points down at the hero, with a soft glow halo
+    this.marker = new THREE.Mesh(new THREE.ConeGeometry(0.46, 1.0, 4).rotateX(Math.PI), glowMat(tc));
+    this.marker.add(new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.3, 4).translate(0, 0.65, 0), glowMat(0xffffff)));
+    const halo = new THREE.Mesh(GEO.sphere, additive(tc, 0.28, 1.4)); halo.scale.setScalar(1.4); this.marker.add(halo);
     scene.add(this.marker);
     this.walk = 0; this.lean = 0; this.roll = 0; this.yaw = 0; this.flash = 0; this.pop = 1; this.t = 0;
     this.capeV = 0; this.capeA = 0.2; this.land = 0; this.prevSin = 0;
+    this.bank = 0; this.kick = 0; this.hurtPrev = 0; this.recover = 0; this.dashPrev = false;
     this.muzzle = new THREE.Vector3();
   }
   // collect parts per bone: p(bone, geo, color, [x,y,z], scale, rot, opts)
@@ -174,54 +178,66 @@ export class Hero {
     r.visible = true; this.marker.visible = true;
     this.pop = Math.min(1, this.pop + dt * 4);
     r.position.set(h.x, 0, h.z);
-    // turn toward aim (smoothly)
+    // turn toward aim (eased), and bank the body into the turn
     let da = h.aim - this.yaw; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
-    this.yaw += da * Math.min(1, dt * 22);
+    const applied = da * Math.min(1, dt * 15);
+    this.yaw += applied;
     r.rotation.y = this.yaw;
+    const turnBank = Math.max(-0.3, Math.min(0.3, applied / Math.max(dt, 1e-3) * 0.028));
+    this.bank += (turnBank - this.bank) * Math.min(1, dt * 8);
     const sp = Math.hypot(h.vx, h.vz);
     const fwdMv = (h.vx * Math.sin(this.yaw) + h.vz * Math.cos(this.yaw)) / 9;
     const sideMv = (h.vx * Math.cos(this.yaw) - h.vz * Math.sin(this.yaw)) / 9;
     const mv = Math.min(1, sp / 8);
     const dashing = h.dashT > 0;
+    // hit stagger: a sharp recoil the instant damage lands, easing back out
+    if (h.hurtT > this.hurtPrev + 1e-3) this.kick = 1;
+    this.hurtPrev = h.hurtT;
+    this.kick = Math.max(0, this.kick - dt / 0.26);
+    const kickE = this.kick * this.kick;
+    // dash recovery: a landing squash when a dash ends
+    if (this.dashPrev && !dashing) this.recover = 1;
+    this.dashPrev = dashing;
+    this.recover = Math.max(0, this.recover - dt / 0.22);
     this.walk += dt * (4 + sp * 1.05) * (fwdMv < -0.2 ? -1 : 1);
     this.lean += ((dashing ? 0.5 : fwdMv * 0.3) - this.lean) * Math.min(1, dt * 10);
-    this.roll += (-sideMv * 0.24 - this.roll) * Math.min(1, dt * 10);
+    this.roll += (-sideMv * 0.24 + this.bank - this.roll) * Math.min(1, dt * 12);
     const rec = h.recoil || 0;
-    const pop = this.pop < 1 ? 1 + Math.sin(this.pop * Math.PI) * 0.35 : 1;
+    const pop = this.pop < 1 ? 1 + Math.sin(this.pop * Math.PI) * 0.3 : 1;
     const s = HERO_SCALE * pop;
-    // squash on each footfall, stretch on dash
+    // squash on each footfall, stretch on dash, landing squash on recover
     const sw = Math.sin(this.walk);
     if (!this.hover && Math.sign(sw) !== Math.sign(this.prevSin) && mv > 0.2) this.land = 1;
     this.prevSin = sw;
     this.land = Math.max(0, this.land - dt * 7);
     const breathe = Math.sin(t * 2.2) * 0.02 * (1 - mv);
-    const sq = this.land * 0.07 * mv;
+    const sq = this.land * 0.07 * mv + this.recover * this.recover * 0.14;
     if (dashing) r.scale.set(s * 0.86, s * 0.9, s * 1.35);
     else r.scale.set(s * (1 + sq * 0.6), s * (1 - sq + breathe), s * (1 + sq * 0.6));
     if (this.hover) {
-      this.hoverG.position.y = 0.42 + Math.sin(t * 3.2) * 0.08;
-      this.body.rotation.set(this.lean * 1.2, 0, this.roll * 1.4);
-      this.torso.rotation.x = -rec * 0.12;
-      this.head.rotation.set(Math.sin(t * 1.1) * 0.05, Math.sin(t * 1.3) * 0.12, Math.sin(t * 0.9) * 0.05);
+      this.hoverG.position.y = 0.42 + Math.sin(t * 3.2) * 0.08 - kickE * 0.1;
+      this.body.rotation.set(this.lean * 1.2 - kickE * 0.4, 0, this.roll * 1.4);
+      this.torso.rotation.x = -rec * 0.12 - kickE * 0.25;
+      this.head.rotation.set(Math.sin(t * 1.1) * 0.05 - kickE * 0.5, Math.sin(t * 1.3) * 0.12, Math.sin(t * 0.9) * 0.05);
       const fl = 0.9 + Math.sin(t * 33) * 0.12 + mv * 0.35;
       this.thrust.scale.set(fl, fl * (1 + mv * 0.6), fl);
-      this.armR.rotation.x = -1.45 + rec * 0.35;
+      this.armR.rotation.x = -1.45 + rec * 0.35 + kickE * 0.3;
       this.gun.position.y = -0.38 + rec * 0.12;
-      this.armL.rotation.x = -0.9 + Math.sin(t * 2) * 0.08 - mv * 0.3;
+      this.armL.rotation.x = -0.9 + Math.sin(t * 2) * 0.08 - mv * 0.3 + kickE * 0.4;
     } else {
-      this.legL.rotation.x = sw * 0.85 * mv; this.legR.rotation.x = -sw * 0.85 * mv;
+      this.legL.rotation.x = sw * 0.9 * mv; this.legR.rotation.x = -sw * 0.9 * mv;
       this.body.position.y = Math.abs(Math.cos(this.walk)) * 0.1 * mv;
-      this.body.rotation.set(this.lean, 0, this.roll);
-      this.torso.rotation.set(-rec * 0.1, sw * 0.1 * mv, 0);
+      this.body.rotation.set(this.lean - kickE * 0.35, Math.sin(this.walk) * 0.06 * mv, this.roll); // hips counter-rotate with the stride
+      this.torso.rotation.set(-rec * 0.1 - kickE * 0.3, -sw * 0.12 * mv, 0);                        // shoulders counter the hips
       this.gun.position.z = 0.42 - rec * 0.18;
-      this.armR.rotation.x = -1.3 + rec * 0.25; this.armL.rotation.x = -1.2 + rec * 0.15;
-      // cape: a damped spring that trails behind movement
-      const target = 0.15 + mv * 0.75 + (dashing ? 0.6 : 0);
+      this.armR.rotation.x = -1.3 + rec * 0.25 + kickE * 0.2; this.armL.rotation.x = -1.2 + rec * 0.15 + sw * 0.25 * mv;
+      // cape: a damped spring that trails behind movement and snaps on a hit
+      const target = 0.15 + mv * 0.75 + (dashing ? 0.6 : 0) + kickE * 0.5;
       this.capeV += ((target - this.capeA) * 60 - this.capeV * 9) * dt;
       this.capeA += this.capeV * dt;
       this.cape.rotation.x = this.capeA + Math.sin(t * 8) * 0.05 * (0.3 + mv);
       this.cape.rotation.z = -this.roll * 0.8;
-      this.head.rotation.set(-this.lean * 0.5 + Math.sin(t * 1.6) * 0.03, Math.sin(t * 0.8) * 0.1 * (1 - mv), 0);
+      this.head.rotation.set(-this.lean * 0.5 + Math.sin(t * 1.6) * 0.03 - kickE * 0.4, Math.sin(t * 0.8) * 0.1 * (1 - mv), 0);
     }
     this.eyeG.scale.y = blinkAt(t, 3);
     // hurt flash / invulnerability blink

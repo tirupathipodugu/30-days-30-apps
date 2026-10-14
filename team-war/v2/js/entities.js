@@ -156,6 +156,8 @@ export class Entities {
   update(g, t, camera, trail) {
     const st = this.st;
     st.t = t;
+    const dt = Math.max(0, Math.min(0.1, this.lastT == null ? 1 / 60 : t - this.lastT));
+    this.lastT = t;
     if (g !== this.lastG) { this.lastG = g; this.seen.clear(); this.dying.length = 0; }
     for (const c of this.crowds.values()) c.begin();
     let nb = 0, nm = 0;
@@ -167,11 +169,21 @@ export class Entities {
       const model = crowd.model;
       const kr = KINDS[u.kind === 'grunt' && u.ally ? 'ally' : u.kind].r;
       const speed = Math.hypot(u.vx, u.vz);
-      st.mv = Math.min(1, speed / 2.5);
+      // per-unit animation memory: ease move amount and run a hit-stagger so motion isn't poppy
+      let rec = this.seen.get(u.id);
+      if (!rec) { rec = { key, x: 0, z: 0, face: 0, s: 1, y: 0, mv: 0, recoil: 0, hitPrev: 0 }; this.seen.set(u.id, rec); }
+      const targetMv = Math.min(1, speed / 2.5);
+      rec.mv += (targetMv - rec.mv) * Math.min(1, dt * 9);
+      if (u.hitT > rec.hitPrev + 1e-3) rec.recoil = u.kind === 'boss' ? 0.22 : (u.kind === 'brute' || u.elite) ? 0.6 : 1; // fresh damage -> stagger (heavies barely flinch)
+      rec.hitPrev = u.hitT;
+      rec.recoil = Math.max(0, rec.recoil - dt / 0.22);
+      const recoilE = rec.recoil * rec.recoil;                    // ease-out
+      st.mv = rec.mv;
       st.ph = u.walk * (Math.PI * 2 / model.stride);
       st.roll = u.walk / 0.45;
       st.seed = u.id;
       st.swing = u.swing;
+      st.recoil = recoilE;
       let y = 0;
       if (u.kind === 'boss') {
         if (u.state === 'wind') st.swing = Math.min(1, (1.05 - u.stateT) / 0.45);
@@ -183,13 +195,16 @@ export class Entities {
       }
       if (model.hover) y += 0.15 + Math.sin(t * 3 + u.id) * 0.12;
       const age = g.t - u.born;
-      let pop = 1;
-      if (age < 0.35) { const a = age / 0.35; pop = a < 0.7 ? a / 0.7 * 1.15 : 1.15 - (a - 0.7) / 0.3 * 0.15; }
+      let pop = 1; // gentle ease-in on spawn (less of a "pop")
+      if (age < 0.3) pop = 0.7 + 0.3 * (1 - (1 - age / 0.3) * (1 - age / 0.3));
       const flash = u.hitT > 0.05 ? Math.min(1, u.hitT / 0.11) * (u.kind === 'boss' ? 0.35 : u.kind === 'brute' || u.elite ? 0.55 : 0.9) : 0;
-      const sq = flash * 0.12;
+      const sq = flash * 0.06;
       const s = model.scale * VIS_SCALE * (u.r / kr) * Math.max(0.01, pop);
-      const roll = u.stun > 0 ? Math.sin(t * 22 + u.id) * 0.18 : 0;
-      rootMatrix(_root, u.x, y, u.z, u.face, s * (1 + sq), s * (1 - sq), s * (1 + sq), model.lean * st.mv, roll);
+      // weight shift (roll side to side with each step) + a backward lean when staggered + stun wobble
+      const roll = Math.sin(st.ph) * 0.06 * st.mv + (u.stun > 0 ? Math.sin(t * 22 + u.id) * 0.18 : 0);
+      const lean = model.lean * st.mv - recoilE * 0.5;
+      const sway = Math.sin(st.ph * 0.5) * 0.045 * st.mv; // subtle hip/shoulder sway on the facing
+      rootMatrix(_root, u.x, y, u.z, u.face + sway, s * (1 + sq), s * (1 - sq), s * (1 + sq), lean, roll);
       crowd.add(_root, st, flash, u.elite);
       // health bar for damaged non-boss units
       if (u.hp < u.max && u.kind !== 'boss' && nb < 160) {
@@ -210,26 +225,27 @@ export class Entities {
         this.marks.setColorAt(nm, _c); nm++;
       }
       this.alive.add(u.id);
-      let rec = this.seen.get(u.id);
-      if (!rec) { rec = { key, x: 0, z: 0, face: 0, s: 1, y: 0 }; this.seen.set(u.id, rec); }
-      rec.x = u.x; rec.z = u.z; rec.face = u.face; rec.s = s; rec.y = y; rec.elite = u.elite; rec.lean = model.lean;
+      rec.x = u.x; rec.z = u.z; rec.face = u.face; rec.s = s; rec.y = y; rec.elite = u.elite;
     }
-    // units that vanished this frame get a quick squash-and-pop before the confetti takes over
+    // units that vanished this frame crumple: they tip over, flatten and sink into the ground
     for (const [id, rec] of this.seen) {
       if (this.alive.has(id)) continue;
       this.seen.delete(id);
-      if (this.dying.length < 40) this.dying.push({ ...rec, t: 0 });
+      if (this.dying.length < 40) this.dying.push({ ...rec, id, t: 0, tip: Math.sin(id) > 0 ? 1 : -1 });
     }
     this.alive.clear();
     for (let i = this.dying.length - 1; i >= 0; i--) {
       const d = this.dying[i];
-      d.t += 1 / 60;
-      if (d.t > 0.16) { this.dying.splice(i, 1); continue; }
-      const k = d.t / 0.16;
-      const sx = d.s * (1 + k * 0.7), sy = d.s * Math.max(0.05, 1 - k * 0.95);
-      st.mv = 0; st.swing = 0; st.ph = 0; st.seed = 0;
-      rootMatrix(_root, d.x, d.y, d.z, d.face, sx, sy, sx, 0, 0);
-      this.crowd(d.key).add(_root, st, 1, d.elite);
+      d.t += dt;
+      const T = 0.5;
+      if (d.t >= T) { this.dying.splice(i, 1); continue; }
+      const k = d.t / T, e = 1 - (1 - k) * (1 - k); // ease-out
+      const fall = d.tip * e * 1.5;                 // keel over forward/back
+      const sink = -e * 0.2;                        // sink into the ground
+      const sc = d.s * (1 - e * e * 0.8);           // crumple away near the end
+      st.mv = 0; st.swing = 0; st.ph = 0; st.recoil = 0; st.seed = d.id;
+      rootMatrix(_root, d.x, d.y + sink, d.z, d.face, sc, sc * (1 - e * 0.25), sc, fall, Math.sin(d.id) * 0.4 * e);
+      this.crowd(d.key).add(_root, st, Math.max(0, 1 - k * 2.5), d.elite);
     }
     for (const c of this.crowds.values()) c.end();
     for (const im of [this.barBg, this.barFg]) { im.count = nb; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; }

@@ -147,7 +147,8 @@ export class FX {
       const a = Math.random() * Math.PI * 2, sp = speed * (0.4 + Math.random() * 0.8);
       this.debris.spawn(x, y + Math.random() * 0.6, z, Math.cos(a) * sp + dx * speed * 0.6, 4 + Math.random() * 6, Math.sin(a) * sp + dz * speed * 0.6, 1.4 + Math.random() * 0.8, size * (0.5 + Math.random() * 0.9), colors[i % colors.length], 22, 0.4, 2);
     }
-    this.confettiBurst(x, y + 0.4, z, Math.round(n * 1.4), colors, speed * 0.8);
+    // only big kills throw a little confetti now; ordinary deaths read through the crumple animation + debris
+    if (n > 10) this.confettiBurst(x, y + 0.4, z, Math.min(16, Math.round(n * 0.7)), colors, speed * 0.8);
   }
   // team-coloured confetti that pops out of a defeated unit and flutters down
   confettiBurst(x, y, z, n, colors, speed = 6) {
@@ -175,8 +176,21 @@ export class FX {
   }
   glowDot(x, y, z, vx, vy, vz, life, size, color, grav = 0, drag = 1) { this.glow.spawn(x, y, z, vx, vy, vz, life, size, color, grav, drag); }
   number(x, y, z, text, cls = '', life = 0.8) {
+    // merge rapid hits on the same spot into one rising total so numbers don't stack into clutter
+    const m = /^([+-]?)(\d+)$/.exec(text), mergeable = m && (cls === '' || cls === 'big' || cls === 'crit');
+    if (mergeable) {
+      for (const o of this.nums) {
+        if (!o.on || o.mergeCls !== cls || o.t < 0.25) continue;
+        if (Math.abs(o.bx - x) + Math.abs(o.bz - z) > 1.8) continue;
+        o.val += +m[2]; o.t = o.max = Math.max(o.t, life);
+        const c = cls !== 'crit' && o.val >= 60 ? 'big' : cls;
+        o.el.textContent = m[1] + o.val; o.el.className = 'num on ' + c;
+        return;
+      }
+    }
     const n = this.nums[this.numI++ % this.nums.length];
-    n.x = x + (Math.random() - 0.5) * 0.6; n.y = y; n.z = z + (Math.random() - 0.5) * 0.6; n.t = life; n.max = life; n.on = true;
+    n.bx = x; n.bz = z; n.val = m ? +m[2] : 0; n.mergeCls = mergeable ? cls : null;
+    n.x = x + (Math.random() - 0.5) * 0.5; n.y = y; n.z = z + (Math.random() - 0.5) * 0.5; n.t = life; n.max = life; n.on = true;
     n.el.textContent = text; n.el.className = 'num on ' + cls;
   }
   shake() { /* the camera never moves: impacts read through flashes, sparks and rings instead */ }
