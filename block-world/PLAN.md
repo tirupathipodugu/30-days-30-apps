@@ -12,7 +12,7 @@ working step. Never let a work session run past :20 so the X rounds (:23/:38/:51
 5. [x] Ambient occlusion: darken block corners/edges where blocks meet (the classic block-game depth look).
 6. [x] Ground: extend the floor/grass a little beyond the photo edge; outdoor scenes get a grass + dirt ground plane.
 7. [x] Footstep, jump, break and place sounds (synthesised, per material: wood, stone, glass, grass, wool).
-8. [~] Test set (kitchen, park, street done; bedroom, office, portrait next): download 6+ CC0 photos (Wikimedia Commons) and 2 CC0 videos (indoor, outdoor); check each gives a sensible world; fix the worst cases.
+8. [~] Test set (kitchen, park, street, bedroom done; office, portrait still to check): download 6+ CC0 photos (Wikimedia Commons) and 2 CC0 videos (indoor, outdoor); check each gives a sensible world; fix the worst cases.
 9. [ ] Live camera: same new look; check it stays smooth.
 10. [ ] Polish: pixel font UI, title card, "Save picture" from walk mode, phone layout check.
 
@@ -22,3 +22,4 @@ working step. Never let a work session run past :20 so the X rounds (:23/:38/:51
 - 05:15 Test set: 6 CC0 photos in testimages/ (not committed). Kitchen: painted wood now keeps its paint per block (was all brown); near-grey colours only match whites/greys/black (no pink speckles). Park: path between hedges on grass, fine; TODO trees need trunks (log blocks under leaves), outdoor sky from photo can be white (overcast) which looks flat: blend toward blue.
 - Testing tip: python http.server lets Chrome cache modules; use scratchpad/nocache_server.py and fetch(file,{cache:'reload'}) before reload.
 - 06:10 Trees get log trunks (new log block, bark texture, in the hotbar); grey/white photo skies nudged to blue; night street photo gives brick buildings, stone road, dirt verges: good.
+- 07:32 Bedroom photo: 18 objects, dark panelled walls come out dark grey (true to photo), bed wool, lamps glow, books. Still to do: office + portrait photos, live camera check in the new look (live already uses the same voxel engine + corner shading, no island), polish.
