@@ -694,9 +694,10 @@ export function buildWorld(scene, renderer, cover, detail = 1) {
       water.mat.uniforms.uHeat.value = lavaHeat;
       water.mat.uniforms.uLavaY.value = lavaY; // refraction marches to where the lava plane actually sits now
       volcano.children[0] && (volcano.rotation.y = t * 0.1);
-      citadel.rings[0].rotation.x = Math.sin(t * 0.6) * 0.3; citadel.rings[0].rotation.z = t * 0.6;
-      citadel.rings[1].rotation.x = t * 0.9; citadel.rings[1].rotation.z = Math.cos(t) * 0.3;
-      citadel.core.scale.setScalar(1 + Math.sin(t * 3) * 0.1);
+      // (the water warship has no spinning ice rings; guard so the frame never throws)
+      if (citadel.rings[0]) { citadel.rings[0].rotation.x = Math.sin(t * 0.6) * 0.3; citadel.rings[0].rotation.z = t * 0.6; }
+      if (citadel.rings[1]) { citadel.rings[1].rotation.x = t * 0.9; citadel.rings[1].rotation.z = Math.cos(t) * 0.3; }
+      if (citadel.core) citadel.core.scale.setScalar(1 + Math.sin(t * 3) * 0.1);
       // (scene flames animate entirely in their shader off TIME — no per-frame JS, so they cost nothing here)
       if (fireLight.intensity > 0) fireLight.intensity = 14 + Math.sin(t * 13) * 3 + Math.sin(t * 29) * 2;
       if (!game) return;
