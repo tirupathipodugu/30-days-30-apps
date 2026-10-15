@@ -454,8 +454,14 @@ Object.assign(UI.prototype, {
     const open = !this.mp.roster.classList.contains('closed');
     let head, rows = '';
     if (status !== 'online' || !r) {
-      head = `<i class="mpDot ${status === 'offline' || status === 'solo' ? '' : 'wait'}"></i>${status === 'offline' ? 'Offline · bots' : status === 'solo' ? 'Solo run · bots' : 'Connecting…'}`;
-      if (status === 'offline' || status === 'solo') rows = '<div class="row me"><i class="mpDot" style="background:var(--team);box-shadow:none"></i><span class="nm">Solo run</span><span class="you">YOU</span></div>';
+      const solo = status === 'offline' || status === 'solo';
+      // Fake teammates on the Fire (human) side so a solo run looks populated. Fixed K/D so the roster doesn't flicker.
+      const mates = solo ? [['Tirupathi', 7, 1], ['Andrew', 4, 2], ['Zhi', 3, 0]] : [];
+      head = `<i class="mpDot ${solo ? 'on' : 'wait'}"></i>${solo ? (mates.length + 1) + ' playing' : 'Connecting…'}`;
+      if (solo) {
+        rows = '<div class="row me"><i class="mpDot" style="background:var(--team);box-shadow:none"></i><span class="nm">You</span><span class="you">YOU</span></div>';
+        for (const [nm, k, d] of mates) rows += `<div class="row"><i class="mpDot" style="background:${TEAM_CSS.human};box-shadow:none"></i><span class="nm">${ESC(nm)}</span><span class="kd">${k}<small>/${d}</small></span></div>`;
+      }
     } else {
       const list = r.p.slice().sort((a, b) => (b[0] === myId) - (a[0] === myId) || b[3] - a[3] || a[4] - b[4]);
       head = `<i class="mpDot on"></i>Online · ${r.n} player${r.n === 1 ? '' : 's'}`;
