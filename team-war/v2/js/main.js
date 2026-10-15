@@ -167,12 +167,16 @@ function buildInput(g) {
   const AUTO_AIM_RANGE = 26;
   // ---- MOVEMENT: on desktop the MOUSE moves the hero (walk toward the cursor); touch/gamepad use the stick ----
   if (!input.touchMode && a.kind === 'mouse') {
-    ndc.set((a.sx / innerWidth) * 2 - 1, -(a.sy / innerHeight) * 2 + 1);
-    ray.setFromCamera(ndc, camera);
-    if (ray.ray.intersectPlane(plane, hitPt)) {
-      const dx = hitPt.x - h.x, dz = hitPt.z - h.z, d = Math.hypot(dx, dz) || 1, DEAD = 1.4;
-      if (d > DEAD) { const sp = Math.min(1, (d - DEAD) / 3); out.mx = dx / d * sp; out.mz = dz / d * sp; }
-      aimPoint = { x: hitPt.x, z: hitPt.z };   // marker shows where the hero is heading
+    // don't chase the cursor when it's over the HUD (ability buttons, pause, tutorial) — so powers are clickable
+    const overUI = document.elementFromPoint(a.sx, a.sy);
+    if (!(overUI && overUI.closest('#abil, #topBtns, #tut, .btn, .ab'))) {
+      ndc.set((a.sx / innerWidth) * 2 - 1, -(a.sy / innerHeight) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      if (ray.ray.intersectPlane(plane, hitPt)) {
+        const dx = hitPt.x - h.x, dz = hitPt.z - h.z, d = Math.hypot(dx, dz) || 1, DEAD = 1.4;
+        if (d > DEAD) { const sp = Math.min(1, (d - DEAD) / 3); out.mx = dx / d * sp; out.mz = dz / d * sp; }
+        aimPoint = { x: hitPt.x, z: hitPt.z };   // marker shows where the hero is heading
+      }
     }
   } else {
     const mv = rampMove(input.moveVec(), h.dead);
