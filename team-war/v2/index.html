@@ -526,6 +526,46 @@
   mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 })();
 </script>
+<!-- quick controls tutorial: shows on each match start, auto-fades, tap to dismiss (self-contained) -->
+<style>
+  #tut { position: fixed; left: 50%; top: calc(70px + var(--safe-t)); transform: translateX(-50%); z-index: 60; display: none;
+    width: min(92vw, 460px); padding: 16px 20px 14px; border-radius: 18px; pointer-events: auto; cursor: pointer; color: #eef4ef; text-align: left;
+    background: linear-gradient(180deg, rgba(22,28,42,.96), rgba(12,16,26,.96)); border: 1.5px solid rgba(255,255,255,.2);
+    box-shadow: 0 16px 50px rgba(0,0,0,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  #tut.show { display: block; animation: tutIn .4s both; }
+  #tut.hide { opacity: 0; transform: translateX(-50%) translateY(-12px); pointer-events: none; transition: opacity .5s, transform .5s; }
+  @keyframes tutIn { from { opacity: 0; transform: translateX(-50%) translateY(-14px); } to { opacity: 1; transform: translateX(-50%); } }
+  #tut h3 { margin: 0 0 10px; font: 900 19px "Lilita One", system-ui, sans-serif; letter-spacing: .02em; }
+  #tut .row { display: flex; align-items: center; gap: 13px; margin: 9px 0; font-size: 14.5px; font-weight: 700; line-height: 1.3; }
+  #tut .ic { font-size: 23px; width: 30px; text-align: center; flex: 0 0 auto; }
+  #tut .row b { color: #9fe3ff; }
+  #tut .dismiss { margin-top: 11px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.5); text-align: center; }
+</style>
+<div id="tut" aria-hidden="true">
+  <h3>How to play</h3>
+  <div class="row"><span class="ic">🖱️</span><span><span class="kb">Move with your <b>mouse</b> — your hero follows the cursor.</span><span class="tc" hidden>Move with the <b>left thumb-stick</b>.</span></span></div>
+  <div class="row"><span class="ic">🎯</span><span>Aiming &amp; shooting are <b>automatic</b> — you auto-fire at the nearest enemy.</span></div>
+  <div class="row"><span class="ic">⚡</span><span>Powers: press <b>Q&nbsp;E&nbsp;R</b> (or tap the round buttons) — <b>no cooldown</b>, use them freely.</span></div>
+  <div class="row"><span class="ic">💨</span><span><span class="kb"><b>Shift</b> to dash out of danger.</span><span class="tc" hidden>Tap the <b>dash</b> button to dodge.</span></span></div>
+  <div class="dismiss">tap to dismiss</div>
+</div>
+<script>
+(function () {
+  var tut = document.getElementById('tut'), timer, wasPlaying = false;
+  if (matchMedia('(pointer: coarse)').matches) {
+    [].forEach.call(tut.querySelectorAll('.kb'), function (e) { e.hidden = true; });
+    [].forEach.call(tut.querySelectorAll('.tc'), function (e) { e.hidden = false; });
+  }
+  function hide() { tut.classList.add('hide'); tut.classList.remove('show'); }
+  function show() { tut.classList.remove('hide'); tut.classList.add('show'); clearTimeout(timer); timer = setTimeout(hide, 8500); }
+  tut.addEventListener('pointerdown', function (e) { e.stopPropagation(); hide(); });
+  new MutationObserver(function () {
+    var playing = document.body.classList.contains('playing');
+    if (playing && !wasPlaying) { wasPlaying = true; show(); }
+    else if (!playing) { wasPlaying = false; hide(); }
+  }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+})();
+</script>
 <script type="module" src="./js/main.js"></script>
 </body>
 </html>
