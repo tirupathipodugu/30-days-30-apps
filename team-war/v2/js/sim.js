@@ -5,7 +5,7 @@
 import {
   ARENA, HERO, KINDS, UPGRADES, UPG, SYNERGIES, PICKUPS, STREAKS, MAX_WAVE,
   baseZ, fwd, other, waveCounts, waveScale, bossWave, TWISTS, TEAMS, ABILITY_PICKS, ABILITY_KEY,
-} from './config.js?v=1015.2125';
+} from './config.js?v=1015.3030';
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -413,9 +413,12 @@ export class Game {
       this.emit('ability', { k, name: 'wall', x: h.x + ax * 2.6, z: h.z + az * 2.6 });
     } else if (T === 'human' && k === 'e') {
       this.rally = 9;
+      const have = this.units.reduce((n, u) => n + (u.ally && !u.dead ? 1 : 0), 0);
+      const base = this.rand() * 6.28;        // random start angle so each press lands in fresh spots
       for (let i = 0; i < 5; i++) {
-        const a = (i / 5) * Math.PI * 2;
-        this.spawnUnit(T, 'grunt', clamp(h.x + Math.cos(a) * 1.8, -16, 16), clamp(h.z + Math.sin(a) * 1.8, -33, 33));
+        const a = base + (i / 5) * Math.PI * 2;
+        const rr = 2 + have * 0.12 + this.rand() * 0.9;   // ring grows with the army so the swarm visibly fans out
+        this.spawnUnit(T, 'grunt', clamp(h.x + Math.cos(a) * rr, -16, 16), clamp(h.z + Math.sin(a) * rr, -33, 33));
       }
       this.emit('ability', { k, name: 'rally', x: h.x, z: h.z });
     } else if (T === 'human' && k === 'r') {
@@ -503,6 +506,13 @@ export class Game {
       let gx, gz, d = 1e9;
       const eb = this.bases[other(u.side)];
       if (t) { gx = t.x; gz = t.z; d = len(gx - u.x, gz - u.z); }
+      else if (u.ally && this.rally > 0 && !this.hero.dead) {
+        // rallied summons escort the hero — a visible, growing entourage that follows you
+        if (u.escR === undefined) { u.escR = 2.2 + this.rand() * 4.5; u.escA = this.rand() * 6.28; }
+        const a = u.escA + this.t * 0.5;
+        gx = this.hero.x + Math.cos(a) * u.escR; gz = this.hero.z + Math.sin(a) * u.escR;
+        d = len(gx - u.x, gz - u.z);
+      }
       else { // march down the field, weaving a little
         gx = u.laneX + Math.sin(this.t * 0.7 + u.wob) * 2; gz = eb.z - fwd(u.side) * (eb.r + 1);
         d = len(gx - u.x, gz - u.z);

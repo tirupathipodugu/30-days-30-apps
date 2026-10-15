@@ -1,7 +1,7 @@
 // DOM side of the game: HUD, banners, callouts, toasts and the menu / upgrade / pause / end / armory screens.
-import { TEAMS, UPG, RARITY, STREAKS, MAX_WAVE, SHOP, SYNERGIES, TWISTS, xpForLevel, ULT_LEVEL, KINDS, other } from './config.js?v=1015.2125';
-import { currencyName } from './meta.js?v=1015.2125';
-import { MATCH } from './match.js?v=1015.2125';
+import { TEAMS, UPG, RARITY, STREAKS, MAX_WAVE, SHOP, SYNERGIES, TWISTS, xpForLevel, ULT_LEVEL, KINDS, other } from './config.js?v=1015.3030';
+import { currencyName } from './meta.js?v=1015.3030';
+import { MATCH } from './match.js?v=1015.3030';
 
 const $ = (s) => document.querySelector(s);
 const SHARE_URL = 'https://tirupathipodugu.github.io/ideas/team-war/v2/';

@@ -3,10 +3,10 @@
 // Procedural animation: walk cycle with squash & stretch, idle breathing, blinking, lean, recoil kick,
 // dash stretch, cape follow-through, hurt flash. A floating team marker keeps the hero easy to find.
 import * as THREE from 'three';
-import { toon, glowMat, additive, GEO, Baker, M4, GLOW, GRADIENT, blinkAt, TIME, contactShadowMat, SHADOW_PLANE } from './gfx.js?v=1015.2125';
-import { PAL } from './models.js?v=1015.2125';
+import { toon, glowMat, additive, GEO, Baker, M4, GLOW, GRADIENT, blinkAt, TIME, contactShadowMat, SHADOW_PLANE } from './gfx.js?v=1015.3030';
+import { PAL } from './models.js?v=1015.3030';
 // elemental flame/water billboards + pooled ember/droplet trail (defined in entities.js, my own files)
-import { flameMaterial, QuadBatch, FLAME_RIGHT, TIER } from './entities.js?v=1015.2125';
+import { flameMaterial, QuadBatch, FLAME_RIGHT, TIER } from './entities.js?v=1015.3030';
 
 // Fire hero = a dark ember body overlaid with a climbing flame glow; Water hero = a pale translucent body
 // with a strong cyan fresnel shimmer. The elemental look comes from the materials; the chibi silhouette and
