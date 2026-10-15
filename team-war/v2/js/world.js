@@ -38,7 +38,7 @@ const W = ARENA.halfW, Lh = ARENA.halfL, BZ = ARENA.baseZ;
 // volcanoes in much closer (see the volcano/iceberg placement) so the island reads small and the sea dominates.
 const GLASS_W = 2 * W + 0.8, GLASS_L = 2 * Lh + 0.8;     // 34.8 x 68.8 — edge right at the walls (was 35 x 69)
 const GLASS_TOP = 0, GLASS_THICK = 0.5;                  // slab top at y=0, a little visible thickness below
-const WATER_Y = -1.9;                                    // sea surface sits below the floating glass island
+const WATER_Y = -0.35;                                   // floor removed: the sea surface sits right at the play plane
 const LAVA_MID = -4.7, LAVA_AMP = 2.7;                   // lava rests mid-deep; rises toward the surface (fire ahead) / sinks (water ahead)
 
 // palettes — focused 5-ish colours per side with one mood anchor (fire = warm amber, water = cool teal) and
@@ -629,8 +629,8 @@ export function buildWorld(scene, renderer, cover, detail = 1) {
   const sunDir = new THREE.Vector3(34, 40, 30).normalize();
   const lava = makeLava(detail);           // glowing volcanic layer at the bottom (+ caustics on high/medium)
   const water = makeWater(detail, sunDir); // realistic refractive moving sea above it
-  const glass = glassIsland(G);            // clean translucent play platform at y = 0 (rim is baked into G)
-  scene.add(lava.mesh, water.mesh, glass);
+  // FLOOR REMOVED (naval redesign): no glass platform — units/ships sit on the open realistic sea. Rim not baked.
+  scene.add(lava.mesh, water.mesh);
   const fireMat = fireMaterial(detail);    // shared volumetric-style flame material for all scene fire
 
   buildWalls(B, G, S);
