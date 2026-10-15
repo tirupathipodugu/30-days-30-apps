@@ -496,8 +496,7 @@ export class Match {
   }
   useAbility(h, k, inp) {
     const T = h.side;
-    const cdBase = (T === 'ai' ? { q: 10, e: 17, r: 22 } : { q: 11, e: 17, r: 22 })[k];
-    h.cd[k] = cdBase * this.cdMul(h); h.cdMax[k] = h.cd[k];
+    h.cd[k] = 0; h.cdMax[k] = 1;   // no cooldown on any power (founder request) — tap to cast, as often as you like
     const ax = h.aimX, az = h.aimZ;
     if (T === 'human' && k === 'q') {
       this.walls.push({ x: h.x + ax * 2.6, z: h.z + az * 2.6, nx: ax, nz: az, half: 3.8, t: 7, max: 7, side: T, owner: h.id });
@@ -505,9 +504,13 @@ export class Match {
       this.emit('ability', { id: h.id, k, name: 'wall', x: h.x + ax * 2.6, z: h.z + az * 2.6 });
     } else if (T === 'human' && k === 'e') {
       this.rally[T] = 9;
+      const have = this.units.reduce((n, u) => n + (u.side === T && u.kind === 'grunt' && !u.dead ? 1 : 0), 0);
+      const base = this.rand() * 6.28;        // random start angle so each press lands in fresh spots
       for (let i = 0; i < 5; i++) {
-        const a = (i / 5) * Math.PI * 2;
-        this.spawnUnit(T, 'grunt', clamp(h.x + Math.cos(a) * 1.8, -16, 16), clamp(h.z + Math.sin(a) * 1.8, -33, 33));
+        const a = base + (i / 5) * Math.PI * 2;
+        const rr = 2 + have * 0.12 + this.rand() * 0.9;   // ring grows with the army so the swarm visibly fans out
+        const g = this.spawnUnit(T, 'grunt', clamp(h.x + Math.cos(a) * rr, -16, 16), clamp(h.z + Math.sin(a) * rr, -33, 33));
+        g.escortOwner = h.id;                 // follow the hero who summoned it (see stepUnits escort branch)
       }
       this.emit('ability', { id: h.id, k, name: 'rally', x: h.x, z: h.z });
     } else if (T === 'human' && k === 'r') {
@@ -575,7 +578,15 @@ export class Match {
       const t = u.tgt;
       let gx, gz, d;
       const eb = this.bases[other(u.side)];
+      // rallied summons with no enemy nearby escort the hero who cast them — a visible army that follows you
+      let owner = null;
+      if (!t && rallied && u.escortOwner != null) owner = this.heroes.find((x) => x.id === u.escortOwner && !x.dead && x.side === u.side);
       if (t) { gx = t.x; gz = t.z; d = len(gx - u.x, gz - u.z); }
+      else if (owner) {
+        if (u.escR === undefined) { u.escR = 2.2 + this.rand() * 4.5; u.escA = this.rand() * 6.28; }
+        const a = u.escA + this.t * 0.5;
+        gx = owner.x + Math.cos(a) * u.escR; gz = owner.z + Math.sin(a) * u.escR; d = len(gx - u.x, gz - u.z);
+      }
       else { gx = u.laneX + Math.sin(this.t * 0.7 + u.wob) * 2; gz = eb.z - fwd(u.side) * (eb.r + 1); d = len(gx - u.x, gz - u.z); }
       let mvx = 0, mvz = 0;
       const dx = (gx - u.x) / (d || 1), dz = (gz - u.z) / (d || 1);
