@@ -394,45 +394,43 @@ function buildCover(B, G, S, cover) {
 
 // ---------------- the obsidian fortress (Fire base, +z) ----------------
 function buildFortress(B, G, S) {
+  // FIRE WARSHIP (naval redesign): a big wooden battleship at the +z end, broadside facing the battle (-z).
   const z0 = BZ + 0.6;
-  const rock = FIRE.rock, rockD = FIRE.rockD, obsid = FIRE.obsid, molten = FIRE.lava;
-  const st = { jitter: 0.2, cell: 0.5 };
-  B.add(GEO.cyl, rockD, M4(0, 0.3, z0, [12, 0.6, 10.5]), st);
-  // a ring of lava around the base
-  G.add(GEO.ring, molten, M4(0, 0.32, z0, [11.6, 4, 10.1]), { boost: GLOW });
-  // keep (jagged molten rock)
-  B.add(GEO.rbox, rock, M4(0, 3.6, z0 + 1.2, [5.4, 6.0, 4.4]), st);
-  for (let i = -2; i <= 2; i++) for (const dz of [-1.0, 3.4]) B.add(GEO.wedge, rock, M4(i * 1.15, 6.9, z0 + dz, [0.7, 1.0, 0.7]), st);
-  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) B.add(GEO.wedge, rock, M4(sx * 2.45, 6.9, z0 + 0.1 + i * 1.15, [0.6, 0.9, 0.6]), st);
-  B.add(GEO.wedge, obsid, M4(0, 8.4, z0 + 1.2, [5.0, 3.0, 4.0]), { jitter: 0.12, cell: 0.4 });
-  // glowing seams up the keep
-  for (const sx of [-1, 1]) G.add(GEO.box, molten, M4(sx * 2.6, 3.6, z0 - 1.0, [0.12, 5.0, 0.1]), { boost: GLOW * 0.8 });
-  G.add(GEO.box, FIRE.lavaHot, M4(0, 3.0, z0 - 1.02, [1.2, 2.0, 0.1]), { boost: GLOW });
-  // towers = basalt spires with molten tips
-  const towers = [[-4.1, z0 - 1.6, 7.2], [4.1, z0 - 1.6, 7.2], [-3.6, z0 + 3.4, 6.2], [3.6, z0 + 3.4, 6.2]];
-  const gouts = [];
-  for (const [x, z, h] of towers) {
-    B.add(GEO.taper, rock, M4(x, h / 2, z, [2.8, h, 2.8]), st);
-    B.add(GEO.cone, obsid, M4(x, h + 1.2, z, [2.6, 2.6, 2.6]), { jitter: 0.14, cell: 0.4 });
-    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; G.add(GEO.box, molten, M4(x + Math.cos(a) * 1.2, h - 0.2 + (k % 2) * 0.4, z + Math.sin(a) * 1.2, [0.1, 1.2, 0.1]), { boost: GLOW * 0.7 }); }
-    gouts.push([x, h + 2.4, z]);       // fire erupts from each tower top
+  const wood = 0x5A3A22, woodD = 0x331F12, trim = FIRE.obsid, dark = FIRE.rockD, sail = FIRE.lava, hot = FIRE.lavaHot;
+  const st = { jitter: 0.05, cell: 0.4 };
+  const HL = 24, HW = 6.6;                                 // hull length (x) and width (z)
+  // hull body + darker keel + pointed bow & stern
+  B.add(GEO.rbox, wood, M4(0, 1.5, z0, [HL, 3.0, HW]), st);
+  B.add(GEO.rbox, woodD, M4(0, 0.6, z0, [HL + 0.6, 1.4, HW + 0.4]), st);
+  for (const sx of [-1, 1]) B.add(GEO.wedge, wood, M4(sx * (HL / 2 + 1.0), 1.5, z0, [3.2, 2.8, HW], [0, sx > 0 ? 0 : Math.PI, 0]), st);
+  // gunwale rails + deck planking
+  for (const sz of [-1, 1]) B.add(GEO.box, trim, M4(0, 3.05, z0 + sz * HW / 2, [HL, 0.35, 0.35]));
+  B.add(GEO.box, 0x6b5033, M4(0, 3.2, z0, [HL - 1.6, 0.3, HW - 1.0]));
+  // raised stern castle (back of the ship)
+  B.add(GEO.rbox, wood, M4(HL / 2 - 2.8, 4.5, z0, [4.2, 2.8, HW - 0.5]), st);
+  B.add(GEO.rbox, woodD, M4(HL / 2 - 2.8, 6.1, z0, [3.6, 1.0, HW - 1.2]), st);
+  // cannons poking out the battle side (-z)
+  for (let i = -3; i <= 3; i++) B.add(GEO.barrel, dark, M4(i * 3, 2.5, z0 - HW / 2 - 0.3, [0.3, 0.3, 1.6], [Math.PI / 2, 0, 0]));
+  // masts + glowing red sails + pennants
+  for (const [mx, mh] of [[-6.5, 10], [0, 12.5], [6, 10]]) {
+    B.add(GEO.cyl, woodD, M4(mx, 3.2 + mh / 2, z0, [0.32, mh, 0.32]));
+    B.add(GEO.box, woodD, M4(mx, 3.2 + mh * 0.72, z0, [5.2, 0.2, 0.2]));
+    G.add(GEO.box, sail, M4(mx, 3.2 + mh * 0.48, z0, [4.6, mh * 0.5, 0.12]), { boost: GLOW * 0.22 });
+    G.add(GEO.box, hot, M4(mx + 0.6, 3.2 + mh + 0.5, z0, [1.2, 0.55, 0.05]), { boost: GLOW * 0.5 });
   }
-  // curtain wall + gate with a lava-glow portcullis
-  B.add(GEO.rbox, rock, M4(0, 1.9, z0 - 1.6, [6.4, 3.8, 1.2]), st);
-  for (let i = -2; i <= 2; i++) B.add(GEO.wedge, rock, M4(i * 1.2, 4.1, z0 - 2.05, [0.7, 0.8, 0.5]), st);
-  B.add(GEO.box, FIRE.scorch, M4(0, 1.35, z0 - 2.18, [2.1, 2.7, 0.1]));
-  G.add(GEO.box, FIRE.lavaHot, M4(0, 1.2, z0 - 2.2, [1.9, 2.4, 0.06]), { boost: GLOW * 0.8 });
-  for (let i = -2; i <= 2; i++) G.add(GEO.box, molten, M4(i * 0.42, 1.3, z0 - 2.24, [0.07, 2.5, 0.04]), { boost: GLOW });
-  gouts.push([0, 5.4, z0 - 1.6]);
-  // turret (a magma catapult arm)
-  const turret = new THREE.Group(); turret.position.set(0, 4.45, z0 - 1.6);
+  // glowing lava waterline trim (fire theme)
+  for (const sz of [-1, 1]) G.add(GEO.box, sail, M4(0, 0.75, z0 + sz * (HW / 2 + 0.05), [HL, 0.14, 0.08]), { boost: GLOW * 0.55 });
+  // lava braziers on deck = fire gout points
+  const gouts = [];
+  for (const gx of [-8, -1, 7]) { G.add(GEO.cyl, trim, M4(gx, 3.6, z0, [0.55, 0.9, 0.55]), { boost: GLOW * 0.4 }); gouts.push([gx, 4.2, z0]); }
+  // turret: magma catapult amidships (drives the simulation — unchanged interface)
+  const turret = new THREE.Group(); turret.position.set(0, 3.6, z0 - 1.0);
   const tb = new Baker(), tg = new Baker();
-  tb.add(GEO.rbox, obsid, M4(0, 0.25, 0, [0.6, 0.5, 1.6]), { jitter: 0.1 });
-  tb.add(GEO.box, rock, M4(0, 0.45, 0.6, [2.2, 0.18, 0.18]));
-  tg.add(GEO.sphereLo, FIRE.lavaHot, M4(0, 0.6, 0.95, 0.3), { boost: GLOW });
+  tb.add(GEO.rbox, trim, M4(0, 0.25, 0, [0.6, 0.5, 1.6]), { jitter: 0.1 });
+  tb.add(GEO.box, dark, M4(0, 0.45, 0.6, [2.2, 0.18, 0.18]));
+  tg.add(GEO.sphereLo, hot, M4(0, 0.6, 0.95, 0.3), { boost: GLOW });
   const tm = new THREE.Mesh(tb.geometry(), toon(0xffffff, 0.2, { vertexColors: true })); tm.castShadow = true;
   turret.add(tm, new THREE.Mesh(tg.geometry(), glowMat(0xffffff, { vertexColors: true })));
-  // damage cracks (glowing lava fractures)
   const cracks = crackMeshes(z0, true);
   void S;
   return { turret, gouts, cracks };
@@ -440,56 +438,33 @@ function buildFortress(B, G, S) {
 
 // ---------------- the coral/ice citadel (Water base, -z) ----------------
 function buildCitadel(B, G, S) {
+  // WATER WARSHIP (naval redesign): a big ice/crystal battleship at the -z end, broadside facing the battle (+z).
   const z0 = -BZ - 0.4;
-  S.add(GEO.cyl, WATER.iceD, M4(0, 0.3, z0, [12, 0.6, 10.5]));
-  G.add(GEO.ring, WATER.crystal, M4(0, 0.32, z0, [11.6, 4, 10.1]), { boost: GLOW * 0.9 });
-  // tiered ice blocks
-  const blocks = [[0, 1.9, 0, 6.0, 2.8, 5.0], [0, 4.6, -0.2, 4.6, 2.8, 4.0], [0, 7.2, -0.3, 3.2, 2.6, 2.8]];
-  for (const [x, y, z, w, h, d] of blocks) {
-    S.add(GEO.rbox, WATER.ice, M4(x, y, z0 + z, [w, h, d]));
-    for (const sz of [-1, 1]) G.add(GEO.box, WATER.crystal, M4(x, y + h / 2 - 0.14, z0 + z + sz * (d / 2 + 0.01), [w * 0.86, 0.06, 0.03]), { boost: GLOW * 0.8 });
+  const hull = WATER.iceD, hullL = WATER.ice, trim = WATER.crystal, sail = 0x4FB8E6, deckC = 0x9FD3F5;
+  const st = { jitter: 0.04, cell: 0.4 };
+  const HL = 24, HW = 6.6;
+  B.add(GEO.rbox, hull, M4(0, 1.5, z0, [HL, 3.0, HW]), st);
+  S.add(GEO.rbox, hullL, M4(0, 1.7, z0, [HL - 1.0, 2.2, HW - 0.8]));
+  B.add(GEO.rbox, hull, M4(0, 0.6, z0, [HL + 0.6, 1.4, HW + 0.4]), st);
+  for (const sx of [-1, 1]) B.add(GEO.wedge, hull, M4(sx * (HL / 2 + 1.0), 1.5, z0, [3.2, 2.8, HW], [0, sx > 0 ? 0 : Math.PI, 0]), st);
+  for (const sz of [-1, 1]) G.add(GEO.box, trim, M4(0, 3.05, z0 + sz * HW / 2, [HL, 0.14, 0.14]), { boost: GLOW * 0.7 });
+  B.add(GEO.box, deckC, M4(0, 3.2, z0, [HL - 1.6, 0.3, HW - 1.0]));
+  B.add(GEO.rbox, hull, M4(-(HL / 2 - 2.8), 4.5, z0, [4.2, 2.8, HW - 0.5]), st);
+  S.add(GEO.rbox, hullL, M4(-(HL / 2 - 2.8), 6.1, z0, [3.6, 1.0, HW - 1.2]));
+  for (let i = -3; i <= 3; i++) B.add(GEO.barrel, hull, M4(i * 3, 2.5, z0 + HW / 2 + 0.3, [0.3, 0.3, 1.6], [Math.PI / 2, 0, 0]));
+  for (const [mx, mh] of [[-6, 10], [0, 12.5], [6.5, 10]]) {
+    B.add(GEO.cyl, hull, M4(mx, 3.2 + mh / 2, z0, [0.32, mh, 0.32]));
+    B.add(GEO.box, hull, M4(mx, 3.2 + mh * 0.72, z0, [5.2, 0.2, 0.2]));
+    G.add(GEO.box, sail, M4(mx, 3.2 + mh * 0.48, z0, [4.6, mh * 0.5, 0.12]), { boost: GLOW * 0.2 });
+    G.add(GEO.box, trim, M4(mx + 0.6, 3.2 + mh + 0.5, z0, [1.2, 0.55, 0.05]), { boost: GLOW * 0.5 });
   }
-  // coral fans on the flanks
-  for (const sx of [-1, 1]) {
-    for (let k = 0; k < 5; k++) {
-      const a = (k / 5 - 0.4) * 1.6;
-      B.add(GEO.cone, WATER.coral, M4(sx * 3.6 + Math.cos(a) * 0.4, 1.4 + k * 0.3, z0 + 0.6 + Math.sin(a) * 1.2, [0.5, 1.8 + k * 0.2, 0.5], [0.4, 0, -sx * a]), { jitter: 0.2 });
-    }
-    S.add(GEO.rbox, WATER.iceD, M4(sx * 3.9, 2.4, z0 + 0.4, [1.6, 4.4, 2.6]));
-  }
-  // waterfalls down the front faces (scrolling translucent planes)
-  const fallMat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    uniforms: { uTime: TIME },
-    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform float uTime; varying vec2 vUv;
-      float h(vec2 p){ return fract(sin(dot(p, vec2(12.9,78.2))) * 43758.5); }
-      void main(){
-        float streak = h(vec2(floor(vUv.x * 14.0), 0.0));
-        float flow = fract(vUv.y * 2.0 + uTime * (1.2 + streak));
-        float bright = 0.4 + 0.6 * smoothstep(0.0, 0.3, flow) * (1.0 - smoothstep(0.3, 1.0, flow));
-        float foam = smoothstep(0.85, 1.0, vUv.y) + smoothstep(0.1, 0.0, vUv.y);
-        vec3 col = mix(vec3(0.5, 0.8, 1.0), vec3(1.0), foam);
-        gl_FragColor = vec4(col, (0.35 + bright * 0.4 + foam * 0.5) * 0.8);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  });
-  const falls = [];
-  for (const [x, y, z, w, hh] of [[-2.4, 3.2, z0 + 2.62, 1.8, 5.5], [2.4, 3.2, z0 + 2.62, 1.8, 5.5], [0, 5.6, z0 + 2.1, 2.2, 4.0]]) {
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(w, hh), fallMat); f.position.set(x, y, z); f.renderOrder = 3;
-    falls.push(f);
-  }
-  // central glowing core (a frozen orb) + rings
-  S.add(GEO.cyl, WATER.iceD, M4(0, 10.0, z0 - 0.3, [0.55, 3.6, 0.55]));
-  const rings = [];
-  const ringA = new THREE.Mesh(GEO.torus, toon(WATER.crystal, 0.4)); ringA.position.set(0, 10.0, z0 - 0.3); ringA.scale.setScalar(2.6); ringA.castShadow = true;
-  const ringB = new THREE.Mesh(GEO.torus, glowMat(WATER.crystal)); ringB.position.set(0, 11.0, z0 - 0.3); ringB.scale.setScalar(1.7);
-  rings.push(ringA, ringB);
-  const core = new THREE.Mesh(GEO.sphere, glowMat(0xCFF4FF)); core.position.set(0, 12.4, z0 - 0.3);
-  const coreHalo = new THREE.Mesh(GEO.sphere, additive(WATER.crystal, 0.25, 1.5)); coreHalo.scale.setScalar(2.2); core.add(coreHalo);
-  // turret (a water cannon)
-  const turret = new THREE.Group(); turret.position.set(0, 6.05, z0 + 1.5);
+  for (const sz of [-1, 1]) G.add(GEO.box, trim, M4(0, 0.75, z0 + sz * (HW / 2 + 0.05), [HL, 0.14, 0.08]), { boost: GLOW * 0.5 });
+  const falls = [], rings = [];
+  // frozen figurehead orb at the bow (kept as `core` so scene.add stays compatible)
+  const core = new THREE.Mesh(GEO.sphere, glowMat(0xCFF4FF)); core.position.set(-(HL / 2 + 1.2), 2.6, z0);
+  const coreHalo = new THREE.Mesh(GEO.sphere, additive(WATER.crystal, 0.25, 1.5)); coreHalo.scale.setScalar(1.8); core.add(coreHalo);
+  // turret: water cannon amidships (drives the simulation — unchanged interface)
+  const turret = new THREE.Group(); turret.position.set(0, 3.6, z0 + 1.0);
   const tb = new Baker(), tg = new Baker();
   tb.add(GEO.hemi, WATER.iceD, M4(0, 0, 0, [1.4, 1.2, 1.4]));
   tb.add(GEO.barrel, WATER.crystal, M4(0, 0.3, 0.2, [0.22, 0.22, 1.2]));
