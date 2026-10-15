@@ -5,6 +5,8 @@
 import * as THREE from 'three';
 import { toon, glowMat, additive, GEO, Baker, M4, GLOW, GRADIENT, blinkAt, TIME, contactShadowMat, SHADOW_PLANE } from './gfx.js';
 import { PAL } from './models.js';
+// elemental flame/water billboards + pooled ember/droplet trail (defined in entities.js, my own files)
+import { flameMaterial, QuadBatch, FLAME_RIGHT, TIER } from './entities.js';
 
 // Fire hero = a dark ember body overlaid with a climbing flame glow; Water hero = a pale translucent body
 // with a strong cyan fresnel shimmer. The elemental look comes from the materials; the chibi silhouette and
@@ -78,6 +80,13 @@ export class Hero {
     this.marker.add(new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.3, 4).translate(0, 0.65, 0), glowMat(0xffffff)));
     const halo = new THREE.Mesh(GEO.sphere, additive(tc, 0.28, 1.4)); halo.scale.setScalar(1.4); this.marker.add(halo);
     scene.add(this.marker);
+    // ---- elemental aura: a THREE.Fire-style climbing flame body (Ember) or a flowing water body (Tide),
+    // plus a pooled ember (fire) / droplet (water) trail. Camera-facing billboards, one draw call each. ----
+    this.fire = team === 'human';
+    this.hi = TIER === 'high';
+    this.flame = new QuadBatch(scene, flameMaterial(this.fire ? 'fire' : 'water'), 12, 2);
+    this.trailFx = new QuadBatch(scene, flameMaterial('dot'), 56, 3);
+    this.sparks = []; this.emit = 0;
     this.walk = 0; this.lean = 0; this.roll = 0; this.yaw = 0; this.flash = 0; this.pop = 1; this.t = 0;
     this.capeV = 0; this.capeA = 0.2; this.land = 0; this.prevSin = 0;
     this.bank = 0; this.kick = 0; this.hurtPrev = 0; this.recover = 0; this.dashPrev = false;
@@ -202,7 +211,7 @@ export class Hero {
   update(h, dt, t) {
     this.t = t;
     const r = this.root;
-    if (h.dead) { r.visible = false; this.marker.visible = false; this.pop = 0; return; }
+    if (h.dead) { r.visible = false; this.marker.visible = false; this.pop = 0; this.flame.begin(); this.flame.end(); this.trailFx.begin(); this.trailFx.end(); this.sparks.length = 0; return; }
     r.visible = true; this.marker.visible = true;
     this.pop = Math.min(1, this.pop + dt * 4);
     r.position.set(h.x, 0, h.z);
@@ -289,6 +298,60 @@ export class Hero {
     this.marker.rotation.y = t * 1.5;
     this.root.updateMatrixWorld(true);
     this.muzzle.copy(this.tipLocal).applyMatrix4(this.tip.matrixWorld);
+    this.updateFx(h, dt, t, mv, dashing, r.visible);
   }
-  dispose(scene) { scene.remove(this.root); scene.remove(this.marker); }
+  // Flame/water body + ember/droplet trail. Called at the end of update; uses the camera basis cached by
+  // entities.fxFrame() (fixed camera) so billboards face the viewer without needing the camera here.
+  updateFx(h, dt, t, mv, dashing, vis) {
+    const fire = this.fire, x = h.x, z = h.z;
+    const hurt = h.hurtT > 0 ? Math.min(1, h.hurtT / 0.35) : 0;
+    const flick = 0.78 + 0.22 * Math.sin(t * 13 + x) + this.kick * this.kick * 0.6 + hurt * 0.4;
+    const boost = 1 + mv * 0.3 + (dashing ? 0.45 : 0);
+    this.flame.begin();
+    if (vis) {
+      // A ring of flame tongues licking up all around the hero, so the camera-side ones are never hidden
+      // behind the body and Ember reads as living flame (THREE.Fire-style) — plus one tall core column.
+      const ring = this.hi ? 6 : 3, spin = t * 1.3;
+      if (fire) {
+        this.flame.pushColumn(x, 0, z, 1.0, 4.0 * boost, spin, 1.0 * flick, 0.5 * flick, 0.14 * flick, 0.62);   // tall core
+        for (let i = 0; i < ring; i++) {
+          const a = spin + i * (Math.PI * 2 / ring), rr = 0.82, wob = 0.82 + 0.3 * Math.sin(t * 9 + i * 1.6);
+          this.flame.pushColumn(x + Math.cos(a) * rr, 0, z + Math.sin(a) * rr, 0.5, (2.5 + (i % 2) * 0.8) * boost * wob, a * 2.3, 1.0 * flick, 0.46 * flick, 0.12, 0.85);
+        }
+      } else {
+        this.flame.pushColumn(x, 0, z, 0.86, 3.1 * boost, spin, 0.55, 0.88, 1.0, 0.46);                        // flowing core
+        for (let i = 0; i < ring; i++) {
+          const a = spin + i * (Math.PI * 2 / ring), rr = 0.58, wob = 0.85 + 0.25 * Math.sin(t * 7 + i * 1.6);
+          this.flame.pushColumn(x + Math.cos(a) * rr, 0, z + Math.sin(a) * rr, 0.44, (1.9 + (i % 2) * 0.5) * boost * wob, a * 2.3, 0.58, 0.9, 1.0, 0.5);
+        }
+      }
+    }
+    this.flame.end();
+    // spawn embers (rise) / droplets (fall), faster while moving
+    const rate = (fire ? 7 : 5) + mv * (fire ? 28 : 22);
+    const cap = this.hi ? 56 : 28;
+    this.emit += dt * rate;
+    while (this.emit >= 1 && this.sparks.length < cap) {
+      this.emit -= 1;
+      const a = Math.random() * Math.PI * 2, rr = 0.25 + Math.random() * 0.55;
+      this.sparks.push({
+        x: x + Math.cos(a) * rr, y: (fire ? 0.5 : 0.9) + Math.random() * 1.5, z: z + Math.sin(a) * rr,
+        vx: (Math.random() - 0.5) * 0.7, vy: fire ? 1.1 + Math.random() * 1.5 : -(0.3 + Math.random() * 0.7), vz: (Math.random() - 0.5) * 0.7,
+        age: 0, life: fire ? 0.5 + Math.random() * 0.45 : 0.42 + Math.random() * 0.3, size: (fire ? 0.12 : 0.1) + Math.random() * 0.1, seed: Math.random() * 10,
+      });
+    }
+    this.trailFx.begin();
+    for (let i = this.sparks.length - 1; i >= 0; i--) {
+      const p = this.sparks[i]; p.age += dt;
+      if (p.age >= p.life) { this.sparks.splice(i, 1); continue; }
+      p.vy += (fire ? -1.1 : -6.5) * dt;               // embers coast then fall back; droplets get gravity
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      if (p.y < 0.06) { p.y = 0.06; p.vy *= -0.25; }
+      const k = 1 - p.age / p.life, rad = p.size * (fire ? 0.5 + k * 0.9 : 0.6 + k * 0.6);
+      if (fire) this.trailFx.pushDot(p.x, p.y, p.z, rad, p.seed, 1.0, 0.45 + 0.35 * k, 0.12, k);
+      else this.trailFx.pushDot(p.x, p.y, p.z, rad, p.seed, 0.55, 0.88, 1.0, k * 0.85);
+    }
+    this.trailFx.end();
+  }
+  dispose(scene) { scene.remove(this.root); scene.remove(this.marker); this.flame.dispose(); this.trailFx.dispose(); }
 }

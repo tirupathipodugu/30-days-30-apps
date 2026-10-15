@@ -293,3 +293,11 @@ export function minionModel(team, kind) {
   }
   return { grunt: aiGrunt, runner: aiRunner, brute: aiBrute, shooter: aiShooter, boss: aiBoss }[kind]();
 }
+
+// Graphics tier for self-contained elemental FX (fire/water billboards): mirrors look.js's choice without
+// depending on it, so entities.js / hero.js can pick full vs cheap flame on their own. 'q=' URL param wins.
+export function gfxTier() {
+  try { const q = new URLSearchParams(location.search).get('q'); if (q === 'high' || q === 'medium' || q === 'low') return q; } catch (e) { /* ignore */ }
+  let coarse = false; try { coarse = matchMedia('(pointer: coarse)').matches; } catch (e) { /* ignore */ }
+  return (coarse || (navigator.hardwareConcurrency || 8) <= 4) ? 'low' : 'high';
+}
