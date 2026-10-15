@@ -23,8 +23,7 @@ export class UI {
       banner: $('#banner'), callout: $('#callout'), toasts: $('#toasts'),
       vignette: $('#vignette'), hurt: $('#hurt'), slowmo: $('#slowmo'), lowhp: $('#lowhp'), crosshair: $('#crosshair'),
     };
-    // Abilities are no longer buttons — they fire from floor power-ups — so drop the Q/E/R buttons from the HUD. Dash stays.
-    for (const k of ['q', 'e', 'r']) { const b = document.querySelector('.ab[data-ab="' + k + '"]'); if (b) b.remove(); }
+    // Powers are on-screen buttons again (Dash + Q/E/R) with no cooldown — keep every .ab button so they all show.
     this.ab = {};
     for (const b of document.querySelectorAll('.ab')) this.ab[b.dataset.ab] = { el: b, cd: b.querySelector('.cd'), sec: b.querySelector('.sec'), ico: b.querySelector('.ico'), ready: true, lastSec: '' };
     this.cache = {};

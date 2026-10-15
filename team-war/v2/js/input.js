@@ -22,7 +22,9 @@ export class Input {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k) && this.enabled) e.preventDefault();
       if (!e.repeat) {
         if (k === 'ShiftLeft' || k === 'ShiftRight') this.edge.dash = true;
-        // Q/E/R no longer cast abilities — abilities now come from floor power-ups. Only Dash stays on a key.
+        if (k === 'KeyQ') this.edge.q = true;      // powers back on keys (no cooldown)
+        if (k === 'KeyE') this.edge.e = true;
+        if (k === 'KeyR') this.edge.r = true;
         this.emit('key', k);
       }
       this.keys.add(k);

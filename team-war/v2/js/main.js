@@ -161,33 +161,28 @@ function nearestFoe(g, x, z, range, dirX, dirZ, cone) {
 }
 function buildInput(g) {
   const h = g.hero;
-  const mv = rampMove(input.moveVec(), h.dead);
-  const m = screenToWorld(mv.x, mv.y);
-  const out = { mx: m.x, mz: m.z, ax: 0, az: 0, fire: false, aimDist: 9 };
   const a = input.aim();
+  const out = { mx: 0, mz: 0, ax: 0, az: 0, fire: false, aimDist: 9 };
   aimPoint = null;
-  // ---- AUTO-AIM (easy mode, default for everyone) ----
-  // The hero automatically locks onto and fires at the NEAREST living enemy in range, so a casual
-  // player only has to MOVE. Holding the mouse button (desktop) overrides with manual aim+fire.
   const AUTO_AIM_RANGE = 26;
-  const manualMouse = a.kind === 'mouse' && a.fire;
-  if (manualMouse) {
+  // ---- MOVEMENT: on desktop the MOUSE moves the hero (walk toward the cursor); touch/gamepad use the stick ----
+  if (!input.touchMode && a.kind === 'mouse') {
     ndc.set((a.sx / innerWidth) * 2 - 1, -(a.sy / innerHeight) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     if (ray.ray.intersectPlane(plane, hitPt)) {
-      out.ax = hitPt.x - h.x; out.az = hitPt.z - h.z; out.aimDist = Math.hypot(out.ax, out.az);
-      aimPoint = { x: hitPt.x, z: hitPt.z };
+      const dx = hitPt.x - h.x, dz = hitPt.z - h.z, d = Math.hypot(dx, dz) || 1, DEAD = 1.4;
+      if (d > DEAD) { const sp = Math.min(1, (d - DEAD) / 3); out.mx = dx / d * sp; out.mz = dz / d * sp; }
+      aimPoint = { x: hitPt.x, z: hitPt.z };   // marker shows where the hero is heading
     }
-    out.fire = true;
-    // light assist even in manual: snap toward a foe near the cursor
-    const l = Math.hypot(out.ax, out.az) || 1;
-    const f = nearestFoe(g, h.x, h.z, AUTO_AIM_RANGE, out.ax / l, out.az / l, 0.45);
-    if (f) { const fx2 = f.x - h.x, fz = f.z - h.z, fl = Math.hypot(fx2, fz) || 1; out.ax = out.ax / l * 0.3 + fx2 / fl * 0.7; out.az = out.az / l * 0.3 + fz / fl * 0.7; out.aimDist = fl; }
   } else {
-    const f = nearestFoe(g, h.x, h.z, AUTO_AIM_RANGE);
-    if (f) { out.ax = f.x - h.x; out.az = f.z - h.z; out.aimDist = Math.hypot(out.ax, out.az); out.fire = true; }
-    else { out.ax = h.aimX; out.az = h.aimZ; out.fire = false; }   // no enemy in range: hold facing, hold fire
+    const mv = rampMove(input.moveVec(), h.dead);
+    const m = screenToWorld(mv.x, mv.y);
+    out.mx = m.x; out.mz = m.z;
   }
+  // ---- AUTO-AIM: shooting is automatic — always lock onto the NEAREST living enemy in range ----
+  const f = nearestFoe(g, h.x, h.z, AUTO_AIM_RANGE);
+  if (f) { out.ax = f.x - h.x; out.az = f.z - h.z; out.aimDist = Math.hypot(out.ax, out.az); out.fire = true; }
+  else { out.ax = h.aimX; out.az = h.aimZ; out.fire = false; }   // no enemy in range: hold facing, hold fire
   const e = input.takeEdges();
   out.dash = e.dash; out.q = e.q; out.e = e.e; out.r = e.r;
   if (testBot) {

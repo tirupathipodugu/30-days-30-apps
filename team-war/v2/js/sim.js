@@ -379,7 +379,7 @@ export class Game {
     if (h.fireT < 0 && !inp.fire) h.fireT = 0;
     // abilities
     const tdef = { q: inp.q, e: inp.e, r: inp.r };
-    for (const k of ['q', 'e', 'r']) if (tdef[k] && h.cd[k] <= 0 && (k !== 'r' || this.ultUnlocked())) this.useAbility(k, inp);
+    for (const k of ['q', 'e', 'r']) if (tdef[k] && h.cd[k] <= 0) this.useAbility(k, inp);   // all powers usable, no ult gate
     this.collide(h, 2, true);
   }
   fireHero() {
@@ -405,9 +405,7 @@ export class Game {
   }
   useAbility(k, inp) {
     const h = this.hero, T = this.team;
-    const base = { q: 11, e: 17, r: 22 }[k];
-    const cdBase = T === 'ai' ? { q: 10, e: 17, r: 22 }[k] : base;
-    h.cd[k] = cdBase * this.cdMul(); h.cdMax[k] = h.cd[k];
+    h.cd[k] = 0; h.cdMax[k] = 1;   // NO timer restriction on any power (founder request) — tap to cast, as often as you like
     this.stats.abilities++;
     const ax = h.aimX, az = h.aimZ;
     if (T === 'human' && k === 'q') {
