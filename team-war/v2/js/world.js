@@ -1,15 +1,29 @@
 // FIRE vs WATER arena (internal team keys stay 'human' = Fire at +z, 'ai' = Water at -z).
-// The play surface is a clean translucent GLASS island floating in a large expanse of realistic moving WATER
-// (three.js Water.js: Gerstner-ish normal-map waves + planar reflection + fresnel), with a glowing VOLCANIC
-// LAVA layer beneath the water. The lava level + heat track who's winning (fire base healthier -> lava rises
-// and glows hotter; water ahead -> it sinks and dims), read live from the two bases' HP in update().
-// Honest limits: the water is a wave shader with a faked (fresnel) sky reflection, not a true planar mirror or
-// a fluid sim; the lava "glowing up through the water" is a bright emissive layer read through a semi-transparent
-// water surface, not volumetric light. (three.js Water.js stays vendored; see makeWater for why it isn't used.)
+// The play surface is a clean translucent GLASS island floating in a large expanse of realistic moving WATER,
+// with a glowing VOLCANIC LAVA layer beneath the water. The lava level + heat track who's winning (fire base
+// healthier -> lava rises and glows hotter; water ahead -> it sinks and dims), read live from the two bases'
+// HP in update().
+//
+// WATER (makeWater) is a custom surface shader inspired by Evan Wallace's classic WebGL Water / the jeantimex
+// three.js port (jeantimex.github.io/threejs-water) and the Anderson Mancini "Realistic Water" demo. From our
+// fixed grazing camera a true planar-mirror ocean (three.js Water.js, still vendored) reflects only the warm sky
+// and read as a flat sheet, so instead the surface does, per-pixel: animated Gerstner-ish swell + analytic
+// ripple normals; REAL REFRACTION of what's below — the view ray is bent through the surface (Snell/refract())
+// and marched down to the lava plane, so the molten crust/sea floor is sampled DISTORTED by the waves, not flat-
+// tinted; animated CAUSTICS (the signature light web of that demo, a procedural caustic function evaluated at the
+// refracted floor point and also laid onto the lava crust itself); a cool fresnel SKY reflection so the sea reads
+// blue when cold; sun glints; foam; and distance fog. Honest limits below in makeWater.
+//
+// SCENE FIRE (makeFireTex / fireMaterial / FlameBillboard) adapts the THREE.Fire volumetric-flame technique
+// (github.com/typeWolffo/THREE.Fire — ray-marched simplex-noise flames) into a cheaper CAMERA-BILLBOARDED,
+// noise-scrolled procedural flame shader (no texture file: the flame mask is procedural so assets ship inline).
+// The volcano craters, the fortress fire-gouts and the fire-side lava get real rising, flickering flames instead
+// of flat emissive cones. Honest limit: it is a billboarded 2.5D flame, not a true 3D ray-marched volume.
+//
 // An obsidian fortress (+z) and a coral/ice citadel (-z) keep the Fire-vs-Water sides readable from the fixed camera.
 import * as THREE from 'three';
-// three.js Water.js stays vendored at vendor/three/addons/objects/Water.js (see makeWater's note on why the
-// sea is a custom wave shader instead of the planar-reflection ocean under this fixed warm-sky camera).
+// three.js Water.js stays vendored at vendor/three/addons/objects/Water.js (see the note above on why the
+// sea is a custom refractive wave shader instead of the planar-reflection ocean under this fixed warm-sky camera).
 import { toon, glowMat, additive, GEO, Baker, M4, TIME, GLOW, contactShadowMat, SHADOW_PLANE } from './gfx.js';
 import { ARENA } from './config.js';
 import { mulberry32 } from './sim.js';
@@ -17,7 +31,12 @@ import { mulberry32 } from './sim.js';
 const W = ARENA.halfW, Lh = ARENA.halfL, BZ = ARENA.baseZ;
 // The glass PLAY PLATFORM hugs the play area (units move within x±W, z±Lh); its TOP surface stays at world
 // y = 0 — the same plane entities.js renders units on. Water + lava live BELOW it (never move the play plane).
-const GLASS_W = 2 * W + 1, GLASS_L = 2 * Lh + 1;         // 35 x 69 — trimmed tight to the play area
+// The glass footprint is really pinned by the fixed play area (units move within x±W, z±Lh = ±17 x ±34, owned by
+// ARENA in config.js) AND the arena walls that ring it at ±(W+0.45): the glass must stay under the walls or they
+// float over water. So we trim it to the tightest that still covers the walls (edge ~0.05 inside the wall line,
+// down from the old 0.5 border) and deliver the "smaller island" the founder asked for by pulling the sea and
+// volcanoes in much closer (see the volcano/iceberg placement) so the island reads small and the sea dominates.
+const GLASS_W = 2 * W + 0.8, GLASS_L = 2 * Lh + 0.8;     // 34.8 x 68.8 — edge right at the walls (was 35 x 69)
 const GLASS_TOP = 0, GLASS_THICK = 0.5;                  // slab top at y=0, a little visible thickness below
 const WATER_Y = -1.9;                                    // sea surface sits below the floating glass island
 const LAVA_MID = -4.7, LAVA_AMP = 2.7;                   // lava rests mid-deep; rises toward the surface (fire ahead) / sinks (water ahead)
@@ -28,24 +47,55 @@ const FIRE = { rock: 0x33231F, rockD: 0x1C1416, rockL: 0x4A342C, obsid: 0x281C26
 // water pulled down from near-white into readable teal mid-tones so forms read and the half stops looking washed out
 const WATER = { ice: 0x8FC8E6, iceD: 0x568FB2, deep: 0x0C3C5C, surf: 0x1C7FB0, foam: 0xCDEBF5, coral: 0x27B4CC, crystal: 0x8FE8F2 };
 
+// ---------------- shared GLSL: value-noise fbm + a procedural caustic web ----------------
+// Reused by the water surface (refracted-floor caustics), the lava crust (caustics on the sea floor) and the
+// flame billboards (turbulence), so the molten floor the water refracts matches the real lava plane below it.
+const NOISE_GLSL = `
+  float hsh(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
+  float vnoise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+    return mix(mix(hsh(i),hsh(i+vec2(1,0)),f.x), mix(hsh(i+vec2(0,1)),hsh(i+vec2(1,1)),f.x), f.y); }
+  float fbm(vec2 p){ return vnoise(p)*0.6 + vnoise(p*2.1 + 7.0)*0.3 + vnoise(p*4.3 - 3.0)*0.1; }`;
+// The classic Shadertoy caustic (Dave Hoskins / "caustic" family): a few cheap domain-warp iterations whose
+// focused ridges read exactly like refracted sunlight dancing on a pool floor. iter gates cost (3 hi / 2 lo).
+const CAUSTIC_GLSL = `
+  float caustic(vec2 uv, float t){
+    // Pass a small SCALED coordinate (world * ~0.08); *TAU + mod wraps it into the classic tiling domain so the
+    // focused ridges read as refracted sunlight. The 5-iteration count + 1.17/1.4/pow(8) constants are tuned
+    // together (fewer iterations mis-normalise and flood the surface white), so this loop is a fixed 5.
+    vec2 p = mod(uv * 6.28318, 6.28318) - 250.0;
+    vec2 i = p; float c = 1.0; float inten = 0.005;
+    for(int n=0; n<5; n++){
+      float tt = t * 0.4 * (1.0 - (3.5 / float(n + 1)));
+      i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
+      c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / inten), p.y / (cos(i.y + tt) / inten)));
+    }
+    c /= 5.0; c = 1.17 - pow(c, 1.4);
+    return clamp(pow(abs(c), 8.0), 0.0, 1.0);
+  }`;
+
 // ---------------- the realistic moving water expanse ----------------
-// NOTE ON APPROACH: three.js Water.js (the planar-reflection ocean) is vendored under
-// vendor/three/addons/objects/Water.js, but from this fixed, low, grazing camera its surface mirrors the
-// arena's warm hazy SKY almost completely (fresnel reflectance -> 1 at grazing angles), so the sea read as a
-// flat warm "sheet" of sand rather than water, and the only clean fix needed editing the vendored shader
-// (which broke its compile). So the sea here is a custom wave shader we fully control: big Gerstner-ish swell
-// for a moving silhouette, analytic ripple normals, cool fresnel SKY reflection (so it reads blue under the
-// warm sky), bright sun glints, crest + shoreline foam, distance fog into the horizon, and a semi-transparent
-// body so the lava glow below rises up through it. Honest limit: this is a shader surface with faked sky
-// reflection — not a true planar mirror of the scene, and not a real fluid simulation.
+// APPROACH (see the file header): three.js Water.js (the planar-reflection ocean) is vendored under
+// vendor/three/addons/objects/Water.js, but from this fixed grazing camera its surface mirrors the warm sky
+// almost completely and read as a flat sheet. So the sea is a custom refractive wave shader we fully control.
+// WHAT'S REAL: the surface animates (swell + analytic ripple normals); it REFRACTS the floor for real (the view
+// ray is bent through the surface with refract() and marched to the lava plane, so the molten crust is sampled
+// warped by the waves and gets deeper/bluer the farther down it is); animated CAUSTICS are laced onto that
+// refracted floor; the fresnel SKY reflection is cool so the sea reads blue when cold. WHAT'S FAKED: the floor
+// it refracts is the lava evaluated procedurally in-shader (not a render-target of the real scene), the sky
+// reflection is an analytic gradient (not a mirror of the geometry), and caustics are a procedural function
+// (not Evan Wallace's differential-area light-focusing pass). uQ (quality) gates the costly refraction march +
+// 3-iteration caustics to desktop/high|medium; low/phone falls back to the cheaper flat-tinted body + 2-iter.
 const SEA = 620; // big enough to run past the horizon fog from the fixed camera
 function makeWater(detail, sunDir) {
   const seg = Math.max(64, Math.round(190 * detail));
+  const hi = detail >= 0.6 ? 1 : 0; // high/medium get real refraction + full caustics; low = simpler fallback
   const geo = new THREE.PlaneGeometry(SEA, SEA, seg, seg).rotateX(-Math.PI / 2);
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false,
     uniforms: {
       uTime: TIME, uSun: { value: sunDir.clone() }, uHeat: { value: 0.5 },
+      uLavaY: { value: LAVA_MID }, // live lava-plane depth, so refraction marches to where the lava actually is
+      uQ: { value: hi },
       uHorizon: { value: new THREE.Color(0xE9DCC6) }, // matches look.js HAZE so the far sea melts into the sky
     },
     vertexShader: `uniform float uTime; varying vec3 vW;
@@ -61,7 +111,28 @@ function makeWater(detail, sunDir) {
         vW = w.xyz;
         gl_Position = projectionMatrix * viewMatrix * w;
       }`,
-    fragmentShader: `uniform float uTime, uHeat; uniform vec3 uSun, uHorizon; varying vec3 vW;
+    fragmentShader: `uniform float uTime, uHeat, uLavaY, uQ; uniform vec3 uSun, uHorizon; varying vec3 vW;
+      ${NOISE_GLSL}
+      ${CAUSTIC_GLSL}
+      // The MOLTEN GLOW of the lava floor at a refracted floor point (the dark basalt baseline is left out here —
+      // the blue water body already fills that role, so this is only the orange light that rises UP through the
+      // water, matching the real lava plane's seams and brightening as Fire pulls ahead).
+      vec3 moltenGlow(vec2 fp){
+        vec2 q = fp * 0.09; float flow = uTime * 0.05;
+        float f = fbm(q + vec2(0.0, flow)) * 0.6 + fbm(q * 2.3 - vec2(flow * 0.7, 0.0)) * 0.4;
+        float vein = smoothstep(0.46, 0.40, abs(f - 0.5)); // TIGHT molten seams only (a broad glow greys out the blue)
+        float hot = smoothstep(0.46, 1.0, uHeat);          // seams stay dark until Fire actually pulls PAST neutral
+        float pulse = 0.7 + 0.3 * sin(uTime * 1.6 + f * 22.0);
+        vec3 molten = mix(vec3(1.4, 0.35, 0.05), vec3(2.8, 1.2, 0.3), uHeat);
+        return molten * vein * pulse * hot * (0.55 + pow(vein, 3.0));
+      }
+      // Animated CAUSTIC web (cool refracted-sunlight light). Squared so only the focused ridges read as crisp bright
+      // lines on the dark blue water (a broad caustic glow marbles the surface cream under the scene's warm grade).
+      vec3 causticCol(vec2 fp){
+        float ca = caustic(fp * 0.08, uTime);
+        ca = ca * ca * ca * 2.1;                    // cube it so the web is crisp bright lines, dark blue between
+        return vec3(0.40, 0.64, 0.98) * ca;
+      }
       // height field (swell + ripples) and its analytic gradient -> crisp normals independent of mesh density
       void waves(vec2 p, out float h, out vec2 grad){
         h = 0.0; grad = vec2(0.0);
@@ -87,25 +158,44 @@ function makeWater(detail, sunDir) {
         float fres = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
         // SATURATED cool sky reflection (not near-white) so the blue survives the scene's warm grade & reads as water
         vec3 r = reflect(-V, N); float ry = clamp(r.y, 0.0, 1.0);
-        vec3 skyRefl = mix(vec3(0.30, 0.52, 0.74), vec3(0.08, 0.28, 0.58), ry); // saturated horizon -> deep zenith blue
-        // body colour: deep blue rising to a brighter teal on the wave faces
-        vec3 body = mix(vec3(0.02, 0.13, 0.24), vec3(0.05, 0.33, 0.50), smoothstep(-0.4, 0.5, h));
-        vec3 col = mix(body, skyRefl, fres * 0.72);
+        vec3 skyRefl = mix(vec3(0.32, 0.55, 0.80), vec3(0.08, 0.30, 0.62), ry); // saturated horizon -> deep zenith blue
+        // WATER BODY: a DEEP, saturated blue sea (absorption tint), darkest in the troughs rising to teal on wave
+        // faces. Kept dark + very low red so it reads as BLUE water through the scene's warm filmic grade; the lava
+        // glow and the bright caustic lines are added UP through it.
+        vec3 body = mix(vec3(0.004, 0.045, 0.125), vec3(0.015, 0.21, 0.37), smoothstep(-0.5, 0.6, h));
+        if (uQ > 0.5) {
+          // REFRACTION: bend the view ray into the water (Snell, eta = air/water) and march it to the lava plane;
+          // the wave normal warps where it lands, so the molten glow + caustics beneath wobble like real refraction.
+          vec3 refr = refract(-V, N, 0.752);
+          vec3 fp3 = (refr.y < -0.02) ? (vW + refr * ((uLavaY - vW.y) / refr.y)) : vW; // floor hit (or straight down)
+          float depth = clamp((vW.y - uLavaY) * 0.05, 0.0, 1.0);                        // how much blue water is in front
+          float through = (1.0 - 0.7 * depth);                                          // shallower lava shows through more
+          body += moltenGlow(fp3.xz) * through;                                         // lava glows UP through the sea
+          body += causticCol(fp3.xz) * (0.6 + 0.4 * through);                           // caustics on the refracted floor
+        } else {
+          // low/phone fallback: NO refraction march and NO 5-iteration caustic (both gated off for cost). The lava
+          // glow still reads straight down, and a cheap 2-sine shimmer stands in for caustics so it still sparkles.
+          body += moltenGlow(vW.xz) * 0.7;
+          float shim = 0.5 + 0.5 * sin(vW.x * 0.6 + uTime) * sin(vW.z * 0.6 - uTime * 0.8);
+          body += vec3(0.18, 0.26, 0.34) * shim * 0.4;
+        }
+        // reflection blended in moderately (not a full mirror) so the refraction + caustics stay visible through it
+        vec3 col = mix(body, skyRefl, fres * 0.4 + 0.05);
         // sun glints that sparkle on the ripple crests
         vec3 Rs = reflect(-normalize(uSun), N);
-        float spec = pow(max(dot(V, Rs), 0.0), 130.0);
-        col += vec3(1.0, 0.95, 0.82) * spec * 3.0;
+        float spec = pow(max(dot(V, Rs), 0.0), 150.0);
+        col += vec3(1.0, 0.95, 0.82) * spec * 2.2;
         // foam: on the highest crests + a soft ring hugging the glass island's footprint
-        float crest = smoothstep(0.34, 0.62, h);
+        float crest = smoothstep(0.38, 0.64, h);
         float ex = abs(vW.x) - ${(GLASS_W / 2).toFixed(2)}, ez = abs(vW.z) - ${(GLASS_L / 2).toFixed(2)};
         float edge = max(ex, ez);
-        float shore = smoothstep(2.2, 0.0, max(edge, 0.0)) * step(0.0, edge);
-        float foam = clamp(crest * 0.7 + shore * (0.55 + 0.45 * sin(vW.x * 3.0 + vW.z * 3.0 - uTime * 2.0)), 0.0, 1.0);
-        col = mix(col, vec3(0.95, 0.98, 1.0), foam * 0.85);
+        float shore = smoothstep(1.8, 0.0, max(edge, 0.0)) * step(0.0, edge);
+        float foam = clamp(crest * 0.55 + shore * (0.5 + 0.45 * sin(vW.x * 3.0 + vW.z * 3.0 - uTime * 2.0)), 0.0, 1.0);
+        col = mix(col, vec3(0.92, 0.97, 1.0), foam * 0.8);
         // thin the water where the lava is hot so the molten glow rises through; opaque + blue when it's cold
-        float alpha = clamp(mix(0.86, 0.62, uHeat) + fres * 0.1 + foam * 0.35, 0.4, 0.96);
-        // distance haze: far sea melts into the sky horizon colour
-        float fog = smoothstep(130.0, 320.0, length(cameraPosition - vW));
+        float alpha = clamp(mix(0.9, 0.72, uHeat) + fres * 0.08 + foam * 0.3, 0.5, 0.98);
+        // distance haze: only the FAR horizon melts into the sky colour (pushed back so the play area stays clear blue)
+        float fog = smoothstep(210.0, 470.0, length(cameraPosition - vW));
         col = mix(col, uHorizon, fog);
         // output LINEAR; the composer's OutputPass applies tone-map + sRGB once (adding the in-shader includes
         // here double-processed the colour and washed the sea out to cream, so they are deliberately omitted)
@@ -119,14 +209,14 @@ function makeWater(detail, sunDir) {
 // ---------------- the volcanic lava layer beneath the water ----------------
 // An emissive flowing-crust shader. position.y and uHeat are driven in update() by the fire/water advantage,
 // so the lava visibly RISES + glows hotter when Fire is ahead and SINKS + dims when Water is ahead.
-function makeLava() {
+function makeLava(detail) {
+  const hi = detail >= 0.6 ? 1 : 0; // caustics on the crust only on high/medium
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uTime: TIME, uHeat: { value: 0.5 } },
+    uniforms: { uTime: TIME, uHeat: { value: 0.5 }, uQ: { value: hi } },
     vertexShader: 'varying vec2 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xz; gl_Position = projectionMatrix * viewMatrix * w; }',
-    fragmentShader: `uniform float uTime, uHeat; varying vec2 vW;
-      float h(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
-      float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
-      float fbm(vec2 p){ return n(p)*0.6 + n(p*2.1 + 7.0)*0.3 + n(p*4.3 - 3.0)*0.1; }
+    fragmentShader: `uniform float uTime, uHeat, uQ; varying vec2 vW;
+      ${NOISE_GLSL}
+      ${CAUSTIC_GLSL}
       void main(){
         vec2 q = vW * 0.09;
         float flow = uTime * 0.05;
@@ -139,6 +229,12 @@ function makeLava() {
         vec3 molten = mix(vec3(1.3, 0.32, 0.05), vec3(2.3, 1.05, 0.28), uHeat);
         vec3 col = crust + molten * (vein * (0.18 + 0.82 * hot) * pulse);
         col += molten * pow(vein, 3.0) * hot * 0.6;                  // white-hot cores for the bloom to grab
+        // CAUSTICS on the sea floor itself: faint caustic light where the water is thin/cool, so the floor seen
+        // directly (beyond the water edge, or through thin water) carries the same dancing web as the refracted view.
+        if (uQ > 0.5) {
+          float ca = caustic(vW * 0.08, uTime);
+          col += vec3(0.45, 0.55, 0.7) * ca * (0.35 + 0.4 * (1.0 - hot));
+        }
         // output LINEAR; the composer's OutputPass does tone-map + sRGB once (no in-shader includes = no double grade)
         gl_FragColor = vec4(col, 1.0);
       }`,
@@ -146,6 +242,66 @@ function makeLava() {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(SEA, SEA).rotateX(-Math.PI / 2), mat);
   m.position.y = LAVA_MID; m.renderOrder = -2;
   return { mesh: m, mat };
+}
+
+// ---------------- volumetric-style SCENE FIRE (THREE.Fire-inspired flame billboards) ----------------
+// Adapts the THREE.Fire volumetric-flame look (ray-marched simplex-noise flames) into a cheaper, camera-facing
+// flame BILLBOARD whose mask is a scrolled-noise procedural flame (no texture file — the flame is computed in the
+// shader so assets ship inline). One shared material is used for every flame; each flame's world position seeds
+// its noise so they all flicker independently. Additive + emissive so the bloom pass gives them a real glow.
+// detail gates the extra turbulence octave (uQ) to high/medium; low still animates, just smoother/cheaper.
+let _fireMat = null;
+function fireMaterial(detail) {
+  if (_fireMat) return _fireMat;
+  const hi = detail >= 0.6 ? 1 : 0;
+  _fireMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: TIME, uQ: { value: hi } },
+    // billboard: the plane is sized in its geometry (bottom at y=0); we rebuild it in world space facing the
+    // camera around the vertical axis so flames always face us and rise straight up (no per-frame JS needed).
+    vertexShader: `uniform float uTime; varying vec2 vUv; varying vec3 vBase;
+      void main(){
+        vUv = uv;
+        vec3 base = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        vBase = base;
+        vec3 look = cameraPosition - base; look.y = 0.0; look = normalize(look);
+        vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), look));
+        vec3 wp = base + right * position.x + vec3(0.0, 1.0, 0.0) * position.y;
+        gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+      }`,
+    fragmentShader: `uniform float uTime, uQ; varying vec2 vUv; varying vec3 vBase;
+      ${NOISE_GLSL}
+      void main(){
+        vec2 uv = vUv;
+        float seed = dot(vBase.xz, vec2(0.17, 0.23));
+        // scroll noise upward for rising flame turbulence; a second finer octave on hi tier
+        float n = fbm(vec2(uv.x * 2.2, uv.y * 2.4 - uTime * 1.7) + seed);
+        float n2 = uQ > 0.5 ? fbm(vec2(uv.x * 5.0 + 4.0, uv.y * 4.2 - uTime * 2.6) + seed) : 0.5;
+        float warp = (n - 0.5) * 0.4 + (n2 - 0.5) * 0.2 * uQ;
+        // flame body: distance from the (warped) centre line, tapering from a wide base to a point
+        float cx = uv.x - 0.5 + warp;
+        float width = mix(0.46, 0.05, uv.y);
+        float body = smoothstep(width, width * 0.15, abs(cx));
+        // vertical envelope: licks of flame whose tips flicker in height; fade in off the ground
+        float top = 0.72 + 0.26 * n;
+        float vprof = smoothstep(top, top - 0.55, uv.y) * smoothstep(0.0, 0.06, uv.y);
+        float f = clamp(body * vprof * (0.6 + 0.7 * n), 0.0, 1.0);
+        if (f < 0.015) discard;
+        // colour ramp: deep red edge -> orange -> white-hot yellow core (values >1 so the bloom grabs the core)
+        vec3 col = mix(vec3(0.75, 0.06, 0.015), vec3(1.7, 0.6, 0.08), smoothstep(0.08, 0.45, f));
+        col = mix(col, vec3(2.6, 1.8, 0.75), smoothstep(0.5, 0.92, f));
+        gl_FragColor = vec4(col * f, f);
+      }`,
+  });
+  return _fireMat;
+}
+// A single flame billboard of width w / height h with its base pivot at (x,y,z). jitter gives a little lean.
+function flame(x, y, z, w, h, mat) {
+  const g = new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0);
+  const m = new THREE.Mesh(g, mat);
+  m.position.set(x, y, z);
+  m.frustumCulled = false; m.renderOrder = 5;
+  return m;
 }
 
 // ---------------- the clean glass play platform (units stand/move on its top face at y = 0) ----------------
@@ -366,7 +522,7 @@ function crackMeshes(z0, fire) {
 }
 
 // ---------------- background set pieces ----------------
-function buildVolcano(B, G, x, z) {
+function buildVolcano(B, G, x, z, fireMat) {
   const y = terrainHeightApprox(x);
   B.add(GEO.cone, FIRE.rockD, M4(x, y + 6, z, [16, 13, 16]), { jitter: 0.18, cell: 1.0 });
   B.add(GEO.cone, FIRE.obsid, M4(x, y + 11.5, z, [7, 4, 7]), { jitter: 0.15, cell: 0.6 });
@@ -376,7 +532,13 @@ function buildVolcano(B, G, x, z) {
   crater.add(new THREE.Mesh(gb.geometry(), glowMat(0xffffff, { vertexColors: true })));
   // lava running down a flank
   G.add(GEO.box, FIRE.lava, M4(x + 2, y + 6, z + 3, [0.6, 0.2, 10], [0.5, 0.3, 0]), { boost: GLOW * 0.7 });
-  return crater;
+  // REAL rising flames erupting from the crater (a tall core flame + two smaller licks at the rim)
+  const flames = [
+    flame(x, y + 12.8, z, 11, 15, fireMat),
+    flame(x - 2.2, y + 12.9, z + 0.6, 5, 8, fireMat),
+    flame(x + 2.4, y + 12.9, z - 0.5, 5.5, 9, fireMat),
+  ];
+  return { crater, flames };
 }
 function buildIceberg(B, G, x, z) {
   const y = WATER_Y - 0.6;
@@ -465,25 +627,31 @@ export function buildWorld(scene, renderer, cover, detail = 1) {
   const B = new Baker(), G = new Baker(), S = new Baker();
   // sun direction must match look.js's key light (34, 40, 30) so the water's sun glints land believably.
   const sunDir = new THREE.Vector3(34, 40, 30).normalize();
-  const lava = makeLava();                 // glowing volcanic layer at the bottom
-  const water = makeWater(detail, sunDir); // realistic moving sea above it
+  const lava = makeLava(detail);           // glowing volcanic layer at the bottom (+ caustics on high/medium)
+  const water = makeWater(detail, sunDir); // realistic refractive moving sea above it
   const glass = glassIsland(G);            // clean translucent play platform at y = 0 (rim is baked into G)
   scene.add(lava.mesh, water.mesh, glass);
+  const fireMat = fireMaterial(detail);    // shared volumetric-style flame material for all scene fire
 
   buildWalls(B, G, S);
   buildCover(B, G, S, cover);
   const fort = buildFortress(B, G, S);
   const citadel = buildCitadel(B, G, S);
-  const volcano = buildVolcano(B, G, -40, 34);
-  buildVolcano(B, G, 42, 60);
-  buildIceberg(B, G, -38, -40);
-  buildIceberg(B, G, 40, -54);
+  // Volcanoes + icebergs pulled IN closer than before so the glass island reads smaller and the sea + volcanoes
+  // dominate the frame (the founder wanted a smaller-looking platform; the play bounds themselves are fixed).
+  const v1 = buildVolcano(B, G, -31, 28, fireMat);
+  const v2 = buildVolcano(B, G, 33, 48, fireMat);
+  const volcano = v1.crater;
+  buildIceberg(B, G, -29, -32);
+  buildIceberg(B, G, 31, -44);
 
   const add = (baker, mat, shadow = true) => { if (baker.empty) return; const m = new THREE.Mesh(baker.geometry(), mat); m.castShadow = shadow; m.receiveShadow = true; scene.add(m); };
   add(B, toon(0xffffff, 0.16, { vertexColors: true }));
   add(S, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.1, transparent: true, opacity: 0.92 }));
   add(G, glowMat(0xffffff, { vertexColors: true }), false);
-  scene.add(volcano, ...citadel.falls, ...citadel.rings, citadel.core);
+  scene.add(volcano, v2.crater, ...citadel.falls, ...citadel.rings, citadel.core);
+  for (const f of v1.flames) scene.add(f);
+  for (const f of v2.flames) scene.add(f);
   for (const c of fort.cracks) scene.add(c);
   for (const c of citadel.cracks) scene.add(c);
 
@@ -497,13 +665,15 @@ export function buildWorld(scene, renderer, cover, detail = 1) {
   staticShadows.forEach(([x, z, r, y], i) => { _sm.makeScale(r, 1, r); _sm.setPosition(x, y, z); shMesh.setMatrixAt(i, _sm); });
   shMesh.instanceMatrix.needsUpdate = true; scene.add(shMesh);
 
-  // fire gouts erupting from the fortress
-  const goutMat = additive(FIRE.lava, 0.95, 2.6), goutCore = additive(FIRE.lavaHot, 0.95, 2.6);
-  const gouts = fort.gouts.map(([x, y, z]) => {
-    const f = new THREE.Mesh(GEO.cone, goutMat); f.position.set(x, y, z); f.scale.set(0.7, 1.6, 0.7);
-    const core = new THREE.Mesh(GEO.cone, goutCore); core.scale.set(0.5, 0.6, 0.5); core.position.y = -0.3; f.add(core);
-    scene.add(f); return f;
-  });
+  // fire erupting from the fortress: real rising flame billboards at each tower top + the gate (THREE.Fire-style),
+  // replacing the old flat additive cones. Their bases sit a touch below the gout point so the flame rises through it.
+  for (const [x, y, z] of fort.gouts) scene.add(flame(x, y - 1.6, z, 3.4, 6.5, fireMat));
+  // fire-side lava-surface flames: a ring of small flames licking up off the molten moat around the fortress base,
+  // so the Fire side's lava reads as actually burning rather than just glowing.
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2, rr = 10.6;
+    scene.add(flame(Math.cos(a) * rr, 0.4, (BZ + 0.6) + Math.sin(a) * rr * 0.85, 2.4 + (i % 3) * 0.5, 3.6 + (i % 2) * 1.2, fireMat));
+  }
   const fireLight = new THREE.PointLight(0xFF6A2A, detail > 0.6 ? 15 : 0, 20, 1.8); fireLight.position.set(0, 7, BZ - 2);
   const waterLight = new THREE.PointLight(0x4DC8FF, detail > 0.6 ? 12 : 0, 18, 1.8); waterLight.position.set(0, 7, -BZ + 3);
   scene.add(fireLight, waterLight);
@@ -545,17 +715,14 @@ export function buildWorld(scene, renderer, cover, detail = 1) {
       lavaY += (targetY - lavaY) * ease; lavaHeat += (targetHeat - lavaHeat) * ease;
       lava.mesh.position.y = lavaY; lava.mat.uniforms.uHeat.value = lavaHeat;
       // feed the lava heat to the water so it thins (molten glow rises through) when Fire leads and stays a
-      // bright opaque blue (hiding the cold dark lava) when Water leads. Waves animate off the shared TIME.
+      // bright opaque blue (hiding the cold dark lava) when Water leads. Waves + flames animate off shared TIME.
       water.mat.uniforms.uHeat.value = lavaHeat;
+      water.mat.uniforms.uLavaY.value = lavaY; // refraction marches to where the lava plane actually sits now
       volcano.children[0] && (volcano.rotation.y = t * 0.1);
       citadel.rings[0].rotation.x = Math.sin(t * 0.6) * 0.3; citadel.rings[0].rotation.z = t * 0.6;
       citadel.rings[1].rotation.x = t * 0.9; citadel.rings[1].rotation.z = Math.cos(t) * 0.3;
       citadel.core.scale.setScalar(1 + Math.sin(t * 3) * 0.1);
-      for (let i = 0; i < gouts.length; i++) {
-        const f = gouts[i], k = 1.0 + Math.sin(t * 11 + i * 3) * 0.3 + Math.sin(t * 23 + i) * 0.2;
-        f.scale.set(0.7 * (2 - k) * 0.8, 1.6 * k, 0.7 * (2 - k) * 0.8);
-        f.rotation.z = Math.sin(t * 6 + i) * 0.12;
-      }
+      // (scene flames animate entirely in their shader off TIME — no per-frame JS, so they cost nothing here)
       if (fireLight.intensity > 0) fireLight.intensity = 14 + Math.sin(t * 13) * 3 + Math.sin(t * 29) * 2;
       if (!game) return;
       for (const k of ['human', 'ai']) {
