@@ -19,5 +19,12 @@
     "hook": "Scan your face in 10 seconds and see what your skin actually needs.",
     "path": "skin-check/",
     "tweet": "2110373097316794852"
+  },
+  {
+    "day": 4,
+    "name": "Fire vs Water",
+    "hook": "Pick fire or water, summon a swarm that follows you, and sink the other team's ship.",
+    "path": "team-war/v2/",
+    "tweet": "2110797637490454737"
   }
 ]

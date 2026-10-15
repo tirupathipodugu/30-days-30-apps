@@ -1,7 +1,7 @@
 // DOM side of the game: HUD, banners, callouts, toasts and the menu / upgrade / pause / end / armory screens.
-import { TEAMS, UPG, RARITY, STREAKS, MAX_WAVE, SHOP, SYNERGIES, TWISTS, xpForLevel, ULT_LEVEL, KINDS, other } from './config.js?v=1015.3030';
-import { currencyName } from './meta.js?v=1015.3030';
-import { MATCH } from './match.js?v=1015.3030';
+import { TEAMS, UPG, RARITY, STREAKS, MAX_WAVE, SHOP, SYNERGIES, TWISTS, xpForLevel, ULT_LEVEL, KINDS, other } from './config.js?v=1015.3130';
+import { currencyName } from './meta.js?v=1015.3130';
+import { MATCH } from './match.js?v=1015.3130';
 
 const $ = (s) => document.querySelector(s);
 const SHARE_URL = 'https://tirupathipodugu.github.io/ideas/team-war/v2/';
@@ -397,9 +397,8 @@ body.touch #mpCards button { width: 112px; padding: 6px 8px; } body.touch #mpCar
 #mpBoard td:nth-child(2), #mpBoard th:nth-child(2) { text-align: left; } #mpBoard tr.me td { background: rgba(255,200,61,.16); }
 #mpBoard .next { margin-top: 10px; color: var(--muted); font-weight: 800; }
 @media (pointer: coarse), (max-width: 720px) {
-  #mpRoster { width: 190px; right: calc(8px + var(--safe-r)); bottom: calc(8px + var(--safe-b)); padding: 5px 8px 4px; font-size: 12px; }
-  #mpRoster .rows { max-height: 140px; }
-  #mpFeed { top: calc(118px + var(--safe-t)); } #mpFeed div { font-size: 12px; }
+  /* mobile: strip the on-screen text clutter (kill feed, scoreboard, warning/ability toasts) per founder - keep HP, objective bars, abilities and your own name tag */
+  #mpFeed, #mpRoster, #toasts { display: none !important; }
 }
 @media (max-width: 560px) { /* the HUD wraps to two rows here: feed and toasts go below it */
   #mpFeed { top: calc(192px + var(--safe-t)); width: min(56vw, 300px); }

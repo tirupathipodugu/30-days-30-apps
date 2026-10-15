@@ -2,9 +2,9 @@
 // running js/match.js), sends only inputs, and turns snapshots into a game-like view for the renderer:
 // other heroes and minions are drawn ~100 ms in the past (smooth interpolation), the player's own hero is
 // predicted locally from its inputs and corrected by the server (so controls feel instant).
-import { ARENA, HERO, KINDS, baseZ, fwd, other } from './config.js?v=1015.3030';
-import { COVER } from './sim.js?v=1015.3030';
-import { SIDE_OF, KIND_LIST, PICK_LIST, SLAM_KINDS, BOSS_STATES, MATCH, cleanName } from './match.js?v=1015.3030';
+import { ARENA, HERO, KINDS, baseZ, fwd, other } from './config.js?v=1015.3130';
+import { COVER } from './sim.js?v=1015.3130';
+import { SIDE_OF, KIND_LIST, PICK_LIST, SLAM_KINDS, BOSS_STATES, MATCH, cleanName } from './match.js?v=1015.3130';
 
 export const DEFAULT_SERVER = 'wss://human-vs-ai.tirupathi-podugu.workers.dev';
 // ?server=local -> a wrangler dev server on this machine, ?server=off -> always offline. Nothing else is accepted.
