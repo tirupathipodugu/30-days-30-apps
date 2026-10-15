@@ -64,8 +64,8 @@ class GradePass extends ShaderPass {
     super({
       uniforms: {
         tDiffuse: { value: null }, uTime: { value: 0 }, aspect: { value: 1.6 },
-        contrast: { value: 1.12 }, saturation: { value: 1.12 }, warmth: { value: 0.78 },
-        lift: { value: 0.012 }, vignette: { value: 0.34 }, grain: { value: 0.0 },
+        contrast: { value: 1.1 }, saturation: { value: 1.14 }, warmth: { value: 0.3 },
+        lift: { value: 0.012 }, vignette: { value: 0.28 }, grain: { value: 0.0 },
       },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: /* glsl */`
