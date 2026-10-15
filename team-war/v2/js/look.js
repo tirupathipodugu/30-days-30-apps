@@ -9,7 +9,7 @@ import { UnrealBloomPass } from '../vendor/three/addons/postprocessing/UnrealBlo
 import { OutputPass } from '../vendor/three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from '../vendor/three/addons/shaders/FXAAShader.js';
 import { RoomEnvironment } from '../vendor/three/addons/environments/RoomEnvironment.js';
-import { ARENA } from './config.js?v=202610152115';
+import { ARENA } from './config.js?v=1015.2125';
 
 export const SKY_TOP = 0x5FA8E0, SKY_HORIZON = 0xF6E3C4, HAZE = 0xE9DCC6;
 

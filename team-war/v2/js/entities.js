@@ -1,9 +1,9 @@
 // Draws everything the simulation owns except the hero: minions (instanced), shots, telegraphs,
 // shield walls, firewalls, drones, pickups and health bars.
 import * as THREE from 'three';
-import { Crowd, rootMatrix, additive, glowMat, toon, GEO, TIME, contactShadowMat, SHADOW_PLANE } from './gfx.js?v=202610152115';
-import { minionModel, PAL, gfxTier } from './models.js?v=202610152115';
-import { KINDS, PICKUPS } from './config.js?v=202610152115';
+import { Crowd, rootMatrix, additive, glowMat, toon, GEO, TIME, contactShadowMat, SHADOW_PLANE } from './gfx.js?v=1015.2125';
+import { minionModel, PAL, gfxTier } from './models.js?v=1015.2125';
+import { KINDS, PICKUPS } from './config.js?v=1015.2125';
 
 // ============================================================================
 // Elemental unit FX — self-contained here (no shared deps added to gfx.js).

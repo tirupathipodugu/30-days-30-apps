@@ -1,6 +1,6 @@
 // Progress saved on this device: level/XP, coins (Human) / parts (AI) — one wallet, named after your side —
 // unlocks, best scores and the daily challenge. Every storage call is wrapped: private windows may block it.
-import { SHOP, MODIFIERS, xpForLevel, ULT_LEVEL, TEAMS } from './config.js?v=202610152115';
+import { SHOP, MODIFIERS, xpForLevel, ULT_LEVEL, TEAMS } from './config.js?v=1015.2125';
 
 const KEY = 'hva2.profile';
 const fresh = () => ({

@@ -1,6 +1,6 @@
 // Game feel: pooled particles, shockwave rings, damage numbers, screen shake and light flashes.
 import * as THREE from 'three';
-import { additive, toon, GEO } from './gfx.js?v=202610152115';
+import { additive, toon, GEO } from './gfx.js?v=1015.2125';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color(), _e = new THREE.Euler();
 
