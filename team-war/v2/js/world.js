@@ -24,9 +24,9 @@
 import * as THREE from 'three';
 // three.js Water.js stays vendored at vendor/three/addons/objects/Water.js (see the note above on why the
 // sea is a custom refractive wave shader instead of the planar-reflection ocean under this fixed warm-sky camera).
-import { toon, glowMat, additive, GEO, Baker, M4, TIME, GLOW, contactShadowMat, SHADOW_PLANE } from './gfx.js';
-import { ARENA } from './config.js';
-import { mulberry32 } from './sim.js';
+import { toon, glowMat, additive, GEO, Baker, M4, TIME, GLOW, contactShadowMat, SHADOW_PLANE } from './gfx.js?v=202610152115';
+import { ARENA } from './config.js?v=202610152115';
+import { mulberry32 } from './sim.js?v=202610152115';
 
 const W = ARENA.halfW, Lh = ARENA.halfL, BZ = ARENA.baseZ;
 // The glass PLAY PLATFORM hugs the play area (units move within x±W, z±Lh); its TOP surface stays at world

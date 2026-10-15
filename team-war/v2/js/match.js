@@ -2,9 +2,9 @@
 // game server (server/room-v2.js) runs exactly this file; the page renders the snapshots it sends.
 // Real Team Human heroes fight real Team AI heroes (PvP) while both sides' minion waves march (PvE).
 // Bot heroes fill a side that has fewer players. A match ends when a base falls or after 8 minutes.
-import { ARENA, HERO, KINDS, UPGRADES, UPG, SYNERGIES, PICKUPS, STREAKS, TWISTS, baseZ, fwd, other, ABILITY_PICKS } from './config.js';
-import { COVER, mulberry32, segCircle, segSeg } from './sim.js';
-import { makeBot, botPick } from './bot.js';
+import { ARENA, HERO, KINDS, UPGRADES, UPG, SYNERGIES, PICKUPS, STREAKS, TWISTS, baseZ, fwd, other, ABILITY_PICKS } from './config.js?v=202610152115';
+import { COVER, mulberry32, segCircle, segSeg } from './sim.js?v=202610152115';
+import { makeBot, botPick } from './bot.js?v=202610152115';
 
 export const MATCH = {
   dur: 480, showEnd: 8, respawn: 4, maxPerSide: 6, maxPlayers: 12, offerTime: 10,

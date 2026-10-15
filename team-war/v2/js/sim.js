@@ -5,7 +5,7 @@
 import {
   ARENA, HERO, KINDS, UPGRADES, UPG, SYNERGIES, PICKUPS, STREAKS, MAX_WAVE,
   baseZ, fwd, other, waveCounts, waveScale, bossWave, TWISTS, TEAMS, ABILITY_PICKS, ABILITY_KEY,
-} from './config.js';
+} from './config.js?v=202610152115';
 
 export function mulberry32(seed) {
   let a = seed >>> 0;

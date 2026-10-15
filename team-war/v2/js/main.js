@@ -1,18 +1,18 @@
 // Human vs AI 2.0 — wires the simulation to rendering, effects, sound and UI.
 import * as THREE from 'three';
-import { Game, COVER } from './sim.js';
-import { TEAMS, KINDS, other, MAX_WAVE, UPG, SHOP, ULT_LEVEL, SYNERGIES, TWISTS, fwd, baseZ } from './config.js';
-import { buildWorld } from './world.js';
-import { Entities } from './entities.js';
-import { Hero } from './hero.js';
-import { FX } from './fx.js';
-import { Audio } from './audio.js';
-import { Input } from './input.js';
-import { UI, BOSS_NAMES } from './ui.js';
-import { makeBot, botPick } from './bot.js';
-import * as meta from './meta.js';
-import { createLook, fixedCamera } from './look.js';
-import { Net, serverUrl, cleanName } from './net.js'; // multiplayer
+import { Game, COVER } from './sim.js?v=202610152115';
+import { TEAMS, KINDS, other, MAX_WAVE, UPG, SHOP, ULT_LEVEL, SYNERGIES, TWISTS, fwd, baseZ } from './config.js?v=202610152115';
+import { buildWorld } from './world.js?v=202610152115';
+import { Entities } from './entities.js?v=202610152115';
+import { Hero } from './hero.js?v=202610152115';
+import { FX } from './fx.js?v=202610152115';
+import { Audio } from './audio.js?v=202610152115';
+import { Input } from './input.js?v=202610152115';
+import { UI, BOSS_NAMES } from './ui.js?v=202610152115';
+import { makeBot, botPick } from './bot.js?v=202610152115';
+import * as meta from './meta.js?v=202610152115';
+import { createLook, fixedCamera } from './look.js?v=202610152115';
+import { Net, serverUrl, cleanName } from './net.js?v=202610152115'; // multiplayer
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('c');

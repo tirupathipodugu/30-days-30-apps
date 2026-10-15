@@ -1,6 +1,6 @@
 // A simple bot that plays the hero. Used for the menu demo, balance tests and the test hook.
 // skill 0..1: aim jitter, reaction to boss slams and how well it uses abilities.
-import { baseZ, fwd, KINDS } from './config.js';
+import { baseZ, fwd, KINDS } from './config.js?v=202610152115';
 
 export function makeBot(skill = 0.7, rand = Math.random) {
   const mem = { strafe: 1, strafeT: 0, jitter: 0, jitterT: 0, abilityT: 0, tgt: null, tgtT: 0, lane: (rand() - 0.5) * 18 };
