@@ -31,17 +31,17 @@ export const MAX_WAVE = 10;
 export const BOSS_WAVES = [3, 6, 9, 10];
 
 export const HERO = {
-  hp: 100, speed: 9.4, rate: 6.2, dmg: 11, shotSpeed: 44, shotLife: 0.52, r: 0.6,
-  dashDist: 7.2, dashTime: 0.14, dashCd: 1.7, dashInv: 0.4, revives: 2, respawn: 2.6,
+  hp: 135, speed: 9.4, rate: 6.6, dmg: 13, shotSpeed: 44, shotLife: 0.52, r: 0.6,
+  dashDist: 7.2, dashTime: 0.14, dashCd: 1.4, dashInv: 0.45, revives: 3, respawn: 2.4,
 };
 
 // Minion kinds. hp/dmg get multiplied by the wave scaling.
 export const KINDS = {
-  grunt:   { hp: 30,  speed: 3.9, r: 0.6,  dmg: 10, atk: 1.0, reach: 0.45, mass: 1,   score: 10, aggro: 10 },
-  runner:  { hp: 14,  speed: 7.4, r: 0.45, dmg: 6,  atk: 0.65, reach: 0.4, mass: 0.6, score: 12, aggro: 13 },
-  brute:   { hp: 150, speed: 2.4, r: 1.05, dmg: 20, atk: 1.5, reach: 0.6, mass: 4,   score: 40, aggro: 8, kb: 10 },
-  shooter: { hp: 26,  speed: 3.3, r: 0.6,  dmg: 9,  atk: 1.4, reach: 0.4, mass: 1,   score: 20, aggro: 16, ranged: true, keep: 11, shotSpeed: 15 },
-  boss:    { hp: 1100, speed: 2.0, r: 2.1, dmg: 26, atk: 1.6, reach: 1.0, mass: 30,  score: 400, aggro: 26 },
+  grunt:   { hp: 24,  speed: 3.9, r: 0.6,  dmg: 7,  atk: 1.0, reach: 0.45, mass: 1,   score: 10, aggro: 10 },
+  runner:  { hp: 14,  speed: 6.8, r: 0.45, dmg: 4,  atk: 0.65, reach: 0.4, mass: 0.6, score: 12, aggro: 13 },
+  brute:   { hp: 115, speed: 2.4, r: 1.05, dmg: 13, atk: 1.5, reach: 0.6, mass: 4,   score: 40, aggro: 8, kb: 10 },
+  shooter: { hp: 22,  speed: 3.3, r: 0.6,  dmg: 6,  atk: 1.6, reach: 0.4, mass: 1,   score: 20, aggro: 16, ranged: true, keep: 11, shotSpeed: 14 },
+  boss:    { hp: 850, speed: 2.0, r: 2.1, dmg: 17, atk: 1.7, reach: 1.0, mass: 30,  score: 400, aggro: 26 },
   ally:    { hp: 38,  speed: 3.9, r: 0.6,  dmg: 9,  atk: 0.9, reach: 0.45, mass: 1,  score: 0,  aggro: 8 },
 };
 
@@ -119,10 +119,10 @@ export function bossWave(n, mod) {
 // What a wave sends at you. Returns counts; the sim shuffles them into spawn groups.
 export function waveCounts(n, mod) {
   const c = {
-    grunt: 8 + n * 3,
-    runner: n === 1 ? 4 : 3 + Math.round(n * 2.5),
-    shooter: n < 2 ? 0 : 1 + Math.round(n * 1.3),
-    brute: n < 4 ? (n === 3 ? 1 : 0) : n - 2,
+    grunt: 6 + n * 2,
+    runner: n === 1 ? 3 : 2 + Math.round(n * 1.7),
+    shooter: n < 2 ? 0 : 1 + Math.round(n * 0.9),
+    brute: n < 4 ? (n === 3 ? 1 : 0) : n - 3,
     boss: bossWave(n, mod) ? 1 : 0,
   };
   if (bossWave(n, mod)) { c.grunt -= 4; c.runner -= 2; }
@@ -132,7 +132,7 @@ export function waveCounts(n, mod) {
   return c;
 }
 
-export const waveScale = (n) => ({ hp: 1 + 0.3 * (n - 1) + 0.08 * (n - 1) ** 2, dmg: 1 + 0.15 * (n - 1) });
+export const waveScale = (n) => ({ hp: 1 + 0.2 * (n - 1) + 0.045 * (n - 1) ** 2, dmg: 1 + 0.09 * (n - 1) });
 
 export const STREAKS = [[2, 'Double!'], [3, 'Triple!'], [5, 'Rampage!'], [8, 'Unstoppable!'], [12, 'Godlike!'], [20, 'Legendary!'], [30, 'Beyond Human!']];
 
