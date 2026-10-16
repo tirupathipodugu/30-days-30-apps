@@ -2116,7 +2116,13 @@ function robotStep(dt) {
   bot.yawRate += (yr - bot.yawRate) * (1 - Math.exp(-dt * 8)); car.yaw += bot.yawRate * dt;
   _fwd.set(Math.sin(car.yaw), 0, Math.cos(car.yaw)); _side.set(Math.cos(car.yaw), 0, -Math.sin(car.yaw));
   const lev = 1 - Math.exp(-dt * 7); car.pitch -= wrapA(car.pitch) * lev; car.roll -= wrapA(car.roll) * lev; car.pRate = car.rRate = 0; car.steer *= 1 - lev;
-  const cmd = active && car.fuel > 0 ? ctl.boostCmd : 0;
+  let cmd = active && car.fuel > 0 ? ctl.boostCmd : 0;
+  // auto landing: whenever it is coming down without the player on the boost, the jets brake the fall by themselves
+  // (a braking curve the jets can always meet: fast high up, ~0.6 m/s at touchdown), so a landing never needs managing
+  if (!car.grounded && car.vel.y < 0 && ctl.boostCmd < 0.05 && bot.k > 0.9) {
+    const h = Math.max(0, car.pos.y + car.vel.y * 0.15 - groundAt(car.pos.x, car.pos.z, car.pos.y)), vyT = -Math.min(16, 0.9 + Math.sqrt(8 * h));
+    cmd = Math.max(cmd, clamp((G + 14 * (vyT - car.vel.y)) / (2 * G), 0, 1));
+  }
   car.boost += (cmd - car.boost) * (1 - Math.exp(-dt / 0.12));
   car.fuel = clamp(car.fuel - car.boost * 8 * dt + (car.grounded && car.boost < 0.05 ? 10 * dt : 0), 0, 100);
   let vF = car.vel.dot(_fwd), vS = car.vel.dot(_side);
