@@ -1,0 +1,16 @@
+Roadster Transformer: suit-up sound sprite (suitup-sprite.mp3)
+All recordings are CC0 (public domain) from freesound.org, trimmed, normalised and joined into one file.
+
+218270  Transformer 12.wav, JarredGibb
+466313  Cybernetic Transformation.wav, AnusProductions
+375925  Machine Charge.wav, Glitchedtones
+123253  MechanicalClamp.wav, Skullsmasha
+416080  Air release, davidlay1
+160712  Servo_1_Panera.wav, sinmente0987
+160719  Servo_3_Panera.wav, sinmente0987
+824121  ServoMotor.wav, derjuli
+264889  SFX Metal Shed Door - Hits, Clangs, Rattle, EpicWizard
+212941  hydraulics.wav, nuckan
+557594  Battle Mech walks (fast & slow sequence), Breviceps
+
+Each sound: https://freesound.org/s/<id>/

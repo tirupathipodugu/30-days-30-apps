@@ -2062,111 +2062,87 @@ class BotView {
   }
 }
 
-// ---- sound: an Iron Man style suit-up, all synthesised and kept smooth. Every piece moves with a clean electric
-// "screw" voice: a gliding motor tone pulsed at a ratchet rate with fine metal thread ticks riding on it, a soft
-// slide of metal, and a precise little click as it seats. A soft power-up hum rises under the whole transform,
-// and it finishes with a deep boom and HUD chimes.
-let fx = null, lockT = 0, voices = [], tShift = 0;
+// ---- sound: the suit-up is built from real recorded foley (CC0 recordings from freesound.org, cut into one
+// small sprite: servo motors, metal plate hits, hydraulics, an air release, a mechanical clamp, a transformer
+// sequence and mech footsteps). Each piece moving plays a servo, each piece seating a metal hit with a hydraulic
+// push, under a transformer bed and a charge; it ends on the clamp. Folding back into the car plays the bed reversed.
+let fx = null, lockT = 0, voices = [], tShift = 0, sprite = null, spriteRev = null, spriteLoading = false;
 const nowT = () => ac.currentTime + tShift;
+const SPR = {"bed": [0.0, 2.3732], "bed2": [2.4532, 1.91], "charge": [4.4432, 2.4938], "clamp": [7.0171, 2.4], "air": [9.4971, 1.4], "servo0": [10.977, 1.0], "servo1": [12.057, 1.0], "servo2": [13.137, 1.0], "servo3": [14.217, 1.0], "servo4": [15.297, 1.0], "servo5": [16.377, 1.0], "zip0": [17.457, 0.37], "zip1": [17.907, 0.35], "zip2": [18.337, 0.37], "hit0": [18.787, 0.44], "hit1": [19.307, 0.56], "hit2": [19.947, 0.42], "hit3": [20.447, 0.34], "hit4": [20.867, 0.62], "hyd0": [21.567, 0.35], "hyd1": [21.997, 0.36], "hyd2": [22.437, 1.0], "step0": [23.517, 0.6], "step1": [24.197, 0.6], "step2": [24.877, 0.6]};
+const MP3_DELAY = 0.026;   // encoder padding at the start of the mp3
+function loadSprite() {
+  if (sprite || spriteLoading || !ac) return; spriteLoading = true;
+  fetch('suitup-sprite.mp3').then(r => r.arrayBuffer()).then(b => new Promise((res, rej) => ac.decodeAudioData(b, res, rej))).then(buf => {
+    sprite = buf;
+    spriteRev = ac.createBuffer(1, buf.length, buf.sampleRate); const s = buf.getChannelData(0), d = spriteRev.getChannelData(0);
+    for (let i = 0, n = s.length; i < n; i++) d[i] = s[n - 1 - i];
+  }).catch(e => { console.warn('suit-up sounds', e); spriteLoading = false; });
+}
 function fxBus() {
-  if (!ac || !aud) return null; if (fx) return fx;
+  if (!ac || !aud) return null; if (!(ac instanceof OfflineAudioContext)) loadSprite(); if (fx) return fx;
   const input = ac.createGain(), comp = ac.createDynamicsCompressor(), conv = ac.createConvolver(), wet = ac.createGain();
-  comp.threshold.value = -18; comp.ratio.value = 3; comp.attack.value = 0.004; comp.release.value = 0.2;
-  const len = Math.floor(ac.sampleRate * 1.4), ir = ac.createBuffer(2, len, ac.sampleRate);   // a clean workshop space
+  comp.threshold.value = -16; comp.ratio.value = 3; comp.attack.value = 0.004; comp.release.value = 0.2;
+  const len = Math.floor(ac.sampleRate * 1.3), ir = ac.createBuffer(2, len, ac.sampleRate);
   for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4); }
-  conv.buffer = ir; wet.gain.value = 0.2;
+  conv.buffer = ir; wet.gain.value = 0.12;
   input.connect(comp); input.connect(conv); conv.connect(wet).connect(comp); comp.connect(aud.master);
   return (fx = { input });
 }
 const fxOn = () => ac && soundOn && fxBus();
 function out(pan) { const p = ac.createStereoPanner ? ac.createStereoPanner() : ac.createGain(); if (p.pan) p.pan.value = pan; p.connect(fx.input); return p; }
 function envGain(t0, a, peak, d, dest) { const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + d); g.connect(dest); return g; }
-function noise(t0, dur) { const s = ac.createBufferSource(); s.buffer = aud.buf; s.start(t0, Math.random() * 1.5); s.stop(t0 + dur + 0.05); return s; }
-function filt(type, f, q = 1) { const b = ac.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; }
 function tone(type, f0, f1, t0, dur, dest) { const o = ac.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t0); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur); o.connect(dest); o.start(t0); o.stop(t0 + dur + 0.05); return o; }
 const voiceFree = (t0, dur, max) => { voices = voices.filter(e => e > t0); if (voices.length >= max) return false; voices.push(t0 + dur); return true; };
-// the screw voice: smooth bell envelope; clean triangle motor with a soft octave, gliding up; the motor pulses
-// at a ratchet rate that speeds up (the drill-like thread feel) and fine metal ticks ride on the same pulse;
-// a quiet slide of metal underneath; a precise click at the end
-function sfxScrew(t0, dur, f0, f1, r0, r1, pan, k = 1, click = true) {
-  const bus = out(pan), g = ac.createGain();
-  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.085 * k, t0 + dur * 0.22); g.gain.setValueAtTime(0.085 * k, t0 + dur * 0.72); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  g.connect(bus);
-  const lp = filt('lowpass', 2800, 0.6); lp.connect(g);
-  const motor = ac.createGain(); motor.gain.value = 0.72; motor.connect(lp);
-  tone('triangle', f0, f1, t0, dur, motor);
-  const oct = ac.createGain(); oct.gain.value = 0.3; oct.connect(motor); tone('sine', f0 * 2, f1 * 2, t0, dur, oct);
-  const lfo = ac.createOscillator(); lfo.type = 'square'; lfo.frequency.setValueAtTime(r0, t0); lfo.frequency.exponentialRampToValueAtTime(r1, t0 + dur);
-  const pulse = ac.createGain(); pulse.gain.value = 0.16; lfo.connect(pulse).connect(motor.gain);
-  const ticks = ac.createGain(); ticks.gain.value = 0.07; const tickDepth = ac.createGain(); tickDepth.gain.value = 0.07; lfo.connect(tickDepth).connect(ticks.gain);
-  noise(t0, dur).connect(filt('bandpass', 6200, 9)).connect(ticks).connect(g);
-  const slide = filt('bandpass', 900, 1.6); slide.frequency.setValueAtTime(900, t0); slide.frequency.exponentialRampToValueAtTime(3600, t0 + dur);
-  const sg = ac.createGain(); sg.gain.value = 0.035; noise(t0, dur).connect(slide).connect(sg).connect(g);
-  lfo.start(t0); lfo.stop(t0 + dur + 0.05);
-  if (click) sfxTick(t0 + dur * 0.96, pan, k);
+const pick = (pre, n) => pre + Math.floor(Math.random() * n);
+// play one recorded clip from the sprite (optionally reversed, re-pitched, shortened with a fade)
+function clip(name, t0, { gain = 1, rate = 1, pan = 0, dur = 0, reverse = false } = {}) {
+  if (!sprite || !SPR[name]) return; const [off, len] = SPR[name], play = dur ? Math.min(dur * rate, len) : len;
+  const src = ac.createBufferSource(); src.buffer = reverse ? spriteRev : sprite; src.playbackRate.value = rate;
+  const start = reverse ? sprite.duration - (off + MP3_DELAY + len) : off + MP3_DELAY;
+  const g = ac.createGain(), real = play / rate; g.gain.setValueAtTime(gain, t0); g.gain.setValueAtTime(gain, t0 + Math.max(0, real - 0.06)); g.gain.linearRampToValueAtTime(0, t0 + real);
+  src.connect(g).connect(out(pan)); src.start(t0, Math.max(0, start), play); src.stop(t0 + real + 0.05);
 }
-// a precise little seating click
-function sfxTick(t0, pan, k = 1) {
-  const bus = out(pan);
-  noise(t0, 0.02).connect(filt('bandpass', 4800, 2.5)).connect(envGain(t0, 0.001, 0.2 * k, 0.01, bus));
-  tone('sine', 4300 + Math.random() * 600, 4100, t0, 0.05, envGain(t0, 0.001, 0.028 * k, 0.045, bus));
-  tone('sine', 230, 120, t0, 0.06, envGain(t0, 0.002, 0.16 * k, 0.05, bus));
-}
-// a plate locking home: firm click, short low thunk, a light metal ring and a breath of air
-function sfxLock(t0, pan, k = 1) {
-  const bus = out(pan);
-  sfxTick(t0, pan, 1.3 * k);
-  tone('sine', 150, 60, t0, 0.16, envGain(t0, 0.003, 0.38 * k, 0.15, bus));
-  const base = 1150 + Math.random() * 300;
-  [[1, 0.03, 0.28], [2.76, 0.018, 0.18], [5.4, 0.01, 0.1]].forEach(([r, gn, d]) => tone('sine', base * r, base * r, t0, d, envGain(t0, 0.002, gn * k, d, bus)));
-  noise(t0 + 0.02, 0.25).connect(filt('highpass', 6000)).connect(envGain(t0 + 0.02, 0.03, 0.015 * k, 0.2, bus));
-}
-// the power-up bed: a soft hum and a gentle charging tone that rise together (and fall when folding back into the car)
+const sideOf = zone => zone.endsWith('A') ? -0.55 : zone.endsWith('B') ? 0.55 : 0;
+// the start: seals release with a burst of air, the transformer bed and a charge build under the pieces
 function sfxPowerUp(up) {
-  if (!fxOn()) return; const t0 = nowT(), T = bot.T, bus = out(0);
-  const air = filt('lowpass', up ? 500 : 3000, 0.7); air.frequency.setValueAtTime(up ? 500 : 3000, t0); air.frequency.exponentialRampToValueAtTime(up ? 3000 : 500, t0 + T);
-  noise(t0, T).connect(air).connect(envGain(t0, T * 0.6, 0.015, T * 0.45, bus));
-  const lp = filt('lowpass', up ? 300 : 1400, 0.8); lp.frequency.setValueAtTime(up ? 300 : 1400, t0); lp.frequency.exponentialRampToValueAtTime(up ? 1400 : 300, t0 + T);
-  const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.09, t0 + 0.4); g.gain.setValueAtTime(0.09, t0 + T - 0.2); g.gain.exponentialRampToValueAtTime(0.0001, t0 + T + 0.15);
-  lp.connect(g).connect(bus);
-  for (const d of [0, 0.4]) tone('triangle', (up ? 70 : 140) + d, (up ? 140 : 70) + d, t0, T, lp);
-  tone('sine', up ? 35 : 70, up ? 70 : 35, t0, T, g);
-  const w = ac.createGain(); w.gain.setValueAtTime(0.0001, t0); w.gain.exponentialRampToValueAtTime(0.014, t0 + T * 0.85); w.gain.exponentialRampToValueAtTime(0.0001, t0 + T + 0.05); w.connect(bus);
-  tone('sine', up ? 520 : 1560, up ? 1560 : 520, t0, T, w);
+  if (!fxOn()) return; const t0 = nowT();
+  if (up) { clip('air', t0, { gain: 0.55 }); clip('bed', t0 + 0.05, { gain: 0.85 }); clip('charge', t0 + 0.1, { gain: 0.3, rate: 2.5 / (bot.T + 0.1) }); }
+  else { clip('bed', t0, { gain: 0.85, reverse: true }); clip('charge', t0, { gain: 0.25, reverse: true }); clip('air', t0 + bot.T - 0.5, { gain: 0.45, rate: 1.2 }); }
 }
-// fully assembled: a deep boom, the last lock, and the HUD coming online (softer and lower back in the car)
+// fully assembled: the heavy clamp, a hydraulic push and a low boom under it
 function sfxSuitOn(robot) {
   if (!fxOn()) return; const t0 = nowT(), bus = out(0);
-  tone('sine', robot ? 68 : 85, 32, t0, 0.8, envGain(t0, 0.006, robot ? 0.75 : 0.45, 0.75, bus));
-  sfxLock(t0, 0, robot ? 1.1 : 0.8);
-  const notes = robot ? [[1318.5, 0.1], [1975.5, 0.22], [2637, 0.34]] : [[1975.5, 0.1], [1318.5, 0.22]];
-  for (const [f, dt] of notes) { tone('sine', f, f, t0 + dt, 0.35, envGain(t0 + dt, 0.006, 0.04, 0.32, bus)); tone('triangle', f * 2, f * 2, t0 + dt, 0.12, envGain(t0 + dt, 0.004, 0.008, 0.1, bus)); }
+  clip('clamp', t0, { gain: robot ? 1 : 0.7, rate: robot ? 1 : 1.12, dur: robot ? 1.8 : 1.2 });
+  clip('hyd2', t0 + 0.05, { gain: 0.45, dur: 0.7 });
+  tone('sine', robot ? 62 : 80, 32, t0, 0.7, envGain(t0, 0.006, robot ? 0.55 : 0.35, 0.65, bus));
 }
-// one step of one piece: a screw voice for the length of the step (each step a little higher), panned by side
+// one step of one piece: a servo motor (short zips for the tyres), a little higher each step, panned by side
 function sfxPieceStep(i, zone, sg) {
-  if (!fxOn()) return; const t0 = nowT(), dur = bot.T * 0.56 / 3 * 0.95;
+  if (!fxOn()) return; const t0 = nowT(), dur = bot.T * 0.56 / 3;
   if (!voiceFree(t0, dur, 4)) return;
-  const pan = zone.endsWith('A') ? -0.5 : zone.endsWith('B') ? 0.5 : 0, f0 = 260 + (i % 4) * 45 + sg * 70, r0 = 20 + sg * 7;
-  sfxScrew(t0, dur, f0, f0 * 1.55, r0, r0 * 1.9, pan, zone.startsWith('wheel') ? 0.7 : 1);
+  if (zone.startsWith('wheel')) clip(pick('zip', 3), t0, { gain: 0.45, rate: 0.95 + sg * 0.08, pan: sideOf(zone) });
+  else clip(pick('servo', 6), t0, { gain: 0.6, rate: 1.05 + sg * 0.1 + Math.random() * 0.1, pan: sideOf(zone), dur });
 }
+// a piece seating: a metal plate hit, with a hydraulic push on the bigger pieces
 function sfxPieceLock(zone) {
   if (!fxOn()) return; const t0 = nowT(); if (t0 - lockT < 0.06) return; lockT = t0;
-  sfxLock(t0, zone.endsWith('A') ? -0.5 : zone.endsWith('B') ? 0.5 : 0, zone.startsWith('wheel') ? 0.6 : 0.9);
+  const big = !zone.startsWith('wheel');
+  clip(pick('hit', 5), t0, { gain: big ? 0.6 : 0.4, rate: 0.9 + Math.random() * 0.2, pan: sideOf(zone) });
+  if (big && Math.random() < 0.6) clip(pick('hyd', 2), t0 + 0.03, { gain: 0.35, rate: 0.95 + Math.random() * 0.15, pan: sideOf(zone) });
 }
 function sfxClank(k = 1) {
-  if (!ac || !soundOn) return; const n = nowT();
-  for (const [fr, gn, d] of [[523, 0.11, 0.8], [1187, 0.07, 0.55], [1771, 0.05, 0.4], [2633, 0.03, 0.25]]) {
-    const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = fr * (0.96 + Math.random() * 0.08);
-    g.gain.setValueAtTime(gn * k, n); g.gain.exponentialRampToValueAtTime(0.0001, n + d); o.connect(g).connect(aud.master); o.start(n); o.stop(n + d + 0.05);
-  }
-  burstNoise(110, 1.1 * k, 0.5); burstNoise(2400, 0.3 * k, 0.07, 'bandpass');
+  if (fxOn() && sprite) { clip(pick('hit', 5), nowT(), { gain: 0.7 * k, rate: 0.8 }); return; }
+  if (!ac || !soundOn) return; burstNoise(110, 1.1 * k, 0.5); burstNoise(2400, 0.3 * k, 0.07, 'bandpass');
 }
-// footsteps: a short smooth joint whir with the stomp
-function sfxStep(k) { if (fxOn()) sfxScrew(nowT(), 0.16, 340 + Math.random() * 60, 480, 34, 50, 0, 0.3 + 0.25 * k, false); burstNoise(85, 1.0 * k, 0.35); burstNoise(650, 0.3 * k, 0.08, 'bandpass'); burstNoise(3000, 0.08 * k, 0.04, 'bandpass'); }
-
+// footsteps: recorded mech steps, softer when walking
+function sfxStep(k) {
+  if (fxOn() && sprite) clip(pick('step', 3), nowT(), { gain: 0.25 + 0.45 * k, rate: 0.9 + Math.random() * 0.15, dur: 0.5 });
+  burstNoise(85, 0.6 * k, 0.3);
+}
 // offline preview: renders one full car-to-robot transform to a WAV (debug only)
 window.__sfxPreview = async () => {
-  const sr = 44100, oc = new OfflineAudioContext(2, sr * (bot.T + 2.2), sr), save = [ac, aud, fx, soundOn, voices, lockT];
+  const sr = 44100, oc = new OfflineAudioContext(2, sr * (bot.T + 2.6), sr), save = [ac, aud, fx, soundOn, voices, lockT];
+  if (!sprite) { sprite = await oc.decodeAudioData(await fetch('suitup-sprite.mp3').then(r => r.arrayBuffer())); spriteRev = oc.createBuffer(1, sprite.length, sprite.sampleRate); const s0 = sprite.getChannelData(0), d0 = spriteRev.getChannelData(0); for (let i = 0, n = s0.length; i < n; i++) d0[i] = s0[n - 1 - i]; }
   const master = oc.createGain(); master.gain.value = 0.55; master.connect(oc.destination);
   const buf = oc.createBuffer(1, sr * 2, sr), d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   ac = oc; aud = { master, buf }; fx = null; soundOn = true; voices = []; lockT = 0;
@@ -2181,12 +2157,12 @@ window.__sfxPreview = async () => {
   } finally { tShift = 0; }
   const res = await oc.startRendering();
   [ac, aud, fx, soundOn, voices, lockT] = save;
-  const L = res.getChannelData(0), R = res.getChannelData(1), n = L.length, out = new DataView(new ArrayBuffer(44 + n * 4));
-  const w = (o, str) => [...str].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
-  w(0, 'RIFF'); out.setUint32(4, 36 + n * 4, true); w(8, 'WAVEfmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 2, true);
-  out.setUint32(24, sr, true); out.setUint32(28, sr * 4, true); out.setUint16(32, 4, true); out.setUint16(34, 16, true); w(36, 'data'); out.setUint32(40, n * 4, true);
-  let peak = 0; for (let i = 0; i < n; i++) { peak = Math.max(peak, Math.abs(L[i]), Math.abs(R[i])); out.setInt16(44 + i * 4, clamp(L[i], -1, 1) * 32767, true); out.setInt16(46 + i * 4, clamp(R[i], -1, 1) * 32767, true); }
-  const bytes = new Uint8Array(out.buffer); let bin = ''; for (let i = 0; i < bytes.length; i += 32768) bin += String.fromCharCode(...bytes.subarray(i, i + 32768));
+  const L = res.getChannelData(0), R = res.getChannelData(1), n = L.length, o = new DataView(new ArrayBuffer(44 + n * 4));
+  const w = (p, str) => [...str].forEach((c, i) => o.setUint8(p + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); o.setUint32(4, 36 + n * 4, true); w(8, 'WAVEfmt '); o.setUint32(16, 16, true); o.setUint16(20, 1, true); o.setUint16(22, 2, true);
+  o.setUint32(24, sr, true); o.setUint32(28, sr * 4, true); o.setUint16(32, 4, true); o.setUint16(34, 16, true); w(36, 'data'); o.setUint32(40, n * 4, true);
+  let peak = 0; for (let i = 0; i < n; i++) { peak = Math.max(peak, Math.abs(L[i]), Math.abs(R[i])); o.setInt16(44 + i * 4, clamp(L[i], -1, 1) * 32767, true); o.setInt16(46 + i * 4, clamp(R[i], -1, 1) * 32767, true); }
+  const bytes = new Uint8Array(o.buffer); let bin = ''; for (let i = 0; i < bytes.length; i += 32768) bin += String.fromCharCode(...bytes.subarray(i, i + 32768));
   return { peak, b64: btoa(bin) };
 };
 
