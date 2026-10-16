@@ -1282,15 +1282,16 @@ function updateCamera(dt) {
       key = 'CI'; const ang = performance.now() * 0.00012; tmp.set(cp.x + Math.cos(ang) * 14, Math.max(1.2, cp.y + 2.2), cp.z + Math.sin(ang) * 14);
       camPos.lerp(tmp, 1 - Math.exp(-dt * 2)); camera.position.copy(camPos); camLook.copy(cp).add(new V3(0, 0.7, 0)); fov = fovFor(40, 45);
     } else {
-      const far = mode === 'FAR', back = (far ? 13 : 6.4) + bot.k * (far ? 1.5 : 1.6), up = (far ? 5.2 : 2.1) + bot.k * 0.9;
-      tmp.copy(cp).addScaledVector(_fwd, -back).add(new V3(0, up, 0)); tmp.y = Math.max(tmp.y, 0.6);
-      camPos.lerp(tmp, 1 - Math.exp(-dt * (far ? 3 : 5))); camera.position.copy(camPos);
-      camLook.copy(cp).addScaledVector(_fwd, 3.5).add(new V3(0, (far ? 1.2 : 1.0) + bot.k * 1.25, 0)); fov = fovFor(far ? 52 : 60, 62) + clamp(car.vel.length() * 0.18, 0, 12);
+      const far = mode === 'FAR', K = bot.k, back = (far ? 13 : 6.4) + K * (far ? 1.5 : 1.4), up = (far ? 5.2 : 2.1) - K * (far ? 2.2 : 1.1);
+      const fp = K > 0 && bot.view ? bot.view.bones.chest.getWorldPosition(_camF).lerp(cp, 1 - K) : cp;
+      tmp.copy(fp).addScaledVector(_fwd, -back).add(new V3(0, up, 0)); tmp.y = Math.max(tmp.y, 0.6);
+      camPos.lerp(tmp, 1 - Math.exp(-dt * ((far ? 3 : 5) + K * 7))); camera.position.copy(camPos);
+      camLook.copy(fp).addScaledVector(_fwd, 3.5 - K * 1.5).add(new V3(0, (far ? 1.2 : 1.0) * (1 - K) + K * 0.2, 0)); fov = fovFor(far ? 52 : 60, 62) + clamp(car.vel.length() * 0.18, 0, 12) * (1 - K);
     }
   }
   if (window.__camOverride) { const o = window.__camOverride; camera.position.set(...o.p); camLook.set(...o.t); snap = true; key = 'dbg'; fov = o.fov || 50; }
   if (key !== lastCamKey) { lookS.copy(camLook); if (!snap) camPos.copy(camera.position); lastCamKey = key; }
-  lookS.lerp(camLook, 1 - Math.exp(-dt * 9));
+  lookS.lerp(camLook, 1 - Math.exp(-dt * (9 + bot.k * 9)));
   if (shake > 0.01) { camera.position.x += (Math.random() - 0.5) * 0.12 * shake; camera.position.y += (Math.random() - 0.5) * 0.12 * shake; shake *= Math.exp(-dt * 5); }
   // camera collision: never end up inside a truck, car, container or wall (the view used to go black after a crash)
   if (key === 'free' || key === 'CI') {
@@ -1777,6 +1778,7 @@ const FRONT = [-1.45, 2.9];   // phiStart, phiLength: a shell that covers the fr
 // ---- skeleton in human metres (1.73 m); the root scales it to a ~3 m robot
 const B = {};
 const HAND_JETS = [];
+const _camF = new V3();
 {
   const root = B.root = bone(rig, 'root', 0, 0, 0);
   const hips = B.hips = bone(root, 'hips', 0, 0.95, 0);
@@ -2091,7 +2093,7 @@ function toggleBot() {
   if (bot.mode === 'car') {
     if (man) { say('Finish the stunt first'); return; }
     if (car.onRamp) { say('Not on the loop', 'transform on flat ground or in the air'); return; }
-    bot.mode = 'toRobot'; ctl.hold = false; syncHoldUI(); car.trick = null; car.side = 0; car.rear = 0; car.steer = 0;
+    bot.mode = 'toRobot'; car.fromRamp = false; ctl.hold = false; syncHoldUI(); car.trick = null; car.side = 0; car.rear = 0; car.steer = 0;
     if (car.grounded && car.vel.length() > 7) { car.vel.y = 5.5; car.grounded = false; }   // at speed it leaps and transforms in the air
     say('Transform', 'robot mode'); sfxWhine(true); sfxClank(0.5);
   } else if (bot.mode === 'robot') { bot.mode = 'toCar'; say('Transform', 'back to the Roadster'); sfxWhine(false); sfxClank(0.5); }
