@@ -970,6 +970,10 @@ function physics(dt) {
     cmd = clamp(want / (2.3 * G * Math.max(0.3, _up.y)), 0, 1);
   }
   if (car.fuel <= 0) cmd = 0;
+  if (!car.grounded && !car.onRamp && !car.trick && !ctl.hold && !(man && man.scripted) && ctl.boostCmd < 0.05 && car.vel.y < 0 && _up.y > 0.3) {
+    const h = Math.max(0, car.pos.y + car.vel.y * 0.15 - gH), vyT = -Math.min(16, 0.9 + Math.sqrt(8 * h));
+    cmd = Math.max(cmd, clamp((G + 14 * (vyT - car.vel.y)) / (2.3 * G * _up.y), 0, 1));
+  }
   car.boost += (cmd - car.boost) * (1 - Math.exp(-dt / 0.16));
   const rearOn = (ctl.rear || car.rear > 0) && car.fuel > 0;
   const sideWant = car.fuel <= 0 ? 0 : ctl.side !== 0 ? ctl.side : (!car.grounded && !car.onRamp && !car.trick ? ctl.steer * 0.8 : 0);
@@ -1402,8 +1406,8 @@ function updateAudio() {
   aud.master.gain.setTargetAtTime(soundOn ? 0.55 : 0, n, 0.08);
   const ws = man && man.scripted ? (man.speed || 0) : Math.abs(car.vel.dot(_fwd));
   aud.o1.frequency.setTargetAtTime(55 + ws * 24, n, 0.05); aud.o2.frequency.setTargetAtTime(110 + ws * 48, n, 0.05);
-  aud.mg.gain.setTargetAtTime(clamp(0.03 + Math.abs(ctl.throttle) * 0.12 + ws / 200, 0, 0.24), n, 0.08);
-  aud.wg.gain.setTargetAtTime(clamp(sp / 34, 0, 0.35), n, 0.1);
+  aud.mg.gain.setTargetAtTime(clamp(0.03 + Math.abs(ctl.throttle) * 0.12 + ws / 200, 0, 0.24) * (1 - bot.k), n, 0.08);
+  aud.wg.gain.setTargetAtTime(clamp(sp / 34, 0, 0.35) * (1 - bot.k * (1 - bot.air)), n, 0.1);
   aud.tg.gain.setTargetAtTime(clamp(thrust * 0.9 + (car.rear > 0 || ctl.rear ? 0.4 : 0) + Math.abs(car.side) * 0.3, 0, 1.1), n, 0.05);
 }
 $('btnSound').addEventListener('click', e => { if (!ac) initAudio(); if (ac.state === 'suspended') ac.resume(); soundOn = !soundOn; e.currentTarget.setAttribute('aria-pressed', String(soundOn)); e.currentTarget.textContent = 'SOUND: ' + (soundOn ? 'ON' : 'OFF'); });
@@ -2053,21 +2057,86 @@ class BotView {
       obj.matrix.multiplyMatrices(_m1, _m2.compose(_pp, _pq, _ps));
       obj.matrix.elements[13] += Math.sin(Math.PI * ki) * 0.3;   // pieces lift clear of each other as they move
       obj.matrixWorldNeedsUpdate = true;
-      if (this.local) { const sg = u <= 0 ? 0 : u >= 1 ? 4 : 1 + Math.floor(u * 3); if (sg !== this.seg[i]) { this.seg[i] = sg; if (sg > 0 && sg < 4) sfxServo(0.8 + i * 0.05); else if (sg === 4 && P.zone === 'front') sfxClank(0.6); } }
+      if (this.local) { const sg = u <= 0 ? 0 : u >= 1 ? 4 : 1 + Math.floor(u * 3); if (sg !== this.seg[i]) { this.seg[i] = sg; if (sg > 0 && sg < 4) sfxPieceStep(i, P.zone, sg); else if (sg === 4) sfxPieceLock(P.zone); } }
     }
   }
 }
 
-// ---- sound: servo chirps per move, a whine under the whole transform, a clank when it locks
-let servoT = 0;
-function sfxServo(pitch = 1) {
-  if (!ac || !soundOn) return; const n = ac.currentTime; if (n - servoT < 0.035) return; servoT = n;
-  const o = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter();
-  o.type = 'square'; o.frequency.setValueAtTime(320 * pitch, n); o.frequency.exponentialRampToValueAtTime(1150 * pitch, n + 0.08);
-  f.type = 'bandpass'; f.frequency.value = 1500; f.Q.value = 1.4;
-  g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(0.13, n + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, n + 0.1);
-  o.connect(f).connect(g).connect(aud.master); o.start(n); o.stop(n + 0.12);
-  burstNoise(3800 * pitch, 0.4, 0.045, 'bandpass');
+// ---- sound: an Iron Man style suit-up, all synthesised. Each piece move is a servo whir that ends in a sharp
+// metal clack; each piece that seats gives a heavy lock with a metallic ring and a pneumatic hiss; a resonant
+// power-up hum rises under the whole transform, and it finishes with a sub-bass boom and HUD chimes.
+let fx = null, whirT = 0, lockT = 0;
+function fxBus() {
+  if (!ac || !aud) return null; if (fx) return fx;
+  const input = ac.createGain(), comp = ac.createDynamicsCompressor(), conv = ac.createConvolver(), wet = ac.createGain();
+  comp.threshold.value = -16; comp.ratio.value = 4; comp.attack.value = 0.002; comp.release.value = 0.18;
+  const len = Math.floor(ac.sampleRate * 1.8), ir = ac.createBuffer(2, len, ac.sampleRate);   // a big hangar
+  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.4); }
+  conv.buffer = ir; wet.gain.value = 0.3;
+  input.connect(comp); input.connect(conv); conv.connect(wet).connect(comp); comp.connect(aud.master);
+  return (fx = { input });
+}
+const fxOn = () => ac && soundOn && fxBus();
+function out(pan) { const p = ac.createStereoPanner ? ac.createStereoPanner() : ac.createGain(); if (p.pan) p.pan.value = pan; p.connect(fx.input); return p; }
+function envGain(t0, a, peak, d, dest) { const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + d); g.connect(dest); return g; }
+function noise(t0, dur) { const s = ac.createBufferSource(); s.buffer = aud.buf; s.start(t0, Math.random() * 1.5); s.stop(t0 + dur + 0.05); return s; }
+function filt(type, f, q = 1) { const b = ac.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; }
+function tone(type, f0, f1, t0, dur, dest) { const o = ac.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t0); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur); o.connect(dest); o.start(t0); o.stop(t0 + dur + 0.05); return o; }
+// servo motor: a gritty gliding whine (saw + square, motor buzz from a fast vibrato), ends in a clack
+function sfxWhir(t0, f0, dur, pan, k = 1) {
+  const bus = out(pan), g = envGain(t0, 0.015, 0.075 * k, dur, bus), bp = filt('bandpass', f0 * 1.3, 2.2); bp.connect(g);
+  bp.frequency.setValueAtTime(f0 * 1.1, t0); bp.frequency.exponentialRampToValueAtTime(f0 * 2.4, t0 + dur * 0.7);
+  const lfo = ac.createOscillator(), depth = ac.createGain(); lfo.frequency.value = 42 + Math.random() * 20; depth.gain.value = f0 * 0.035; lfo.connect(depth);
+  for (const [type, m] of [['sawtooth', 1], ['square', 1.5]]) { const o = tone(type, f0 * m, f0 * m * 1.9, t0, dur * 0.7, bp); depth.connect(o.frequency); }
+  lfo.start(t0); lfo.stop(t0 + dur + 0.05);
+  sfxClack(t0 + dur * 0.92, pan, k);
+}
+// a sharp metal clack: a tick of bright noise, a tiny ping and a small thunk
+function sfxClack(t0, pan, k = 1) {
+  const bus = out(pan);
+  noise(t0, 0.03).connect(filt('highpass', 2200)).connect(filt('bandpass', 4200 + Math.random() * 1500, 1.8)).connect(envGain(t0, 0.001, 0.55 * k, 0.025, bus));
+  tone('sine', 2600 + Math.random() * 1200, 2400, t0, 0.08, envGain(t0, 0.001, 0.05 * k, 0.07, bus));
+  tone('sine', 160, 70, t0, 0.1, envGain(t0, 0.002, 0.35 * k, 0.09, bus));
+}
+// a heavy plate seating: deep thunk, inharmonic metal ring, pneumatic hiss
+function sfxLock(t0, pan, k = 1) {
+  const bus = out(pan);
+  tone('sine', 120, 42, t0, 0.28, envGain(t0, 0.003, 0.8 * k, 0.26, bus));
+  noise(t0, 0.15).connect(filt('lowpass', 900)).connect(envGain(t0, 0.002, 0.45 * k, 0.12, bus));
+  const base = 760 + Math.random() * 240;
+  [[1, 0.07, 0.4], [2.76, 0.05, 0.3], [5.4, 0.03, 0.18], [8.93, 0.018, 0.12]].forEach(([r, gn, d]) => tone('sine', base * r, base * r, t0, d, envGain(t0, 0.002, gn * k, d, bus)));
+  noise(t0 + 0.04, 0.4).connect(filt('highpass', 5200)).connect(envGain(t0 + 0.04, 0.05, 0.09 * k, 0.3, bus));
+}
+// the power-up: resonant rising hum with a charging whine (falls instead when folding back into the car)
+function sfxPowerUp(up) {
+  if (!fxOn()) return; const t0 = ac.currentTime, T = bot.T, bus = out(0);
+  noise(t0, 0.5).connect(filt('highpass', 3800)).connect(envGain(t0, 0.04, 0.12, 0.45, bus));   // seals release
+  const lp = filt('lowpass', up ? 220 : 2600, 7); lp.frequency.setValueAtTime(up ? 220 : 2600, t0); lp.frequency.exponentialRampToValueAtTime(up ? 2800 : 200, t0 + T);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.1, t0 + 0.3); g.gain.setValueAtTime(0.1, t0 + T - 0.15); g.gain.exponentialRampToValueAtTime(0.0001, t0 + T + 0.1);
+  lp.connect(g).connect(bus);
+  for (const d of [0, 0.6]) tone('sawtooth', (up ? 55 : 110) + d, (up ? 110 : 55) + d, t0, T, lp);
+  tone('sine', up ? 27.5 : 55, up ? 55 : 27.5, t0, T, g);
+  const w = ac.createGain(); w.gain.setValueAtTime(0.0001, t0); w.gain.exponentialRampToValueAtTime(0.022, t0 + T * 0.8); w.gain.exponentialRampToValueAtTime(0.0001, t0 + T + 0.05); w.connect(bus);
+  tone('sine', up ? 420 : 1900, up ? 1900 : 420, t0, T, w);
+}
+// fully assembled: sub-bass boom, a closing lock and the HUD coming online (a softer, lower version back in the car)
+function sfxSuitOn(robot) {
+  if (!fxOn()) return; const t0 = ac.currentTime, bus = out(0);
+  tone('sine', robot ? 70 : 90, 30, t0, 0.9, envGain(t0, 0.004, robot ? 1.0 : 0.6, 0.85, bus));
+  noise(t0, 0.5).connect(filt('lowpass', 420)).connect(envGain(t0, 0.003, 0.5, 0.45, bus));
+  sfxLock(t0, 0, robot ? 1.1 : 0.7);
+  const notes = robot ? [[1318.5, 0.08], [1975.5, 0.2], [2637, 0.32]] : [[1975.5, 0.08], [1318.5, 0.2]];
+  for (const [f, dt] of notes) { tone('sine', f, f, t0 + dt, 0.35, envGain(t0 + dt, 0.005, 0.05, 0.33, bus)); tone('triangle', f * 2, f * 2, t0 + dt, 0.12, envGain(t0 + dt, 0.003, 0.012, 0.1, bus)); }
+}
+// one step of one piece: whir into a clack (stereo by side), rate-limited so many pieces don't turn into noise
+function sfxPieceStep(i, zone, sg) {
+  if (!fxOn()) return; const t0 = ac.currentTime; if (t0 - whirT < 0.05) return; whirT = t0;
+  const pan = zone.endsWith('A') ? -0.45 : zone.endsWith('B') ? 0.45 : 0, f0 = 620 + (i % 5) * 120 + sg * 140;
+  sfxWhir(t0, f0, 0.13 + Math.random() * 0.06, pan, zone.startsWith('wheel') ? 0.7 : 1);
+}
+function sfxPieceLock(zone) {
+  if (!fxOn()) return; const t0 = ac.currentTime; if (t0 - lockT < 0.07) return; lockT = t0;
+  sfxLock(t0, zone.endsWith('A') ? -0.45 : zone.endsWith('B') ? 0.45 : 0, zone.startsWith('wheel') ? 0.6 : 1);
 }
 function sfxClank(k = 1) {
   if (!ac || !soundOn) return; const n = ac.currentTime;
@@ -2077,15 +2146,7 @@ function sfxClank(k = 1) {
   }
   burstNoise(110, 1.1 * k, 0.5); burstNoise(2400, 0.3 * k, 0.07, 'bandpass');
 }
-function sfxStep(k) { burstNoise(85, 1.0 * k, 0.35); burstNoise(650, 0.3 * k, 0.08, 'bandpass'); burstNoise(3000, 0.08 * k, 0.04, 'bandpass'); }
-function sfxWhine(up) {
-  if (!ac || !soundOn) return; const n = ac.currentTime, d = bot.T;
-  const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain(); o.type = 'sawtooth';
-  o.frequency.setValueAtTime(up ? 170 : 640, n); o.frequency.exponentialRampToValueAtTime(up ? 640 : 170, n + d);
-  f.type = 'bandpass'; f.frequency.setValueAtTime(up ? 600 : 1800, n); f.frequency.exponentialRampToValueAtTime(up ? 1800 : 600, n + d); f.Q.value = 2;
-  g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(0.07, n + 0.15); g.gain.setValueAtTime(0.07, n + d - 0.25); g.gain.exponentialRampToValueAtTime(0.0001, n + d);
-  o.connect(f).connect(g).connect(aud.master); o.start(n); o.stop(n + d + 0.05);
-}
+function sfxStep(k) { if (fxOn()) sfxWhir(ac.currentTime, 480 + Math.random() * 220, 0.11, 0, 0.3 + 0.3 * k); burstNoise(85, 1.0 * k, 0.35); burstNoise(650, 0.3 * k, 0.08, 'bandpass'); burstNoise(3000, 0.08 * k, 0.04, 'bandpass'); }
 
 // ---- switching modes
 function toggleBot() {
@@ -2095,8 +2156,8 @@ function toggleBot() {
     if (car.onRamp) { say('Not on the loop', 'transform on flat ground or in the air'); return; }
     bot.mode = 'toRobot'; car.fromRamp = false; ctl.hold = false; syncHoldUI(); car.trick = null; car.side = 0; car.rear = 0; car.steer = 0;
     if (car.grounded && car.vel.length() > 7) { car.vel.y = 5.5; car.grounded = false; }   // at speed it leaps and transforms in the air
-    say('Transform', 'robot mode'); sfxWhine(true); sfxClank(0.5);
-  } else if (bot.mode === 'robot') { bot.mode = 'toCar'; say('Transform', 'back to the Roadster'); sfxWhine(false); sfxClank(0.5); }
+    say('Transform', 'robot mode'); sfxPowerUp(true);
+  } else if (bot.mode === 'robot') { bot.mode = 'toCar'; say('Transform', 'back to the Roadster'); sfxPowerUp(false); }
   syncBotUI();
 }
 function syncBotUI() {
@@ -2156,11 +2217,11 @@ function robotStep(dt) {
 // per frame: transform progress, walk cycle (also stepping when turning on the spot), footsteps, crouch spring, jets
 function updateBot(dt, t) {
   if (!bot.view) return;
-  if (bot.mode === 'toRobot') { bot.k = Math.min(1, bot.k + dt / bot.T); if (bot.k >= 1) { bot.mode = 'robot'; bot.crouchV -= 2.2; sfxClank(1); shake = Math.max(shake, 0.35); syncBotUI(); } }
+  if (bot.mode === 'toRobot') { bot.k = Math.min(1, bot.k + dt / bot.T); if (bot.k >= 1) { bot.mode = 'robot'; bot.crouchV -= 2.2; sfxSuitOn(true); shake = Math.max(shake, 0.35); syncBotUI(); } }
   else if (bot.mode === 'toCar') {
     bot.k = Math.max(0, bot.k - dt / bot.T);
     if (bot.k <= 0) {
-      bot.mode = 'car'; sfxClank(0.8); syncBotUI();
+      bot.mode = 'car'; sfxSuitOn(false); syncBotUI();
       const gy = groundAt(car.pos.x, car.pos.z, car.pos.y); car.grounded = car.pos.y - gy < 0.3; if (car.grounded) car.pos.y = gy;
       car.air = 0; car.rollAcc = car.pitchAcc = 0; car.clearedSemi = false;
     }
