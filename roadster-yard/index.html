@@ -1697,7 +1697,14 @@ function collideRemotes() {
     if (d < 2.1 && dy < 1.3 && d > 1e-3) { const nx = dx / d, nz = dz / d; car.pos.x += nx * (2.1 - d); car.pos.z += nz * (2.1 - d); const vn = car.vel.x * nx + car.vel.z * nz; if (vn < 0) { car.vel.x -= nx * vn * 1.4; car.vel.z -= nz * vn * 1.4; hitFx(-vn, car.pos.x - nx, car.pos.z - nz); } }
   }
 }
-startServer(1);
+let netErrors = 0;
+function goSolo() {
+  try { dropPeer(); } catch (e) {}
+  try { if (sock) { const s0 = sock; sock = null; s0.onclose = null; s0.close(); } } catch (e) {}
+  for (const r of remotes.values()) { scene.remove(r.root); r.tag.remove(); }
+  remotes.clear(); setNet('off'); $('net').textContent = 'Solo · live room unavailable';
+}
+try { startServer(1); } catch (e) { goSolo(); }
 
 /* ======================= phone layout ======================= */
 function layoutMode() { document.body.classList.toggle('compact', IS_MOBILE || innerWidth < 760 || innerHeight < 520); }
@@ -1782,7 +1789,8 @@ function frame(now) {
   grade.uniforms.uT.value = now * 0.001;
   composer.render();
   watchdog(now);
-  netTick(dt); updateRemotes(simT);
+  // multiplayer can never take the game down: on repeated errors, drop to solo and keep driving
+  if (net !== 'off' || remotes.size) { try { netTick(dt); updateRemotes(simT); } catch (e) { console.warn('multiplayer error', e); if (++netErrors > 5) goSolo(); } }
 }
 syncHoldUI();
 let startSafe = false; try { startSafe = localStorage.getItem('roadster-safe') === '1'; } catch (e) {}
