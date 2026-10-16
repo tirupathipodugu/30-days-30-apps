@@ -1565,7 +1565,7 @@ const SERVER_URL = new URLSearchParams(location.search).get('server') || 'wss://
 let sock = null;
 function startServer(n = 1) {
   setNet('connecting'); roomNo = n;
-  let s2; try { s2 = new WebSocket(SERVER_URL.replace(/\/+$/, '') + '/roadster/room/' + (100 + n)); } catch (e) { startPeer(); return; }
+  let s2; try { s2 = new WebSocket(SERVER_URL.replace(/\/+$/, '') + '/roadster/room/' + (10 + n)); } catch (e) { startPeer(); return; }
   sock = s2; let ok = false;
   const timer = setTimeout(() => { if (sock === s2 && !ok) { try { s2.close(); } catch (e) {} sock = null; startPeer(); } }, 5000);
   s2.onmessage = ev => {
