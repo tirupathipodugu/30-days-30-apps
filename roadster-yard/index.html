@@ -96,6 +96,35 @@ button:focus-visible{outline:2px solid var(--jet);outline-offset:2px}
 .credit{position:fixed;left:0;right:0;bottom:calc(52px + env(safe-area-inset-bottom,0px));margin:0;text-align:center;font:400 .6rem/1.3 var(--mono);color:var(--muted);opacity:.6;pointer-events:none}
 .credit a{color:inherit;pointer-events:auto}
 @media (max-width:560px){.read .spd{font-size:1.9rem}.brand span{display:none}.trick{font-size:1.4rem}}
+/* phones: one clean screen, settings and stunts behind two buttons */
+.menuBtn,.stuntBtn{display:none}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--panel);border-top:1px solid var(--line);border-radius:20px 20px 0 0;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:14px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.sheet h2{margin:0 0 10px;font:700 .9rem/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.sheet h2 button{background:none;border:0;color:var(--fg);font-size:1.4rem;line-height:1;cursor:pointer;padding:4px 8px}
+.sheet .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sheet .grid button{border:1px solid var(--line);background:rgba(233,237,240,.06);border-radius:14px;padding:14px 10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:.9rem;cursor:pointer;text-align:left}
+.sheet .grid button.hero{border-color:rgba(255,58,48,.6)}
+.sheet .grid button small{display:block;font:500 .66rem/1.4 var(--mono);color:var(--muted);letter-spacing:.02em;text-transform:none;margin-top:3px}
+.sheet .fine{font:400 .62rem/1.5 var(--mono);color:var(--muted);margin:12px 0 0}
+.sheet .fine a{color:inherit}
+.fuel2{display:none}
+body.compact .brand b,body.compact #mode,body.compact .cluster,body.compact .actions,body.compact .credit,body.compact .side{display:none}
+body.compact .score{font-size:1.25rem;margin-top:0}
+body.compact .read .spd{font-size:1.6rem}
+body.compact .roster span:nth-child(n+4){display:none}
+body.compact .trick{font-size:1.25rem;top:calc(70px + env(safe-area-inset-top,0px))}
+body.compact .menuBtn{display:grid;place-items:center;position:fixed;top:calc(64px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));
+  width:40px;height:40px;border-radius:50%;background:var(--panel);border:1px solid var(--line);font-size:1.15rem;cursor:pointer;z-index:3}
+body.compact .stuntBtn{display:block;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));
+  background:var(--panel);border:1px solid rgba(255,58,48,.7);border-radius:999px;padding:12px 22px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;font-size:.95rem;cursor:pointer;z-index:3;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+body.compact .booster{width:62px;padding:8px 6px;gap:6px;bottom:calc(14px + env(safe-area-inset-bottom,0px));right:max(12px,env(safe-area-inset-right,0px))}
+body.compact #thr{height:84px}
+body.compact .booster button{font-size:.7rem;padding:9px 0}
+body.compact .booster #boostBtn{padding:16px 0;font-size:.78rem}
+body.compact .fuel2{display:block;width:100%;height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+body.compact .fuel2 i{display:block;height:100%;background:var(--jet)}
+body.compact .joy{display:block;width:118px;height:118px;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px))}
 @media (prefers-reduced-motion:reduce){.trick,.fade{transition:none}}
 </style>
 
@@ -133,6 +162,31 @@ button:focus-visible{outline:2px solid var(--jet);outline-offset:2px}
 </div>
 
 <div class="joy" id="joy"><i id="knob"></i></div>
+<button class="menuBtn" id="btnMenu" type="button" aria-label="Settings">⚙</button>
+<button class="stuntBtn" id="btnStunts" type="button">Stunts</button>
+<div class="sheet" id="stuntSheet" hidden>
+  <h2>Stunts <button type="button" data-close aria-label="Close">×</button></h2>
+  <div class="grid">
+    <button class="hero" data-act="loop" type="button">Loop the ramp<small>Upside down, flip, land</small></button>
+    <button class="hero" data-act="semi" type="button">Jump the Semi<small>Thrusters over the trucks</small></button>
+    <button data-act="hover" type="button">Hover<small>Hold 4 m, tap again to drop</small></button>
+    <button data-act="roll" type="button">Barrel roll</button>
+    <button data-act="flip" type="button">Backflip</button>
+    <button data-act="launch" type="button">Launch<small>Rear thrusters</small></button>
+    <button data-act="land" type="button">Soft land</button>
+    <button data-act="reset" type="button">Reset</button>
+  </div>
+</div>
+<div class="sheet" id="menuSheet" hidden>
+  <h2>Settings <button type="button" data-close aria-label="Close">×</button></h2>
+  <div class="grid">
+    <button type="button" data-proxy="btnCam" id="mCam">Camera</button>
+    <button type="button" data-proxy="btnTime" id="mTime">Time</button>
+    <button type="button" data-proxy="btnQ" id="mQ">Quality</button>
+    <button type="button" data-proxy="btnSound" id="mSound">Sound</button>
+  </div>
+  <p class="fine" id="mCredit"></p>
+</div>
 
 <div class="booster">
   <label for="thr" id="thrLabel">BOOSTER</label>
@@ -140,6 +194,7 @@ button:focus-visible{outline:2px solid var(--jet);outline-offset:2px}
   <input id="thr" type="range" min="0" max="100" value="0" aria-label="Booster throttle">
   <button id="boostBtn" type="button">Boost</button>
   <button id="holdBtn" type="button" aria-pressed="false">Hold alt</button>
+  <div class="fuel2" aria-hidden="true"><i id="fuel2"></i></div>
 </div>
 
 <div class="actions pad" role="toolbar" aria-label="One-click stunts">
@@ -1457,7 +1512,7 @@ function updateHUD(dt) {
   jEls.forEach(e => e.setAttribute('opacity', (0.15 + 0.85 * down).toFixed(2)));
   $('jRear').setAttribute('opacity', car.rear > 0 || ctl.rear ? 1 : 0.15);
   $('jL').setAttribute('opacity', car.side < -0.05 ? 1 : 0.15); $('jR').setAttribute('opacity', car.side > 0.05 ? 1 : 0.15);
-  $('fuel').style.width = car.fuel + '%';
+  $('fuel').style.width = car.fuel + '%'; $('fuel2').style.width = car.fuel + '%';
   if (!ctl.hold) $('thrOut').textContent = Math.round(Math.max(ctl.slider, ctl.keyBoost) * 100) + '%';
 }
 
@@ -1643,6 +1698,19 @@ function collideRemotes() {
   }
 }
 startServer(1);
+
+/* ======================= phone layout ======================= */
+function layoutMode() { document.body.classList.toggle('compact', IS_MOBILE || innerWidth < 760 || innerHeight < 520); }
+layoutMode(); addEventListener('resize', layoutMode);
+function openSheet(id) { for (const sh of document.querySelectorAll('.sheet')) sh.hidden = sh.id !== id; if (id === 'menuSheet') syncMenu(); }
+function closeSheets() { for (const sh of document.querySelectorAll('.sheet')) sh.hidden = true; }
+$('btnStunts').addEventListener('click', () => openSheet($('stuntSheet').hidden ? 'stuntSheet' : ''));
+$('btnMenu').addEventListener('click', () => openSheet($('menuSheet').hidden ? 'menuSheet' : ''));
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeSheets));
+document.querySelectorAll('#stuntSheet [data-act]').forEach(b => b.addEventListener('click', closeSheets));
+document.querySelectorAll('[data-proxy]').forEach(b => b.addEventListener('click', () => { $(b.dataset.proxy).click(); syncMenu(); }));
+function syncMenu() { for (const [m, src] of [['mCam', 'btnCam'], ['mTime', 'btnTime'], ['mQ', 'btnQ'], ['mSound', 'btnSound']]) $(m).textContent = $(src).textContent; $('mCredit').innerHTML = document.querySelector('.credit').innerHTML; }
+canvas.addEventListener('pointerdown', closeSheets);
 
 /* ======================= main loop ======================= */
 let started = false, last = performance.now(), acc = 0, simT = 0;
