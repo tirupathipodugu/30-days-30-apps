@@ -858,7 +858,7 @@ const grade = new ShaderPass({
 composer.addPass(grade);
 
 /* ======================= car state & physics ======================= */
-const SPAWN = { pos: new V3(0, 0, 46), yaw: Math.PI };
+const SPAWN = { pos: new V3((Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 9), 0, 42 + Math.random() * 16), yaw: Math.PI };   // spread drivers out so nobody spawns inside another car
 const car = { pos: SPAWN.pos.clone(), vel: new V3(), yaw: SPAWN.yaw, yawRate: 0, pitch: 0, roll: 0, pRate: 0, rRate: 0, grounded: true, steer: 0, boost: 0, rear: 0, side: 0,
   fuel: 100, air: 0, crashed: 0, susp: 0, suspV: 0, trick: null, rollAcc: 0, pitchAcc: 0, clearedSemi: false, wheelAngle: 0, prevVel: new V3(), g: 1 };
 const ctl = { throttle: 0, steer: 0, hand: false, boostCmd: 0, rear: false, side: 0, hold: false, holdAlt: 4, slider: 0, keyBoost: 0 };
