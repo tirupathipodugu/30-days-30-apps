@@ -13,6 +13,11 @@ class_name = "GameRoom"
 name = "GAME_ROOM_V2"
 class_name = "GameRoomV2"
 
+# Roadster Thruster Yard relay rooms (/roadster/room/N)
+[[durable_objects.bindings]]
+name = "ROADSTER_ROOM"
+class_name = "RoadsterRoom"
+
 # SQLite-backed Durable Objects are the kind available on the Workers Free plan.
 [[migrations]]
 tag = "v1"
@@ -22,3 +27,7 @@ new_sqlite_classes = ["GameRoom"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["GameRoomV2"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["RoadsterRoom"]

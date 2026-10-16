@@ -26,5 +26,11 @@
     "hook": "Pick fire or water, summon a swarm that follows you, and sink the other team's ship.",
     "path": "team-war/v2/",
     "tweet": "2110797637490454737"
+  },
+  {
+    "day": 5,
+    "name": "Roadster Thruster Yard",
+    "hook": "Drive the Tesla Roadster with SpaceX thrusters: loop the ramp, jump the Semi, and race friends in your own paint.",
+    "path": "roadster-yard/"
   }
 ]

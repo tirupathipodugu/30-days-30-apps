@@ -4,7 +4,8 @@
 //   player -> server: {t:'join', name, team}, {t:'team', name, team}, {t:'a', d, u, v}, {t:'send'}
 import '../engine.js';
 import { GameRoomV2 } from './room-v2.js';
-export { GameRoomV2 };
+import { RoadsterRoom } from './roadster-room.js';
+export { GameRoomV2, RoadsterRoom };
 
 const E = globalThis.HVAEngine;
 const MAX_PLAYERS = 40;        // sockets per room; the 41st gets {t:'full'} and the page tries the next room
@@ -18,6 +19,14 @@ const KICK_PER_SEC = 200;      // far above it, the socket is closed
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Roadster Thruster Yard relay rooms: /roadster/room/1 .. /roadster/room/20
+    const mr = url.pathname.match(/^\/roadster\/room\/(\d{1,3})\/?$/);
+    if (mr) {
+      const n = Number(mr[1]);
+      if (n < 1 || n > MAX_ROOMS) return new Response('No such room', { status: 404 });
+      if (request.headers.get('Upgrade') !== 'websocket') return new Response('Expected a WebSocket', { status: 426 });
+      return env.ROADSTER_ROOM.get(env.ROADSTER_ROOM.idFromName('roadster-room-' + n)).fetch(request);
+    }
     // Human vs AI 2.0 (the 3D hero arena) has its own rooms: /v2/room/1 .. /v2/room/20
     const m2 = url.pathname.match(/^\/v2\/room\/(\d{1,3})\/?$/);
     if (m2) {
